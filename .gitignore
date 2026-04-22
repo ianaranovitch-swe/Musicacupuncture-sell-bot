@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+
+# Environment variables (real tokens live here — never commit)
+.env
+.env.*
+!.env.example
+
+# Local files with passwords / API keys / tokens (not for Git)
+Bot-Info.txt
+logs/
+secrets/
+*.pem
+*.key
+credentials.json
+service-account*.json
+*-credentials.json
+*.__pycache__
+.DS_Store
+
+# Large WAV files in songs/ (not in Git — copy them to the server or another PC yourself)
+songs/**/*.wav
+
+# Telegram file_id map from upload_songs.py (do not commit)
+file_ids.json

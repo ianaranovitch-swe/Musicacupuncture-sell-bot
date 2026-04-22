@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+After each change in the code, Checked errors. and run tests And if the tests find an error, fix it. Errors in code

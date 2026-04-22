@@ -1,0 +1,128 @@
+from unittest.mock import MagicMock
+
+_TEST_CATALOG = {
+    "song1": {"name": "Relaxing Sound", "price_sek": 50, "file": "SONGS/song1.mp3"},
+}
+
+
+def test_create_checkout_returns_stripe_url(mocker):
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        domain="http://localhost:5000",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 42})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["url"] == "https://stripe.test/session"
+
+
+def test_create_checkout_400_when_missing_fields(mocker):
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1"})
+    assert resp.status_code == 400
+
+
+def test_create_checkout_400_when_unknown_song(mocker):
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post(
+        "/create-checkout", json={"song_id": "unknown", "telegram_id": 1}
+    )
+    assert resp.status_code == 400
+    assert "Unknown" in resp.get_json().get("error", "")
+
+
+def test_webhook_completed_sends_audio(mocker, tmp_path):
+    (tmp_path / "SONGS").mkdir()
+    (tmp_path / "SONGS" / "song1.mp3").write_bytes(b"fake-audio")
+
+    mock_bot = MagicMock()
+    event = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {
+                    "telegram_id": "555",
+                    "song_id": "song1",
+                }
+            }
+        },
+    }
+    mocker.patch("stripe.Event.construct_from", return_value=event)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mock_bot,
+        stripe_secret="sk_test_fake",
+        project_root_override=tmp_path,
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/webhook", json=event)
+
+    assert resp.status_code == 200
+    mock_bot.send_audio.assert_called_once()
+    kwargs = mock_bot.send_audio.call_args[1]
+    assert kwargs["chat_id"] == 555
+    assert kwargs["title"] == "Relaxing Sound"
+
+
+def test_webhook_ignores_other_events(mocker, tmp_path):
+    mocker.patch("stripe.Event.construct_from", return_value={"type": "charge.succeeded"})
+    mock_bot = MagicMock()
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mock_bot,
+        stripe_secret="sk_test_fake",
+        project_root_override=tmp_path,
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/webhook", json={})
+
+    assert resp.status_code == 200
+    mock_bot.send_audio.assert_not_called()
+
+
+def test_success_and_cancel_pages():
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=MagicMock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    assert client.get("/success").status_code == 200
+    assert client.get("/cancel").status_code == 200

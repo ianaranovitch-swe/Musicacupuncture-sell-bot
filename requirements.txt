@@ -1,0 +1,9 @@
+# v22+ required for Python 3.14 (older PTB crashes in Updater on 3.14)
+python-telegram-bot>=22.7,<23
+python-dotenv>=1.0
+flask
+stripe
+requests
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-mock>=3.14
