@@ -20,14 +20,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     for s in songs:
         keyboard.append([
-            InlineKeyboardButton(f"🎵 {s['name']} ({s['price']} SEK)", callback_data=f"buy_{s['id']}"),
+            InlineKeyboardButton(f"🎵 {s['name']} (${s['price']} USD)", callback_data=f"buy_{s['id']}"),
             InlineKeyboardButton("▶ Preview", callback_data=f"preview_{s['id']}")
         ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "🎧 *Välkommen till min musikbutik*\n\nVälj en låt:",
+        "🎧 *Welcome to my music store*\n\nPick a track:",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -49,7 +49,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         payment_url = response.json().get("url")
 
-        await query.message.reply_text(f"💳 Betala här:\n{payment_url}")
+        await query.message.reply_text(f"💳 Pay here:\n{payment_url}")
 
     elif data.startswith("preview_"):
         song_id = data.split("_")[1]
@@ -94,7 +94,8 @@ for file in os.listdir(SONG_FOLDER):
         songs[song_id] = {
             "id": song_id,
             "name": song_id,
-            "price": 5000,
+            # $16.00 USD => 1600 cents for Stripe unit_amount
+            "price": 1600,
             "file": f"{SONG_FOLDER}/{file}",
             "preview": f"{DOMAIN}/preview-file/{song_id}"
         }
@@ -126,7 +127,7 @@ def create_checkout():
         payment_method_types=['card'],
         line_items=[{
             'price_data': {
-                'currency': 'sek',
+                'currency': 'usd',
                 'product_data': {'name': song['name']},
                 'unit_amount': song['price'],
             },
@@ -191,19 +192,19 @@ if __name__ == '__main__':
 # IMPROVEMENTS IN VERSION 2
 # =========================
 
-# ✅ Automatisk katalog (lägger du in MP3 → syns direkt i bot)
-# ✅ Preview-knapp
-# ✅ Snygg UI med emojis
-# ✅ Mindre manuell kod
-# ✅ Skalbar struktur
+# ✅ Automatic catalog (drop in MP3 files → they show up in the bot)
+# ✅ Preview button
+# ✅ Polished UI with emojis
+# ✅ Less manual code
+# ✅ Scalable structure
 
 
 # =========================
 # NEXT IDEAS (VERSION 3)
 # =========================
 
-# - Unika nedladdningslänkar
-# - Databas (SQLite)
-# - Adminpanel
-# - Rabattkoder
-# - Prenumeration
+# - Unique download links
+# - Database (SQLite)
+# - Admin panel
+# - Discount codes
+# - Subscriptions
