@@ -13,7 +13,7 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def setup_logging() -> None:
-    """Configure root logging once: console, optional file, quieter third-party loggers."""
+    """Настроить root-logging один раз: консоль, опционально файл, приглушить шумные логгеры."""
     global _configured
     if _configured:
         return
@@ -39,7 +39,7 @@ def setup_logging() -> None:
         file_handler.setFormatter(formatter)
         root.addHandler(file_handler)
 
-    # python-telegram-bot and HTTP stack are noisy at INFO
+    # python-telegram-bot и HTTP-стек слишком болтливы на уровне INFO
     logging.getLogger("telegram").setLevel(max(level, logging.WARNING))
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)

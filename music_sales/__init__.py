@@ -1,1 +1,1 @@
-"""Telegram music sales bot + Stripe checkout backend."""
+"""Telegram-бот для продажи музыки + Flask backend со Stripe Checkout."""

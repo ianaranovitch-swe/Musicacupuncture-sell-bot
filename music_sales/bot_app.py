@@ -3,10 +3,21 @@ from __future__ import annotations
 import logging
 from functools import partial
 
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    PreCheckoutQueryHandler,
+    filters,
+)
 
 from music_sales import config
 from music_sales.bot_handlers import button, start
+from music_sales.buy_callbacks import buy_pay_method, buy_track_select
+from music_sales.buy_command import buy
+from music_sales.buy_payments import pre_checkout, successful_payment
 from music_sales.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -31,6 +42,15 @@ def build_application():
         .build()
     )
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("buy", buy))
+
+    # /buy: отдельные префиксы callback_data, чтобы не пересекаться с callback'ами /start
+    application.add_handler(CallbackQueryHandler(buy_track_select, pattern=r"^b:t:\d{3}$"))
+    application.add_handler(CallbackQueryHandler(buy_pay_method, pattern=r"^b:p:(tg|lk)$"))
+
+    application.add_handler(PreCheckoutQueryHandler(pre_checkout))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
+
     application.add_handler(
         CallbackQueryHandler(partial(button, backend_url=config.BACKEND_URL))
     )

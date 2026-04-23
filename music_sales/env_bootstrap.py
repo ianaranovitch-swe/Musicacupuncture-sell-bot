@@ -1,4 +1,4 @@
-"""Load .env from the project root before other modules read os.environ."""
+"""Загрузить `.env` из корня проекта до того, как другие модули читают os.environ."""
 
 from pathlib import Path
 

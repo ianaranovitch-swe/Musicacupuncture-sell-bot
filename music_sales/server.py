@@ -31,8 +31,9 @@ def _parse_webhook_event(
     stripe_webhook_secret: str,
 ) -> Union[stripe.Event, Tuple[Any, int]]:
     """
-    If stripe_webhook_secret is set, verify Stripe-Signature (production).
-    Otherwise parse JSON (local/dev only — do not expose to the internet).
+    Если задан `stripe_webhook_secret`, проверяем подпись Stripe-Signature (прод).
+
+    Иначе парсим JSON из тела запроса (только локально/в тестах — нельзя открывать в интернет).
     """
     if stripe_webhook_secret:
         payload = request.get_data()
@@ -63,9 +64,9 @@ def create_app(
     stripe_webhook_secret: Optional[str] = None,
 ) -> Flask:
     """
-    stripe_webhook_secret:
-      - None: use STRIPE_WEBHOOK_SECRET from environment (recommended in production).
-      - \"\": disable signature verification (tests / local only).
+    Параметр `stripe_webhook_secret`:
+      - None: взять `STRIPE_WEBHOOK_SECRET` из окружения (рекомендуется в проде)
+      - \"\": отключить проверку подписи (только тесты/локально)
     """
     stripe_secret = stripe_secret or config.STRIPE_SECRET_KEY
 
@@ -109,7 +110,7 @@ def create_app(
                 line_items=[
                     {
                         "price_data": {
-                            "currency": "sek",
+                            "currency": "usd",
                             "product_data": {"name": song["name"]},
                             "unit_amount": unit_amount_for_song(song),
                         },

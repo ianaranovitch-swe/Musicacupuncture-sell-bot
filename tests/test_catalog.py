@@ -19,7 +19,7 @@ def test_discover_songs_reads_audio_files(monkeypatch, tmp_path):
     ids = set(found.keys())
     assert ids == {"alpha", "beta"}
     for sid, song in found.items():
-        assert song["price_sek"] > 0
+        assert song["price_usd"] > 0
         assert song["file"].startswith("SONGS/")
         assert unit_amount_for_song(song) == stripe_unit_amount_ore(sid)
 

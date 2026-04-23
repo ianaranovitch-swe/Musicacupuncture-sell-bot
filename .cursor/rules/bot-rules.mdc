@@ -2,4 +2,6 @@
 alwaysApply: true
 ---
 
-After each change in the code, Checked errors. and run tests And if the tests find an error, fix it. Errors in code
+После каждого изменения кода: проверь ошибки, запусти тесты.
+
+Если тесты упали — исправь причину (код или тесты), пока тесты не станут зелёными.

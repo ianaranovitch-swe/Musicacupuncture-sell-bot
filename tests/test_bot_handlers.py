@@ -5,8 +5,8 @@ import pytest
 from music_sales.bot_handlers import button, start
 
 _SAMPLE_SONGS = {
-    "s1": {"name": "Relaxing Sound", "price_sek": 50, "file": "SONGS/s1.mp3"},
-    "s2": {"name": "Deep Sleep Track", "price_sek": 70, "file": "SONGS/s2.mp3"},
+    "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/s1.mp3"},
+    "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "SONGS/s2.mp3"},
 }
 
 

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _format_visitor_notice(visitor: User) -> str:
-    """Short HTML message for the bot owner."""
+    """Короткое HTML-сообщение владельцу бота."""
     uname = f"@{visitor.username}" if visitor.username else "(no username)"
     name = " ".join(x for x in (visitor.first_name, visitor.last_name or "") if x).strip() or "—"
     return (
@@ -27,7 +27,7 @@ def _format_visitor_notice(visitor: User) -> str:
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
-    """Send the owner a private message when a user starts the bot."""
+    """Отправить владельцу личное сообщение, когда пользователь запустил бота (/start)."""
     owner_id = config.owner_telegram_id_int()
     if owner_id is None:
         return
@@ -48,7 +48,7 @@ async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor
 def _keyboard_markup():
     songs = discover_songs()
     rows = [
-        [InlineKeyboardButton(f"{s['name']} — {s['price_sek']} SEK", callback_data=k)]
+        [InlineKeyboardButton(f"{s['name']} — ${s['price_usd']}", callback_data=k)]
         for k, s in sorted(songs.items(), key=lambda kv: kv[1]["name"].lower())
     ]
     return InlineKeyboardMarkup(rows)

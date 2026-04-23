@@ -21,15 +21,28 @@ def songs_dir() -> Path:
     return project_root() / SONGS_DIR_NAME
 
 
-def _default_price_sek() -> int:
+def _fixed_track_price_usd() -> int:
+    """
+    Фиксированная цена трека в целых долларах США (USD) для всех треков.
+
+    Значение можно задать через переменные окружения, но продуктовый дефолт — $16.
+    """
+    primary = (config.DEFAULT_TRACK_PRICE_USD or "").strip()
+    legacy = (config.DEFAULT_TRACK_PRICE_SEK or "").strip()
+    raw = primary or legacy or "16"
     try:
-        return int(config.DEFAULT_TRACK_PRICE_SEK or "50")
+        return int(raw)
     except ValueError:
-        return 50
+        return 16
 
 
 def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:
-    """Optional SONGS/catalog.json: { \"Track.mp3\": { \"name\": \"...\", \"price_sek\": 70 } }"""
+    """
+    Опциональный `SONGS/catalog.json`:
+      { "Track.mp3": { "name": "Красивое имя для кнопки" } }
+
+    Важно: цены из JSON игнорируются — витрина использует фиксированную USD-цену из кода/окружения.
+    """
     meta = folder / "catalog.json"
     if not meta.is_file():
         return {}
@@ -47,7 +60,7 @@ def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:
 
 
 def _song_id_from_stem(stem: str) -> str:
-    """Telegram callback_data is max 64 bytes; use safe ASCII id."""
+    """Telegram ограничивает callback_data 64 байтами — делаем безопасный ASCII id."""
     s = re.sub(r"[^\w\-]", "_", stem, flags=re.ASCII)
     s = re.sub(r"_+", "_", s).strip("_")[:64]
     return s or "track"
@@ -55,15 +68,16 @@ def _song_id_from_stem(stem: str) -> str:
 
 def discover_songs() -> Dict[str, Dict[str, Any]]:
     """
-    Scan the SONGS folder for audio files. One button per file.
-    Optional SONGS/catalog.json can set display name and price_sek per filename.
+    Сканирует папку `SONGS/` и собирает аудио-файлы (по одному треку на файл).
+
+    Опционально `SONGS/catalog.json` может задать отображаемое имя, но не цену.
     """
     folder = songs_dir()
     if not folder.is_dir():
         return {}
 
     overrides = _load_catalog_json(folder)
-    default_price = _default_price_sek()
+    default_price = _fixed_track_price_usd()
     out: Dict[str, Dict[str, Any]] = {}
     used_ids: set[str] = set()
 
@@ -77,13 +91,9 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         name = ov.get("name") if isinstance(ov.get("name"), str) else None
         if not name:
             name = path.stem.replace("_", " ").strip() or path.stem
-        price = ov.get("price_sek", default_price)
-        try:
-            price_sek = int(price)
-        except (TypeError, ValueError):
-            price_sek = default_price
-        if price_sek < 1:
-            price_sek = default_price
+        # Требование продукта: все треки продаются по фиксированной USD-цене.
+        # `SONGS/catalog.json` может менять отображаемое имя, но не цену.
+        price_usd = default_price
 
         base_id = _song_id_from_stem(path.stem)
         song_id = base_id
@@ -96,7 +106,7 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
 
         out[song_id] = {
             "name": name,
-            "price_sek": price_sek,
+            "price_usd": price_usd,
             "file": f"{SONGS_DIR_NAME}/{path.name}",
         }
 
@@ -109,9 +119,13 @@ def song_path(song_id: str) -> Path:
 
 
 def unit_amount_for_song(song: Dict[str, Any]) -> int:
-    """Stripe amount in minor currency units (SEK × 100)."""
-    return int(song["price_sek"] * 100)
+    """Сумма для Stripe в минимальных единицах валюты (для USD: центы, т.е. USD × 100)."""
+    return int(song["price_usd"] * 100)
 
 
-def stripe_unit_amount_ore(song_id: str) -> int:
+def stripe_unit_amount_cents(song_id: str) -> int:
     return unit_amount_for_song(discover_songs()[song_id])
+
+
+# Обратная совместимость (старое имя функции)
+stripe_unit_amount_ore = stripe_unit_amount_cents

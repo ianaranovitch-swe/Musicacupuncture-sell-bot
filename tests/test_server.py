@@ -1,14 +1,14 @@
 from unittest.mock import MagicMock
 
 _TEST_CATALOG = {
-    "song1": {"name": "Relaxing Sound", "price_sek": 50, "file": "SONGS/song1.mp3"},
+    "song1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/song1.mp3"},
 }
 
 
 def test_create_checkout_returns_stripe_url(mocker):
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"
-    mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
 
     from music_sales.server import create_app
 
@@ -24,6 +24,11 @@ def test_create_checkout_returns_stripe_url(mocker):
 
     assert resp.status_code == 200
     assert resp.get_json()["url"] == "https://stripe.test/session"
+
+    create.assert_called_once()
+    kwargs = create.call_args.kwargs
+    assert kwargs["line_items"][0]["price_data"]["currency"] == "usd"
+    assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 1600
 
 
 def test_create_checkout_400_when_missing_fields(mocker):
