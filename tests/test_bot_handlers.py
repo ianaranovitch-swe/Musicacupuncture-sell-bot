@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from music_sales.bot_handlers import button, start
+from music_sales.bot_handlers import button, gallery_callback, start
 
 _SAMPLE_SONGS = {
     "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/s1.mp3"},
@@ -17,25 +17,57 @@ async def test_start_replies_with_catalog_keyboard(mocker):
     update = MagicMock()
     update.message = MagicMock()
     update.message.reply_text = AsyncMock()
-    update.message.chat = MagicMock()
-    update.message.chat.id = 123
     update.effective_user = MagicMock()
     context = MagicMock()
-    context.bot.send_photo = AsyncMock()
 
     await start(update, context)
 
-    # 1 сообщение-инструкция + 2 карточки (в тесте без реальных cover-файлов это text fallback)
-    assert update.message.reply_text.await_count == 3
-    intro_text = update.message.reply_text.await_args_list[0].args[0]
-    assert "Choose a track card below." in intro_text
-    context.bot.send_photo.assert_not_called()
-
-    first_card = update.message.reply_text.await_args_list[1]
-    markup = first_card.kwargs["reply_markup"]
+    update.message.reply_text.assert_awaited_once()
+    call = update.message.reply_text.call_args
+    assert "Choose a track from the 2x2 grid." in call.args[0]
+    markup = call.kwargs["reply_markup"]
     labels = [btn.text for row in markup.inline_keyboard for btn in row]
-    assert "Pay via external link" in labels
-    assert "Pay inside Telegram" in labels
+    assert "1. Deep Sleep Track" in labels
+    assert "2. Relaxing Sound" in labels
+    assert "Page 1/1" in labels
+
+
+@pytest.mark.asyncio
+async def test_gallery_select_opens_track_card(mocker):
+    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
+    mocker.patch("music_sales.bot_handlers._cover_path_for_song", return_value=None)
+
+    update = MagicMock()
+    query = MagicMock()
+    query.data = "g:s:000"
+    query.answer = AsyncMock()
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update.callback_query = query
+    context = MagicMock()
+
+    await gallery_callback(update, context)
+
+    query.message.reply_text.assert_awaited_once()
+    sent = query.message.reply_text.call_args.args[0]
+    assert "Deep Sleep Track" in sent
+
+
+@pytest.mark.asyncio
+async def test_gallery_page_edit_message(mocker):
+    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
+
+    update = MagicMock()
+    query = MagicMock()
+    query.data = "g:p:000"
+    query.answer = AsyncMock()
+    query.message = MagicMock()
+    query.message.edit_text = AsyncMock()
+    update.callback_query = query
+
+    await gallery_callback(update, MagicMock())
+
+    query.message.edit_text.assert_awaited_once()
 
 
 @pytest.mark.asyncio

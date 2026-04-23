@@ -15,6 +15,10 @@ from music_sales.catalog import discover_songs
 
 logger = logging.getLogger(__name__)
 
+GALLERY_SELECT_PREFIX = "g:s:"
+GALLERY_PAGE_PREFIX = "g:p:"
+GALLERY_PAGE_SIZE = 4
+
 
 def _format_visitor_notice(visitor: User) -> str:
     """Короткое HTML-сообщение владельцу бота."""
@@ -47,15 +51,6 @@ async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor
         logger.warning("Could not notify owner %s: %s", owner_id, e)
 
 
-def _keyboard_markup():
-    songs = discover_songs()
-    rows = [
-        [InlineKeyboardButton(f"{s['name']} — ${s['price_usd']}", callback_data=k)]
-        for k, s in sorted(songs.items(), key=lambda kv: kv[1]["name"].lower())
-    ]
-    return InlineKeyboardMarkup(rows)
-
-
 def _mp3_only_songs(all_songs: dict) -> dict:
     """Оставить только MP3, чтобы кнопка Telegram Payments вела в валидный сценарий."""
     out: dict = {}
@@ -84,6 +79,71 @@ def _cover_path_for_song(song_meta: dict) -> Path | None:
     return None
 
 
+def _sorted_song_items() -> list[tuple[str, dict]]:
+    songs = discover_songs()
+    return sorted(songs.items(), key=lambda kv: kv[1]["name"].lower())
+
+
+def _gallery_page_count(total_items: int) -> int:
+    return max(1, (total_items + GALLERY_PAGE_SIZE - 1) // GALLERY_PAGE_SIZE)
+
+
+def _gallery_markup(page: int, sorted_items: list[tuple[str, dict]]) -> InlineKeyboardMarkup:
+    total_items = len(sorted_items)
+    page_count = _gallery_page_count(total_items)
+    safe_page = max(0, min(page, page_count - 1))
+    start = safe_page * GALLERY_PAGE_SIZE
+    end = min(start + GALLERY_PAGE_SIZE, total_items)
+    page_items = sorted_items[start:end]
+
+    grid_rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for absolute_idx, (_, meta) in enumerate(page_items, start=start):
+        label = str(meta.get("name", f"Track {absolute_idx + 1}"))
+        short_label = label if len(label) <= 24 else f"{label[:23]}…"
+        row.append(
+            InlineKeyboardButton(
+                f"{absolute_idx + 1}. {short_label}",
+                callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}",
+            )
+        )
+        if len(row) == 2:
+            grid_rows.append(row)
+            row = []
+    if row:
+        grid_rows.append(row)
+
+    nav_row: list[InlineKeyboardButton] = []
+    if safe_page > 0:
+        nav_row.append(InlineKeyboardButton("Prev", callback_data=f"{GALLERY_PAGE_PREFIX}{safe_page - 1:03d}"))
+    nav_row.append(InlineKeyboardButton(f"Page {safe_page + 1}/{page_count}", callback_data="noop"))
+    if safe_page < page_count - 1:
+        nav_row.append(InlineKeyboardButton("Next", callback_data=f"{GALLERY_PAGE_PREFIX}{safe_page + 1:03d}"))
+    grid_rows.append(nav_row)
+
+    return InlineKeyboardMarkup(grid_rows)
+
+
+def _gallery_text(page: int, total_items: int) -> str:
+    page_count = _gallery_page_count(total_items)
+    safe_page = max(0, min(page, page_count - 1))
+    return (
+        "Choose a track from the 2x2 grid.\n"
+        "Open a track card, then pay by Stripe link or inside Telegram.\n"
+        f"Tracks: {total_items} | Page: {safe_page + 1}/{page_count}\n\n"
+        "Alternative list mode: /buy"
+    )
+
+
+def _parse_gallery_index(data: str, prefix: str) -> int | None:
+    if not data.startswith(prefix):
+        return None
+    tail = data[len(prefix) :]
+    if not tail.isdigit():
+        return None
+    return int(tail)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
@@ -99,49 +159,75 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # Готовим callback для Telegram Payments только для MP3 (поведение как в /buy).
-    tg_callback_by_song_id: dict[str, str] = {}
-    for idx, row in enumerate(sorted_buy_rows(_mp3_only_songs(songs))):
-        tg_callback_by_song_id[row.song_id] = index_to_callback(idx)
-
+    sorted_items = _sorted_song_items()
     await update.message.reply_text(
-        "Choose a track card below.\n"
-        "Buttons under each card:\n"
-        "- Pay via external link (Stripe Checkout)\n"
-        "- Pay inside Telegram (Stripe provider)\n\n"
-        "Alternative list mode: /buy"
+        _gallery_text(page=0, total_items=len(sorted_items)),
+        reply_markup=_gallery_markup(page=0, sorted_items=sorted_items),
     )
 
-    sorted_items = sorted(songs.items(), key=lambda kv: kv[1]["name"].lower())
-    for song_id, song_meta in sorted_items:
-        song_name = str(song_meta.get("name", song_id))
-        price_usd = int(song_meta.get("price_usd", 0) or 0)
-        caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
 
-        buttons = [
-            [InlineKeyboardButton("Pay via external link", callback_data=song_id)],
-        ]
-        tg_callback = tg_callback_by_song_id.get(song_id)
-        if tg_callback:
-            buttons.append([InlineKeyboardButton("Pay inside Telegram", callback_data=tg_callback)])
-        markup = InlineKeyboardMarkup(buttons)
+async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик сетки: переключение страниц и открытие карточки конкретного трека."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    await query.answer()
 
-        cover_path = _cover_path_for_song(song_meta)
-        if cover_path and update.message.chat is not None:
-            with cover_path.open("rb") as photo:
-                await context.bot.send_photo(
-                    chat_id=update.message.chat.id,
-                    photo=photo,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_markup=markup,
-                )
-        else:
-            await update.message.reply_text(
-                caption,
+    if query.data == "noop":
+        return
+
+    sorted_items = _sorted_song_items()
+    if not sorted_items:
+        if query.message:
+            await query.message.reply_text("No tracks available right now.")
+        return
+
+    page_idx = _parse_gallery_index(query.data, GALLERY_PAGE_PREFIX)
+    if page_idx is not None:
+        if query.message:
+            await query.message.edit_text(
+                _gallery_text(page=page_idx, total_items=len(sorted_items)),
+                reply_markup=_gallery_markup(page=page_idx, sorted_items=sorted_items),
+            )
+        return
+
+    song_idx = _parse_gallery_index(query.data, GALLERY_SELECT_PREFIX)
+    if song_idx is None or song_idx < 0 or song_idx >= len(sorted_items):
+        if query.message:
+            await query.message.reply_text("Unknown track in gallery. Please press /start again.")
+        return
+
+    song_id, song_meta = sorted_items[song_idx]
+    song_name = str(song_meta.get("name", song_id))
+    price_usd = int(song_meta.get("price_usd", 0) or 0)
+    caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
+
+    tg_callback_by_song_id: dict[str, str] = {}
+    for idx, row in enumerate(sorted_buy_rows(_mp3_only_songs(discover_songs()))):
+        tg_callback_by_song_id[row.song_id] = index_to_callback(idx)
+
+    buttons = [[InlineKeyboardButton("Pay via external link", callback_data=song_id)]]
+    tg_callback = tg_callback_by_song_id.get(song_id)
+    if tg_callback:
+        buttons.append([InlineKeyboardButton("Pay inside Telegram", callback_data=tg_callback)])
+    markup = InlineKeyboardMarkup(buttons)
+
+    cover_path = _cover_path_for_song(song_meta)
+    if cover_path and query.message is not None and query.message.chat is not None:
+        with cover_path.open("rb") as photo:
+            await context.bot.send_photo(
+                chat_id=query.message.chat.id,
+                photo=photo,
+                caption=caption,
                 parse_mode="HTML",
                 reply_markup=markup,
             )
+    elif query.message:
+        await query.message.reply_text(
+            caption,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url: str) -> None:

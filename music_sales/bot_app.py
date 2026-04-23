@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 from music_sales import config
-from music_sales.bot_handlers import button, start
+from music_sales.bot_handlers import button, gallery_callback, start
 from music_sales.buy_callbacks import buy_pay_method, buy_track_select
 from music_sales.buy_command import buy
 from music_sales.buy_payments import pre_checkout, successful_payment
@@ -47,6 +47,7 @@ def build_application():
     # /buy: отдельные префиксы callback_data, чтобы не пересекаться с callback'ами /start
     application.add_handler(CallbackQueryHandler(buy_track_select, pattern=r"^b:t:\d{3}$"))
     application.add_handler(CallbackQueryHandler(buy_pay_method, pattern=r"^b:p:(tg|lk)$"))
+    application.add_handler(CallbackQueryHandler(gallery_callback, pattern=r"^(g:s:\d{3}|g:p:\d{3}|noop)$"))
 
     application.add_handler(PreCheckoutQueryHandler(pre_checkout))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
