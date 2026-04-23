@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+from pathlib import Path
 
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
 from telegram.ext import ContextTypes
 
 from music_sales import config
+from music_sales.buy_constants import index_to_callback, sorted_buy_rows
 from music_sales.catalog import discover_songs
 
 logger = logging.getLogger(__name__)
@@ -54,6 +56,34 @@ def _keyboard_markup():
     return InlineKeyboardMarkup(rows)
 
 
+def _mp3_only_songs(all_songs: dict) -> dict:
+    """Оставить только MP3, чтобы кнопка Telegram Payments вела в валидный сценарий."""
+    out: dict = {}
+    for song_id, meta in all_songs.items():
+        file_path = str(meta.get("file", "")).lower()
+        if file_path.endswith(".mp3"):
+            out[song_id] = meta
+    return out
+
+
+def _cover_path_for_song(song_meta: dict) -> Path | None:
+    """Найти файл обложки в папке covers по имени аудио (одинаковая основа имени)."""
+    file_path = str(song_meta.get("file", ""))
+    stem = Path(file_path).stem
+    if not stem:
+        return None
+
+    covers_dir = Path(__file__).resolve().parent.parent / "covers"
+    if not covers_dir.is_dir():
+        return None
+
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+        candidate = covers_dir / f"{stem}{ext}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
@@ -61,13 +91,57 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user is not None:
         logger.info("/start from user_id=%s username=%s", user.id, user.username or "-")
         await notify_owner_about_visitor(context, user)
-    if not discover_songs():
+    songs = discover_songs()
+    if not songs:
         await update.message.reply_text(
             "No tracks available yet. Add audio files (.mp3, .wav, .m4a, …) to the "
             "SONGS folder on the server, then try again."
         )
         return
-    await update.message.reply_text("Choose a track to buy:", reply_markup=_keyboard_markup())
+
+    # Готовим callback для Telegram Payments только для MP3 (поведение как в /buy).
+    tg_callback_by_song_id: dict[str, str] = {}
+    for idx, row in enumerate(sorted_buy_rows(_mp3_only_songs(songs))):
+        tg_callback_by_song_id[row.song_id] = index_to_callback(idx)
+
+    await update.message.reply_text(
+        "Choose a track card below.\n"
+        "Buttons under each card:\n"
+        "- Pay via external link (Stripe Checkout)\n"
+        "- Pay inside Telegram (Stripe provider)\n\n"
+        "Alternative list mode: /buy"
+    )
+
+    sorted_items = sorted(songs.items(), key=lambda kv: kv[1]["name"].lower())
+    for song_id, song_meta in sorted_items:
+        song_name = str(song_meta.get("name", song_id))
+        price_usd = int(song_meta.get("price_usd", 0) or 0)
+        caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
+
+        buttons = [
+            [InlineKeyboardButton("Pay via external link", callback_data=song_id)],
+        ]
+        tg_callback = tg_callback_by_song_id.get(song_id)
+        if tg_callback:
+            buttons.append([InlineKeyboardButton("Pay inside Telegram", callback_data=tg_callback)])
+        markup = InlineKeyboardMarkup(buttons)
+
+        cover_path = _cover_path_for_song(song_meta)
+        if cover_path and update.message.chat is not None:
+            with cover_path.open("rb") as photo:
+                await context.bot.send_photo(
+                    chat_id=update.message.chat.id,
+                    photo=photo,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+        else:
+            await update.message.reply_text(
+                caption,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url: str) -> None:

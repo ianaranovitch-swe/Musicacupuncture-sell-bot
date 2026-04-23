@@ -17,16 +17,25 @@ async def test_start_replies_with_catalog_keyboard(mocker):
     update = MagicMock()
     update.message = MagicMock()
     update.message.reply_text = AsyncMock()
+    update.message.chat = MagicMock()
+    update.message.chat.id = 123
     update.effective_user = MagicMock()
     context = MagicMock()
+    context.bot.send_photo = AsyncMock()
 
     await start(update, context)
 
-    update.message.reply_text.assert_awaited_once()
-    call = update.message.reply_text.call_args
-    assert "Choose a track" in call[0][0]
-    markup = call[1]["reply_markup"]
-    assert len(markup.inline_keyboard) == 2
+    # 1 сообщение-инструкция + 2 карточки (в тесте без реальных cover-файлов это text fallback)
+    assert update.message.reply_text.await_count == 3
+    intro_text = update.message.reply_text.await_args_list[0].args[0]
+    assert "Choose a track card below." in intro_text
+    context.bot.send_photo.assert_not_called()
+
+    first_card = update.message.reply_text.await_args_list[1]
+    markup = first_card.kwargs["reply_markup"]
+    labels = [btn.text for row in markup.inline_keyboard for btn in row]
+    assert "Pay via external link" in labels
+    assert "Pay inside Telegram" in labels
 
 
 @pytest.mark.asyncio
