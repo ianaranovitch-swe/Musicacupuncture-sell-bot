@@ -22,6 +22,7 @@ GALLERY_PAGE_SIZE = 4
 # Лимит подписи к фото в Telegram (символы; для HTML обычно хватает len() как грубой оценки).
 MAX_PHOTO_CAPTION_LEN = 1024
 UD_LAST_GALLERY_CONTROLS_MSG_ID = "gallery_last_controls_msg_id"
+UD_LAST_GALLERY_BATCH_MSG_IDS = "gallery_last_batch_msg_ids"
 
 
 def _format_visitor_notice(visitor: User) -> str:
@@ -132,8 +133,8 @@ def _gallery_text(page: int, total_items: int) -> str:
     page_count = _gallery_page_count(total_items)
     safe_page = max(0, min(page, page_count - 1))
     return (
-        "Choose a track from the 2x2 grid.\n"
-        "Open a track card, then pay by Stripe link or inside Telegram.\n"
+        "Choose a track from the covers below.\n"
+        "Tap the button under a cover to open full track card.\n"
         f"Tracks: {total_items} | Page: {safe_page + 1}/{page_count}\n\n"
         "Alternative list mode: /buy"
     )
@@ -254,10 +255,89 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     sorted_items = _sorted_song_items()
-    await update.message.reply_text(
-        _gallery_text(page=0, total_items=len(sorted_items)),
-        reply_markup=_gallery_markup(page=0, sorted_items=sorted_items),
+    await _send_gallery_page_cards_to_chat(
+        context=context,
+        chat_id=update.message.chat_id,
+        sorted_items=sorted_items,
+        page=0,
     )
+
+
+async def _delete_previous_gallery_batch(
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Удаляет предыдущий блок витрины (4 карточки + панель), чтобы не копить старые кнопки."""
+    old_batch = context.user_data.get(UD_LAST_GALLERY_BATCH_MSG_IDS)
+    if not isinstance(old_batch, list):
+        return
+    for item in old_batch:
+        if not isinstance(item, dict):
+            continue
+        chat_id = item.get("chat_id")
+        message_id = item.get("message_id")
+        if not isinstance(chat_id, int) or not isinstance(message_id, int):
+            continue
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            # Сообщение могло быть удалено вручную/устареть — это не критично.
+            pass
+
+
+async def _send_gallery_page_cards_to_chat(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    sorted_items: list[tuple[str, dict]],
+    page: int,
+) -> None:
+    """Показывает страницу витрины: 4 обложки (каждая с кнопкой) и одну панель Prev/Next."""
+    total_items = len(sorted_items)
+    page_count = _gallery_page_count(total_items)
+    safe_page = max(0, min(page, page_count - 1))
+    start = safe_page * GALLERY_PAGE_SIZE
+    end = min(start + GALLERY_PAGE_SIZE, total_items)
+    page_items = sorted_items[start:end]
+
+    await _delete_previous_gallery_batch(context)
+
+    sent_refs: list[dict] = []
+    for absolute_idx, (_, song_meta) in enumerate(page_items, start=start):
+        song_name = str(song_meta.get("name", f"Track {absolute_idx + 1}"))
+        price_usd = int(song_meta.get("price_usd", 0) or 0)
+        card_caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
+        select_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Open this track", callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}")]]
+        )
+
+        cover_path = _cover_path_for_song(song_meta)
+        if cover_path:
+            with cover_path.open("rb") as photo:
+                msg = await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=card_caption,
+                    parse_mode="HTML",
+                    reply_markup=select_markup,
+                )
+        else:
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=card_caption,
+                parse_mode="HTML",
+                reply_markup=select_markup,
+            )
+        sent_refs.append({"chat_id": chat_id, "message_id": msg.message_id})
+
+    nav_markup = _gallery_markup(page=safe_page, sorted_items=sorted_items)
+    nav_msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text=_gallery_text(page=safe_page, total_items=total_items),
+        reply_markup=nav_markup,
+    )
+    sent_refs.append({"chat_id": chat_id, "message_id": nav_msg.message_id})
+    context.user_data[UD_LAST_GALLERY_BATCH_MSG_IDS] = sent_refs
+    context.user_data[UD_LAST_GALLERY_CONTROLS_MSG_ID] = nav_msg.message_id
 
 
 async def _send_gallery_controls_for_page(
@@ -267,23 +347,15 @@ async def _send_gallery_controls_for_page(
     sorted_items: list[tuple[str, dict]],
     page: int,
 ) -> None:
-    """Отправляет новую панель галереи и удаляет предыдущую, чтобы не копить кнопки в чате."""
+    """Совместимый хелпер: теперь отправляет целую страницу витрины в текущий чат."""
     if query.message is None:
         return
-    chat_id = query.message.chat_id
-    old_msg_id = context.user_data.get(UD_LAST_GALLERY_CONTROLS_MSG_ID)
-    if isinstance(old_msg_id, int):
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=old_msg_id)
-        except Exception:
-            # Старое сообщение могло уже исчезнуть — это не критично.
-            pass
-
-    sent = await query.message.reply_text(
-        _gallery_text(page=page, total_items=len(sorted_items)),
-        reply_markup=_gallery_markup(page=page, sorted_items=sorted_items),
+    await _send_gallery_page_cards_to_chat(
+        context=context,
+        chat_id=query.message.chat_id,
+        sorted_items=sorted_items,
+        page=page,
     )
-    context.user_data[UD_LAST_GALLERY_CONTROLS_MSG_ID] = sent.message_id
 
 
 async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
