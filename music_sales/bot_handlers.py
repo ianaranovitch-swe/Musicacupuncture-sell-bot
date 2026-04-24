@@ -21,6 +21,7 @@ GALLERY_PAGE_PREFIX = "g:p:"
 GALLERY_PAGE_SIZE = 4
 # Лимит подписи к фото в Telegram (символы; для HTML обычно хватает len() как грубой оценки).
 MAX_PHOTO_CAPTION_LEN = 1024
+UD_LAST_GALLERY_CONTROLS_MSG_ID = "gallery_last_controls_msg_id"
 
 
 def _format_visitor_notice(visitor: User) -> str:
@@ -259,6 +260,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def _send_gallery_controls_for_page(
+    query,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    sorted_items: list[tuple[str, dict]],
+    page: int,
+) -> None:
+    """Отправляет новую панель галереи и удаляет предыдущую, чтобы не копить кнопки в чате."""
+    if query.message is None:
+        return
+    chat_id = query.message.chat_id
+    old_msg_id = context.user_data.get(UD_LAST_GALLERY_CONTROLS_MSG_ID)
+    if isinstance(old_msg_id, int):
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=old_msg_id)
+        except Exception:
+            # Старое сообщение могло уже исчезнуть — это не критично.
+            pass
+
+    sent = await query.message.reply_text(
+        _gallery_text(page=page, total_items=len(sorted_items)),
+        reply_markup=_gallery_markup(page=page, sorted_items=sorted_items),
+    )
+    context.user_data[UD_LAST_GALLERY_CONTROLS_MSG_ID] = sent.message_id
+
+
 async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик сетки: переключение страниц и открытие карточки конкретного трека."""
     query = update.callback_query
@@ -279,11 +306,7 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     page_idx = _parse_gallery_index(query.data, GALLERY_PAGE_PREFIX)
     if page_idx is not None:
         await query.answer()
-        if query.message:
-            await query.message.edit_text(
-                _gallery_text(page=page_idx, total_items=len(sorted_items)),
-                reply_markup=_gallery_markup(page=page_idx, sorted_items=sorted_items),
-            )
+        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=page_idx)
         return
 
     song_idx = _parse_gallery_index(query.data, GALLERY_SELECT_PREFIX)
@@ -326,6 +349,10 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="HTML",
                 reply_markup=markup,
             )
+        # После открытия карточки заново показываем снизу панель галереи (4 трека + Prev/Next),
+        # чтобы пользователю не приходилось скроллить вверх.
+        current_page = song_idx // GALLERY_PAGE_SIZE
+        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=current_page)
         await query.answer()
     except Exception as e:
         user_text, err_code = _gallery_error_user_text_and_code(e, has_cover=cover_path is not None)

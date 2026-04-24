@@ -49,9 +49,13 @@ async def test_gallery_select_opens_track_card(mocker):
 
     await gallery_callback(update, context)
 
-    query.message.reply_text.assert_awaited_once()
-    sent = query.message.reply_text.call_args.args[0]
+    # 1) карточка трека 2) новая панель галереи снизу
+    assert query.message.reply_text.await_count == 2
+    sent = query.message.reply_text.await_args_list[0].args[0]
     assert "Deep Sleep Track" in sent
+    controls_markup = query.message.reply_text.await_args_list[1].kwargs["reply_markup"]
+    labels = [btn.text for row in controls_markup.inline_keyboard for btn in row]
+    assert "Page 1/1" in labels
 
 
 @pytest.mark.asyncio
@@ -79,14 +83,14 @@ async def test_gallery_select_includes_description_from_tracks_py(mocker):
 
     await gallery_callback(update, MagicMock())
 
-    sent = query.message.reply_text.call_args.args[0]
+    sent = query.message.reply_text.await_args_list[0].args[0]
     assert "Deep Sleep Track" in sent
     assert "First line of story." in sent
     assert "Second line." in sent
 
 
 @pytest.mark.asyncio
-async def test_gallery_page_edit_message(mocker):
+async def test_gallery_page_sends_controls_message(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
 
     update = MagicMock()
@@ -94,12 +98,14 @@ async def test_gallery_page_edit_message(mocker):
     query.data = "g:p:000"
     query.answer = AsyncMock()
     query.message = MagicMock()
-    query.message.edit_text = AsyncMock()
+    query.message.reply_text = AsyncMock()
     update.callback_query = query
 
     await gallery_callback(update, MagicMock())
 
-    query.message.edit_text.assert_awaited_once()
+    query.message.reply_text.assert_awaited_once()
+    sent = query.message.reply_text.call_args.args[0]
+    assert "Choose a track from the 2x2 grid." in sent
 
 
 @pytest.mark.asyncio
