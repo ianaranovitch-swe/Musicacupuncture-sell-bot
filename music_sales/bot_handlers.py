@@ -315,7 +315,7 @@ async def _send_gallery_page_cards_to_chat(
             description=track_desc,
         )
         select_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open this track", callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}")]]
+            [[InlineKeyboardButton("Buy this track", callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}")]]
         )
 
         cover_path = _cover_path_for_song(song_meta)
