@@ -305,7 +305,12 @@ async def _send_gallery_page_cards_to_chat(
     for absolute_idx, (_, song_meta) in enumerate(page_items, start=start):
         song_name = str(song_meta.get("name", f"Track {absolute_idx + 1}"))
         price_usd = int(song_meta.get("price_usd", 0) or 0)
-        card_caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
+        track_desc = _track_description_for_meta(song_meta)
+        card_caption = _caption_html_for_track_card(
+            song_name=song_name,
+            price_usd=price_usd,
+            description=track_desc,
+        )
         select_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton("Open this track", callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}")]]
         )
