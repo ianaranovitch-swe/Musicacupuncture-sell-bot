@@ -7,6 +7,7 @@ from pathlib import Path
 
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
+from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
 from music_sales import config
@@ -192,7 +193,8 @@ def _caption_html_for_track_card(*, song_name: str, price_usd: int, description:
         return header
 
     desc_plain = description.strip()
-    desc_html = html.escape(desc_plain).replace("\n", "<br>")
+    # В parse_mode="HTML" у Telegram переносы строк делаются обычным '\n', а не тегом <br>.
+    desc_html = html.escape(desc_plain)
     full = f"{header}\n\n{desc_html}"
     if len(full) <= MAX_PHOTO_CAPTION_LEN:
         return full
@@ -201,12 +203,38 @@ def _caption_html_for_track_card(*, song_name: str, price_usd: int, description:
     ellipsis = "…"
     for n in range(len(desc_plain), 0, -1):
         fragment = desc_plain[:n]
-        body = html.escape(fragment).replace("\n", "<br>")
+        body = html.escape(fragment)
         suffix = ellipsis if n < len(desc_plain) else ""
         candidate = f"{header}\n\n{body}{suffix}"
         if len(candidate) <= MAX_PHOTO_CAPTION_LEN:
             return candidate
     return header
+
+
+def _gallery_error_user_text_and_code(exc: Exception, *, has_cover: bool) -> tuple[str, str]:
+    """
+    Короткий и понятный текст ошибки для пользователя.
+
+    Тексты интерфейса оставляем на английском по правилам проекта.
+    """
+    # Частые сетевые/временные ошибки Telegram API.
+    if isinstance(exc, (TimedOut, NetworkError)):
+        return "Temporary network issue while opening this track. Please try again.", "ERR_CARD_NETWORK"
+
+    # Telegram BadRequest: обычно проблема с подписью, media или разметкой.
+    if isinstance(exc, BadRequest):
+        low = str(exc).lower()
+        if "caption" in low or "parse" in low or "entities" in low:
+            return "Track text is too long or invalid. Please try another track.", "ERR_CARD_CAPTION"
+        if "photo" in low or "media" in low or "file" in low:
+            return "Could not load the cover image. Please try again.", "ERR_CARD_TELEGRAM_MEDIA"
+        return "Telegram could not open this track card. Please try again.", "ERR_CARD_TELEGRAM_BAD_REQUEST"
+
+    # Локальная ошибка открытия файла обложки.
+    if has_cover and isinstance(exc, OSError):
+        return "Could not read the cover image file. Please try again.", "ERR_CARD_COVER_IO"
+
+    return "Could not open this track card right now. Please try again.", "ERR_CARD_UNKNOWN"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -236,19 +264,21 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     query = update.callback_query
     if query is None or query.data is None:
         return
-    await query.answer()
 
     if query.data == "noop":
+        await query.answer()
         return
 
     sorted_items = _sorted_song_items()
     if not sorted_items:
+        await query.answer()
         if query.message:
             await query.message.reply_text("No tracks available right now.")
         return
 
     page_idx = _parse_gallery_index(query.data, GALLERY_PAGE_PREFIX)
     if page_idx is not None:
+        await query.answer()
         if query.message:
             await query.message.edit_text(
                 _gallery_text(page=page_idx, total_items=len(sorted_items)),
@@ -258,6 +288,7 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     song_idx = _parse_gallery_index(query.data, GALLERY_SELECT_PREFIX)
     if song_idx is None or song_idx < 0 or song_idx >= len(sorted_items):
+        await query.answer()
         if query.message:
             await query.message.reply_text("Unknown track in gallery. Please press /start again.")
         return
@@ -279,21 +310,42 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     markup = InlineKeyboardMarkup(buttons)
 
     cover_path = _cover_path_for_song(song_meta)
-    if cover_path and query.message is not None and query.message.chat is not None:
-        with cover_path.open("rb") as photo:
-            await context.bot.send_photo(
-                chat_id=query.message.chat.id,
-                photo=photo,
-                caption=caption,
+    try:
+        if cover_path and query.message is not None and query.message.chat is not None:
+            with cover_path.open("rb") as photo:
+                await context.bot.send_photo(
+                    chat_id=query.message.chat.id,
+                    photo=photo,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                )
+        elif query.message:
+            await query.message.reply_text(
+                caption,
                 parse_mode="HTML",
                 reply_markup=markup,
             )
-    elif query.message:
-        await query.message.reply_text(
-            caption,
-            parse_mode="HTML",
-            reply_markup=markup,
+        await query.answer()
+    except Exception as e:
+        user_text, err_code = _gallery_error_user_text_and_code(e, has_cover=cover_path is not None)
+        logger.exception(
+            "Failed to open track card: code=%s song_id=%s has_cover=%s error=%s",
+            err_code,
+            song_id,
+            cover_path is not None,
+            e,
         )
+        try:
+            await query.answer(
+                user_text,
+                show_alert=True,
+            )
+        except Exception:
+            # Если callback уже подтверждён или устарел — продолжаем с обычным сообщением в чат.
+            pass
+        if query.message:
+            await query.message.reply_text(user_text)
 
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url: str) -> None:
