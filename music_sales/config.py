@@ -18,7 +18,9 @@ PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
 PAYMENTS_CURRENCY = _env("PAYMENTS_CURRENCY", "USD")
 # Владелец бота: получает личное сообщение, когда кто-то нажал /start (можно переопределить OWNER_TELEGRAM_ID)
 OWNER_TELEGRAM_ID = _env("OWNER_TELEGRAM_ID", "7846059164")
-# Цена по умолчанию (USD, целые доллары) для файлов в SONGS/, если не задано иначе в коде/окружении
+# Папка в корне проекта с аудио для витрины (по умолчанию `songs`; для старых установок можно задать `SONGS`)
+AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
+# Цена по умолчанию (USD, целые доллары) для файлов в этой папке, если не задано иначе в коде/окружении
 DEFAULT_TRACK_PRICE_USD = _env("DEFAULT_TRACK_PRICE_USD", "16")
 # Обратная совместимость (старое имя переменной): используется только если DEFAULT_TRACK_PRICE_USD пустой
 DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")

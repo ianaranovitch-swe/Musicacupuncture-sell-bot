@@ -31,7 +31,8 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not songs:
         await update.message.reply_text(
             "No MP3 tracks are available yet.\n"
-            "Add `.mp3` files to the `SONGS/` folder on the server (or update `SONGS/catalog.json`)."
+            "Add `.mp3` files to the `songs/` folder on the server (or update `songs/catalog.json`). "
+            "You can change the folder name with `AUDIO_SALES_DIR` in your environment (see `.env.example`)."
         )
         return
 

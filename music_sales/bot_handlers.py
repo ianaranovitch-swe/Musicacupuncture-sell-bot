@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 GALLERY_SELECT_PREFIX = "g:s:"
 GALLERY_PAGE_PREFIX = "g:p:"
 GALLERY_PAGE_SIZE = 4
+# Лимит подписи к фото в Telegram (символы; для HTML обычно хватает len() как грубой оценки).
+MAX_PHOTO_CAPTION_LEN = 1024
 
 
 def _format_visitor_notice(visitor: User) -> str:
@@ -144,6 +146,69 @@ def _parse_gallery_index(data: str, prefix: str) -> int | None:
     return int(tail)
 
 
+def _load_tracks_from_tracks_py() -> list[dict]:
+    """Загружает список треков из корневого `tracks.py` (описания для витрины)."""
+    try:
+        from tracks import TRACKS  # noqa: WPS433 — осознанный импорт из корня проекта
+
+        return TRACKS
+    except ImportError:
+        return []
+
+
+def _track_description_for_meta(song_meta: dict) -> str | None:
+    """
+    Находит текст описания из `tracks.py` для записи каталога `discover_songs()`.
+
+    Сопоставляем по «основе имени файла» (stem): в каталоге и в tracks — .mp3.
+    Дополнительно — по точному совпадению поля title с полем name из каталога.
+    """
+    file_stem = Path(str(song_meta.get("file", ""))).stem
+    display_name = str(song_meta.get("name", "")).strip()
+    tracks = _load_tracks_from_tracks_py()
+    for t in tracks:
+        audio_stem = Path(str(t.get("audio", ""))).stem
+        if file_stem and audio_stem == file_stem:
+            desc = t.get("description")
+            if isinstance(desc, str) and desc.strip():
+                return desc.strip()
+    if display_name:
+        for t in tracks:
+            if str(t.get("title", "")).strip() == display_name:
+                desc = t.get("description")
+                if isinstance(desc, str) and desc.strip():
+                    return desc.strip()
+    return None
+
+
+def _caption_html_for_track_card(*, song_name: str, price_usd: int, description: str | None) -> str:
+    """HTML-подпись карточки трека (название, цена, описание); укладывается в лимит Telegram."""
+    header_lines = [
+        f"<b>{html.escape(song_name)}</b>",
+        f"Price: <b>${price_usd} USD</b>",
+    ]
+    header = "\n".join(header_lines)
+    if not description:
+        return header
+
+    desc_plain = description.strip()
+    desc_html = html.escape(desc_plain).replace("\n", "<br>")
+    full = f"{header}\n\n{desc_html}"
+    if len(full) <= MAX_PHOTO_CAPTION_LEN:
+        return full
+
+    # Обрезаем только описание: после html.escape длина может вырасти, поэтому подбираем n по факту.
+    ellipsis = "…"
+    for n in range(len(desc_plain), 0, -1):
+        fragment = desc_plain[:n]
+        body = html.escape(fragment).replace("\n", "<br>")
+        suffix = ellipsis if n < len(desc_plain) else ""
+        candidate = f"{header}\n\n{body}{suffix}"
+        if len(candidate) <= MAX_PHOTO_CAPTION_LEN:
+            return candidate
+    return header
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
@@ -155,7 +220,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not songs:
         await update.message.reply_text(
             "No tracks available yet. Add audio files (.mp3, .wav, .m4a, …) to the "
-            "SONGS folder on the server, then try again."
+            "`songs/` folder on the server (or set `AUDIO_SALES_DIR`), then try again."
         )
         return
 
@@ -200,7 +265,8 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     song_id, song_meta = sorted_items[song_idx]
     song_name = str(song_meta.get("name", song_id))
     price_usd = int(song_meta.get("price_usd", 0) or 0)
-    caption = f"<b>{html.escape(song_name)}</b>\nPrice: <b>${price_usd} USD</b>"
+    track_desc = _track_description_for_meta(song_meta)
+    caption = _caption_html_for_track_card(song_name=song_name, price_usd=price_usd, description=track_desc)
 
     tg_callback_by_song_id: dict[str, str] = {}
     for idx, row in enumerate(sorted_buy_rows(_mp3_only_songs(discover_songs()))):

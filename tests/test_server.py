@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 _TEST_CATALOG = {
-    "song1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/song1.mp3"},
+    "song1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/song1.mp3"},
 }
 
 
@@ -63,8 +63,8 @@ def test_create_checkout_400_when_unknown_song(mocker):
 
 
 def test_webhook_completed_sends_audio(mocker, tmp_path):
-    (tmp_path / "SONGS").mkdir()
-    (tmp_path / "SONGS" / "song1.mp3").write_bytes(b"fake-audio")
+    (tmp_path / "songs").mkdir()
+    (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
 
     mock_bot = MagicMock()
     event = {

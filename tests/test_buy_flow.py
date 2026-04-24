@@ -9,8 +9,8 @@ from music_sales.buy_payments import pre_checkout, successful_payment
 
 
 _SAMPLE_SONGS = {
-    "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/s1.mp3"},
-    "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "SONGS/wav_only.wav"},
+    "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/s1.mp3"},
+    "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "songs/wav_only.wav"},
 }
 
 

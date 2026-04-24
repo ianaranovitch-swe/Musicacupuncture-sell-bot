@@ -1,4 +1,4 @@
-"""Catalog of 16 tracks: cover and audio share the same base filename (.jpg / .wav)."""
+"""Catalog of 16 tracks: cover and audio share the same base filename (.jpg / .mp3)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Crownchakra Browchakra and Throatchakra from God.jpg",
-        "audio": "songs/Divine sound Crownchakra Browchakra and Throatchakra from God.wav",
+        "audio": "songs/Divine sound Crownchakra Browchakra and Throatchakra from God.mp3",
         "buy_url": "PLACEHOLDER_URL_1",
     },
     {
@@ -30,7 +30,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Estrogen from God.jpg",
-        "audio": "songs/Divine sound Estrogen from God.wav",
+        "audio": "songs/Divine sound Estrogen from God.mp3",
         "buy_url": "PLACEHOLDER_URL_2",
     },
     {
@@ -46,7 +46,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Heart from God.jpg",
-        "audio": "songs/Divine sound Heart from God.wav",
+        "audio": "songs/Divine sound Heart from God.mp3",
         "buy_url": "PLACEHOLDER_URL_3",
     },
     {
@@ -61,7 +61,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg",
-        "audio": "songs/Divine sound Heartchakra and Diaphragmchakra from God.wav",
+        "audio": "songs/Divine sound Heartchakra and Diaphragmchakra from God.mp3",
         "buy_url": "PLACEHOLDER_URL_4",
     },
     {
@@ -77,7 +77,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Immunedefence from God.jpg",
-        "audio": "songs/Divine sound Immunedefence from God.wav",
+        "audio": "songs/Divine sound Immunedefence from God.mp3",
         "buy_url": "PLACEHOLDER_URL_5",
     },
     {
@@ -92,7 +92,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Kidney from God.jpg",
-        "audio": "songs/Divine sound Kidney from God.wav",
+        "audio": "songs/Divine sound Kidney from God.mp3",
         "buy_url": "PLACEHOLDER_URL_6",
     },
     {
@@ -107,7 +107,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Liver from God.jpg",
-        "audio": "songs/Divine sound Liver from God.wav",
+        "audio": "songs/Divine sound Liver from God.mp3",
         "buy_url": "PLACEHOLDER_URL_7",
     },
     {
@@ -122,7 +122,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Lungs from God.jpg",
-        "audio": "songs/Divine sound Lungs from God.wav",
+        "audio": "songs/Divine sound Lungs from God.mp3",
         "buy_url": "PLACEHOLDER_URL_8",
     },
     {
@@ -138,7 +138,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Minerals from God.jpg",
-        "audio": "songs/Divine sound Minerals from God.wav",
+        "audio": "songs/Divine sound Minerals from God.mp3",
         "buy_url": "PLACEHOLDER_URL_9",
     },
     {
@@ -153,7 +153,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound NO Alcohol from God.jpg",
-        "audio": "songs/Divine sound NO Alcohol from God.wav",
+        "audio": "songs/Divine sound NO Alcohol from God.mp3",
         "buy_url": "PLACEHOLDER_URL_10",
     },
     {
@@ -169,7 +169,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound NO Smoking from God.jpg",
-        "audio": "songs/Divine sound NO Smoking from God.wav",
+        "audio": "songs/Divine sound NO Smoking from God.mp3",
         "buy_url": "PLACEHOLDER_URL_11",
     },
     {
@@ -184,7 +184,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Rootchakra from God.jpg",
-        "audio": "songs/Divine sound Rootchakra from God.wav",
+        "audio": "songs/Divine sound Rootchakra from God.mp3",
         "buy_url": "PLACEHOLDER_URL_12",
     },
     {
@@ -199,7 +199,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Sacralchakra and Navelchakra from God.jpg",
-        "audio": "songs/Divine sound Sacralchakra and Navelchakra from God.wav",
+        "audio": "songs/Divine sound Sacralchakra and Navelchakra from God.mp3",
         "buy_url": "PLACEHOLDER_URL_13",
     },
     {
@@ -214,7 +214,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg",
-        "audio": "songs/Divine sound Solarplexuschakra and Spleenchakra from God.wav",
+        "audio": "songs/Divine sound Solarplexuschakra and Spleenchakra from God.mp3",
         "buy_url": "PLACEHOLDER_URL_14",
     },
     {
@@ -229,7 +229,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Testosteron from God.jpg",
-        "audio": "songs/Divine sound Testosteron from God.wav",
+        "audio": "songs/Divine sound Testosteron from God.mp3",
         "buy_url": "PLACEHOLDER_URL_15",
     },
     {
@@ -245,7 +245,7 @@ TRACKS: list[dict] = [
         "price": "$16",
         "price_amount": 1600,
         "cover": "covers/Divine sound Vitamins from God.jpg",
-        "audio": "songs/Divine sound Vitamins from God.wav",
+        "audio": "songs/Divine sound Vitamins from God.mp3",
         "buy_url": "PLACEHOLDER_URL_16",
     },
 ]

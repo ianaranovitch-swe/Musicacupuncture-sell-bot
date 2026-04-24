@@ -8,8 +8,6 @@ from typing import Any, Dict
 
 from music_sales import config
 
-SONGS_DIR_NAME = "SONGS"
-
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".flac"}
 
 
@@ -17,8 +15,17 @@ def project_root() -> Path:
     return Path(os.environ.get("PROJECT_ROOT", Path(__file__).resolve().parent.parent))
 
 
+def _audio_sales_dir_name() -> str:
+    """Имя папки с треками: сначала `os.environ` (для тестов и .env), иначе `config.AUDIO_SALES_DIR`."""
+    env = (os.environ.get("AUDIO_SALES_DIR") or "").strip()
+    if env:
+        return env
+    name = (config.AUDIO_SALES_DIR or "songs").strip()
+    return name or "songs"
+
+
 def songs_dir() -> Path:
-    return project_root() / SONGS_DIR_NAME
+    return project_root() / _audio_sales_dir_name()
 
 
 def _fixed_track_price_usd() -> int:
@@ -38,7 +45,7 @@ def _fixed_track_price_usd() -> int:
 
 def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:
     """
-    Опциональный `SONGS/catalog.json`:
+    Опциональный `songs/catalog.json` (или `<AUDIO_SALES_DIR>/catalog.json`):
       { "Track.mp3": { "name": "Красивое имя для кнопки" } }
 
     Важно: цены из JSON игнорируются — витрина использует фиксированную USD-цену из кода/окружения.
@@ -68,14 +75,15 @@ def _song_id_from_stem(stem: str) -> str:
 
 def discover_songs() -> Dict[str, Dict[str, Any]]:
     """
-    Сканирует папку `SONGS/` и собирает аудио-файлы (по одному треку на файл).
+    Сканирует папку `songs/` (или значение `AUDIO_SALES_DIR`) и собирает аудио-файлы (по одному треку на файл).
 
-    Опционально `SONGS/catalog.json` может задать отображаемое имя, но не цену.
+    Опционально `catalog.json` в этой папке может задать отображаемое имя, но не цену.
     """
     folder = songs_dir()
     if not folder.is_dir():
         return {}
 
+    dir_name = _audio_sales_dir_name()
     overrides = _load_catalog_json(folder)
     default_price = _fixed_track_price_usd()
     out: Dict[str, Dict[str, Any]] = {}
@@ -92,7 +100,7 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         if not name:
             name = path.stem.replace("_", " ").strip() or path.stem
         # Требование продукта: все треки продаются по фиксированной USD-цене.
-        # `SONGS/catalog.json` может менять отображаемое имя, но не цену.
+        # `catalog.json` в папке треков может менять отображаемое имя, но не цену.
         price_usd = default_price
 
         base_id = _song_id_from_stem(path.stem)
@@ -107,7 +115,7 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         out[song_id] = {
             "name": name,
             "price_usd": price_usd,
-            "file": f"{SONGS_DIR_NAME}/{path.name}",
+            "file": f"{dir_name}/{path.name}",
         }
 
     return out

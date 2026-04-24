@@ -5,8 +5,8 @@ import pytest
 from music_sales.bot_handlers import button, gallery_callback, start
 
 _SAMPLE_SONGS = {
-    "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "SONGS/s1.mp3"},
-    "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "SONGS/s2.mp3"},
+    "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/s1.mp3"},
+    "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "songs/s2.mp3"},
 }
 
 
@@ -36,6 +36,7 @@ async def test_start_replies_with_catalog_keyboard(mocker):
 async def test_gallery_select_opens_track_card(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
     mocker.patch("music_sales.bot_handlers._cover_path_for_song", return_value=None)
+    mocker.patch("music_sales.bot_handlers._load_tracks_from_tracks_py", return_value=[])
 
     update = MagicMock()
     query = MagicMock()
@@ -51,6 +52,37 @@ async def test_gallery_select_opens_track_card(mocker):
     query.message.reply_text.assert_awaited_once()
     sent = query.message.reply_text.call_args.args[0]
     assert "Deep Sleep Track" in sent
+
+
+@pytest.mark.asyncio
+async def test_gallery_select_includes_description_from_tracks_py(mocker):
+    """Описание подтягивается из `tracks.py` по stem (каталог songs/*.mp3 и поле audio)."""
+    tracks_stub = [
+        {
+            "id": 1,
+            "title": "Deep Sleep Track",
+            "description": "First line of story.\nSecond line.",
+            "audio": "songs/s2.mp3",
+        }
+    ]
+    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
+    mocker.patch("music_sales.bot_handlers._load_tracks_from_tracks_py", return_value=tracks_stub)
+    mocker.patch("music_sales.bot_handlers._cover_path_for_song", return_value=None)
+
+    update = MagicMock()
+    query = MagicMock()
+    query.data = "g:s:000"
+    query.answer = AsyncMock()
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update.callback_query = query
+
+    await gallery_callback(update, MagicMock())
+
+    sent = query.message.reply_text.call_args.args[0]
+    assert "Deep Sleep Track" in sent
+    assert "First line of story." in sent
+    assert "Second line." in sent
 
 
 @pytest.mark.asyncio
