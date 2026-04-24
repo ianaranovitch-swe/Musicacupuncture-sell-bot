@@ -2,11 +2,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from music_sales.bot_handlers import button, gallery_callback, start
+from music_sales.bot_handlers import _gallery_markup, button, gallery_callback, start
 
 _SAMPLE_SONGS = {
     "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/s1.mp3"},
     "s2": {"name": "Deep Sleep Track", "price_usd": 16, "file": "songs/s2.mp3"},
+}
+_SAMPLE_SONGS_8 = {
+    f"s{i}": {"name": f"Track {i:02d}", "price_usd": 16, "file": f"songs/s{i}.mp3"}
+    for i in range(1, 9)
 }
 
 
@@ -102,6 +106,16 @@ async def test_gallery_page_sends_controls_message(mocker):
     await gallery_callback(update, context)
 
     send_controls.assert_awaited_once()
+
+
+def test_gallery_markup_shows_next_page_track_buttons_for_first_page():
+    sorted_items = sorted(_SAMPLE_SONGS_8.items(), key=lambda kv: kv[1]["name"].lower())
+    markup = _gallery_markup(page=0, sorted_items=sorted_items)
+    labels = [btn.text for row in markup.inline_keyboard for btn in row]
+    assert "5. Track 05" in labels
+    assert "6. Track 06" in labels
+    assert "7. Track 07" in labels
+    assert "8. Track 08" in labels
 
 
 @pytest.mark.asyncio

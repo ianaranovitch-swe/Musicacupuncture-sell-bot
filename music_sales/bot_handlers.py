@@ -96,8 +96,10 @@ def _gallery_page_count(total_items: int) -> int:
 def _gallery_markup(page: int, sorted_items: list[tuple[str, dict]]) -> InlineKeyboardMarkup:
     total_items = len(sorted_items)
     page_count = _gallery_page_count(total_items)
-    safe_page = max(0, min(page, page_count - 1))
-    start = safe_page * GALLERY_PAGE_SIZE
+    shown_page = max(0, min(page, page_count - 1))
+    # Внизу показываем кнопки следующей страницы, чтобы не дублировать обложки сверху.
+    select_page = (shown_page + 1) % page_count if page_count > 1 else shown_page
+    start = select_page * GALLERY_PAGE_SIZE
     end = min(start + GALLERY_PAGE_SIZE, total_items)
     page_items = sorted_items[start:end]
 
@@ -119,11 +121,11 @@ def _gallery_markup(page: int, sorted_items: list[tuple[str, dict]]) -> InlineKe
         grid_rows.append(row)
 
     nav_row: list[InlineKeyboardButton] = []
-    if safe_page > 0:
-        nav_row.append(InlineKeyboardButton("Prev", callback_data=f"{GALLERY_PAGE_PREFIX}{safe_page - 1:03d}"))
-    nav_row.append(InlineKeyboardButton(f"Page {safe_page + 1}/{page_count}", callback_data="noop"))
-    if safe_page < page_count - 1:
-        nav_row.append(InlineKeyboardButton("Next", callback_data=f"{GALLERY_PAGE_PREFIX}{safe_page + 1:03d}"))
+    if shown_page > 0:
+        nav_row.append(InlineKeyboardButton("Prev", callback_data=f"{GALLERY_PAGE_PREFIX}{shown_page - 1:03d}"))
+    nav_row.append(InlineKeyboardButton(f"Page {shown_page + 1}/{page_count}", callback_data="noop"))
+    if shown_page < page_count - 1:
+        nav_row.append(InlineKeyboardButton("Next", callback_data=f"{GALLERY_PAGE_PREFIX}{shown_page + 1:03d}"))
     grid_rows.append(nav_row)
 
     return InlineKeyboardMarkup(grid_rows)
@@ -135,6 +137,7 @@ def _gallery_text(page: int, total_items: int) -> str:
     return (
         "Choose a track from the covers below.\n"
         "Tap the button under a cover to open full track card.\n"
+        "Bottom buttons show the next 4 tracks.\n"
         f"Tracks: {total_items} | Page: {safe_page + 1}/{page_count}\n\n"
         "Alternative list mode: /buy"
     )
