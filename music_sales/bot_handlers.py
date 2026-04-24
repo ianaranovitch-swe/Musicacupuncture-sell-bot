@@ -23,6 +23,7 @@ GALLERY_PAGE_SIZE = 4
 MAX_PHOTO_CAPTION_LEN = 1024
 UD_LAST_GALLERY_CONTROLS_MSG_ID = "gallery_last_controls_msg_id"
 UD_LAST_GALLERY_BATCH_MSG_IDS = "gallery_last_batch_msg_ids"
+UD_LAST_GALLERY_SHOWN_PAGE = "gallery_last_shown_page"
 
 
 def _format_visitor_notice(visitor: User) -> str:
@@ -346,6 +347,7 @@ async def _send_gallery_page_cards_to_chat(
     sent_refs.append({"chat_id": chat_id, "message_id": nav_msg.message_id})
     context.user_data[UD_LAST_GALLERY_BATCH_MSG_IDS] = sent_refs
     context.user_data[UD_LAST_GALLERY_CONTROLS_MSG_ID] = nav_msg.message_id
+    context.user_data[UD_LAST_GALLERY_SHOWN_PAGE] = safe_page
 
 
 async def _send_gallery_controls_for_page(
@@ -429,10 +431,12 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="HTML",
                 reply_markup=markup,
             )
-        # После открытия карточки заново показываем снизу панель галереи (4 трека + Prev/Next),
-        # чтобы пользователю не приходилось скроллить вверх.
-        current_page = song_idx // GALLERY_PAGE_SIZE
-        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=current_page)
+        # После открытия карточки показываем панель для текущей видимой страницы,
+        # чтобы выбор трека не "прыгал" на другую страницу обложек.
+        shown_page = context.user_data.get(UD_LAST_GALLERY_SHOWN_PAGE)
+        if not isinstance(shown_page, int):
+            shown_page = song_idx // GALLERY_PAGE_SIZE
+        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=shown_page)
         await query.answer()
     except Exception as e:
         user_text, err_code = _gallery_error_user_text_and_code(e, has_cover=cover_path is not None)
