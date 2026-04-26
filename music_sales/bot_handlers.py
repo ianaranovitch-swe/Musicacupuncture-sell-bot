@@ -73,9 +73,16 @@ def _gallery_page_count(total_items: int) -> int:
     return max(1, (total_items + GALLERY_PAGE_SIZE - 1) // GALLERY_PAGE_SIZE)
 
 
-def _full_catalog_markup(*, sorted_items: list[tuple[str, dict]], current_idx: int) -> InlineKeyboardMarkup:
-    """Клавиатура каталога: 16 кнопок треков (по одной в строке) + NEXT."""
+def _full_catalog_markup(
+    *,
+    sorted_items: list[tuple[str, dict]],
+    current_idx: int,
+    current_song_id: str,
+) -> InlineKeyboardMarkup:
+    """Клавиатура каталога: Buy для текущего трека + 16 кнопок + NEXT."""
     grid_rows: list[list[InlineKeyboardButton]] = []
+    # Кнопка покупки текущего трека всегда сверху, рядом с карточкой/обложкой.
+    grid_rows.append([InlineKeyboardButton("💳 Buy this track", callback_data=current_song_id)])
     for absolute_idx, (_, meta) in enumerate(sorted_items):
         label = str(meta.get("name", f"Track {absolute_idx + 1}"))
         grid_rows.append(
@@ -371,7 +378,11 @@ async def _send_single_track_card(
     price_usd = int(song_meta.get("price_usd", 0) or 0)
     track_desc = _track_description_for_meta(song_meta)
     caption = _caption_html_for_track_card(song_name=song_name, price_usd=price_usd, description=track_desc)
-    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=safe_idx)
+    markup = _full_catalog_markup(
+        sorted_items=sorted_items,
+        current_idx=safe_idx,
+        current_song_id=song_id,
+    )
 
     last_msg_id = context.user_data.get(UD_LAST_GALLERY_CARD_MSG_ID)
     if isinstance(last_msg_id, int):

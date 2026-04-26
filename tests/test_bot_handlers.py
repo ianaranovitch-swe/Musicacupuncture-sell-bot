@@ -78,8 +78,9 @@ async def test_gallery_next_opens_next_track_card(mocker):
 
 def test_gallery_markup_shows_next_page_track_buttons_for_first_page():
     sorted_items = sorted(_SAMPLE_SONGS_8.items(), key=lambda kv: kv[1]["name"].lower())
-    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=0)
+    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=0, current_song_id="s1")
     labels = [btn.text for row in markup.inline_keyboard for btn in row]
+    assert "💳 Buy this track" in labels
     assert "🎵 Track 01" in labels
     assert "🎵 Track 08" in labels
     assert "NEXT" in labels
