@@ -11,6 +11,7 @@ env/
 .env
 .env.*
 !.env.example
+node_modules/
 
 # Local files with passwords / API keys / tokens (not for Git)
 Bot-Info.txt
