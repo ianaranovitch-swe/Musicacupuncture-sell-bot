@@ -2,7 +2,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
-from music_sales.bot_handlers import _gallery_markup, button, gallery_callback, start
+from music_sales.bot_handlers import _full_catalog_markup, button, gallery_callback, start
 
 _SAMPLE_SONGS = {
     "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/s1.mp3"},
@@ -18,7 +18,7 @@ _SAMPLE_SONGS_8 = {
 async def test_start_replies_with_catalog_keyboard(mocker):
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=None)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    send_gallery = mocker.patch("music_sales.bot_handlers._send_gallery_page_cards_to_chat", new_callable=AsyncMock)
+    send_card = mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
     update = MagicMock()
     update.message = MagicMock()
     update.message.reply_text = AsyncMock()
@@ -28,94 +28,61 @@ async def test_start_replies_with_catalog_keyboard(mocker):
 
     await start(update, context)
 
-    send_gallery.assert_awaited_once()
-    kwargs = send_gallery.call_args.kwargs
+    send_card.assert_awaited_once()
+    kwargs = send_card.call_args.kwargs
     assert kwargs["chat_id"] == 777
-    assert kwargs["page"] == 0
+    assert kwargs["song_idx"] == 0
 
 
 @pytest.mark.asyncio
 async def test_gallery_select_opens_track_card(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    mocker.patch("music_sales.bot_handlers._cover_path_for_song", return_value=None)
-    mocker.patch("music_sales.bot_handlers._load_tracks_from_tracks_py", return_value=[])
-    send_controls = mocker.patch("music_sales.bot_handlers._send_gallery_controls_for_page", new_callable=AsyncMock)
+    send_card = mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
 
     update = MagicMock()
     query = MagicMock()
     query.data = "g:s:000"
     query.answer = AsyncMock()
     query.message = MagicMock()
-    query.message.reply_text = AsyncMock()
+    query.message.chat.id = 777
     update.callback_query = query
     context = MagicMock()
 
     await gallery_callback(update, context)
 
-    query.message.reply_text.assert_awaited_once()
-    sent = query.message.reply_text.await_args_list[0].args[0]
-    assert "Deep Sleep Track" in sent
-    send_controls.assert_awaited_once()
+    send_card.assert_awaited_once()
+    kwargs = send_card.call_args.kwargs
+    assert kwargs["chat_id"] == 777
+    assert kwargs["song_idx"] == 0
 
 
 @pytest.mark.asyncio
-async def test_gallery_select_includes_description_from_tracks_py(mocker):
-    """Описание подтягивается из `tracks.py` по stem (каталог songs/*.mp3 и поле audio)."""
-    tracks_stub = [
-        {
-            "id": 1,
-            "title": "Deep Sleep Track",
-            "description": "First line of story.\nSecond line.",
-            "audio": "songs/s2.mp3",
-        }
-    ]
+async def test_gallery_next_opens_next_track_card(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    mocker.patch("music_sales.bot_handlers._load_tracks_from_tracks_py", return_value=tracks_stub)
-    mocker.patch("music_sales.bot_handlers._cover_path_for_song", return_value=None)
-    mocker.patch("music_sales.bot_handlers._send_gallery_controls_for_page", new_callable=AsyncMock)
+    send_card = mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
 
     update = MagicMock()
     query = MagicMock()
-    query.data = "g:s:000"
+    query.data = "g:n:001"
     query.answer = AsyncMock()
     query.message = MagicMock()
-    query.message.reply_text = AsyncMock()
+    query.message.chat.id = 888
     update.callback_query = query
 
     await gallery_callback(update, MagicMock())
-
-    sent = query.message.reply_text.await_args_list[0].args[0]
-    assert "Deep Sleep Track" in sent
-    assert "First line of story." in sent
-    assert "Second line." in sent
-
-
-@pytest.mark.asyncio
-async def test_gallery_page_sends_controls_message(mocker):
-    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    send_controls = mocker.patch("music_sales.bot_handlers._send_gallery_controls_for_page", new_callable=AsyncMock)
-
-    update = MagicMock()
-    query = MagicMock()
-    query.data = "g:p:000"
-    query.answer = AsyncMock()
-    query.message = MagicMock()
-    update.callback_query = query
-
-    context = MagicMock()
-    await gallery_callback(update, context)
-
-    send_controls.assert_awaited_once()
+    send_card.assert_awaited_once()
+    kwargs = send_card.call_args.kwargs
+    assert kwargs["chat_id"] == 888
+    assert kwargs["song_idx"] == 1
 
 
 def test_gallery_markup_shows_next_page_track_buttons_for_first_page():
     sorted_items = sorted(_SAMPLE_SONGS_8.items(), key=lambda kv: kv[1]["name"].lower())
-    markup = _gallery_markup(page=0, sorted_items=sorted_items)
+    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=0)
     labels = [btn.text for row in markup.inline_keyboard for btn in row]
-    assert "5. Track 05" in labels
-    assert "6. Track 06" in labels
-    assert "7. Track 07" in labels
-    assert "8. Track 08" in labels
+    assert "🎵 Track 01" in labels
+    assert "🎵 Track 08" in labels
+    assert "NEXT" in labels
 
 
 @pytest.mark.asyncio
@@ -160,7 +127,7 @@ async def test_start_no_message_does_nothing():
 async def test_start_sends_owner_notification(mocker):
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=555)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    mocker.patch("music_sales.bot_handlers._send_gallery_page_cards_to_chat", new_callable=AsyncMock)
+    mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
     visitor = MagicMock()
     visitor.id = 111
     visitor.username = "buyer"
@@ -186,7 +153,7 @@ async def test_start_sends_owner_notification(mocker):
 async def test_start_skips_notify_when_visitor_is_owner(mocker):
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=7846059164)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
-    mocker.patch("music_sales.bot_handlers._send_gallery_page_cards_to_chat", new_callable=AsyncMock)
+    mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
     visitor = MagicMock()
     visitor.id = 7846059164
     visitor.username = "mikael"

@@ -47,7 +47,7 @@ def build_application():
     # /buy: отдельные префиксы callback_data, чтобы не пересекаться с callback'ами /start
     application.add_handler(CallbackQueryHandler(buy_track_select, pattern=r"^b:t:\d{3}$"))
     application.add_handler(CallbackQueryHandler(buy_pay_method, pattern=r"^b:p:(tg|lk)$"))
-    application.add_handler(CallbackQueryHandler(gallery_callback, pattern=r"^(g:s:\d{3}|g:p:\d{3}|noop)$"))
+    application.add_handler(CallbackQueryHandler(gallery_callback, pattern=r"^(g:s:\d{3}|g:n:\d{3})$"))
 
     application.add_handler(PreCheckoutQueryHandler(pre_checkout))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))

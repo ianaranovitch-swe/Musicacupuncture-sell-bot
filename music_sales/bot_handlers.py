@@ -11,20 +11,20 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
 from music_sales import config
-from music_sales.buy_constants import index_to_callback, sorted_buy_rows
 from music_sales.catalog import discover_songs
 from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
 
 GALLERY_SELECT_PREFIX = "g:s:"
-GALLERY_PAGE_PREFIX = "g:p:"
+GALLERY_NEXT_PREFIX = "g:n:"
 GALLERY_PAGE_SIZE = 4
 # Лимит подписи к фото в Telegram (символы; для HTML обычно хватает len() как грубой оценки).
 MAX_PHOTO_CAPTION_LEN = 1024
 UD_LAST_GALLERY_CONTROLS_MSG_ID = "gallery_last_controls_msg_id"
 UD_LAST_GALLERY_BATCH_MSG_IDS = "gallery_last_batch_msg_ids"
 UD_LAST_GALLERY_SHOWN_PAGE = "gallery_last_shown_page"
+UD_LAST_GALLERY_CARD_MSG_ID = "gallery_last_card_msg_id"
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
@@ -71,6 +71,25 @@ def _sorted_song_items() -> list[tuple[str, dict]]:
 
 def _gallery_page_count(total_items: int) -> int:
     return max(1, (total_items + GALLERY_PAGE_SIZE - 1) // GALLERY_PAGE_SIZE)
+
+
+def _full_catalog_markup(*, sorted_items: list[tuple[str, dict]], current_idx: int) -> InlineKeyboardMarkup:
+    """Клавиатура каталога: 16 кнопок треков (по одной в строке) + NEXT."""
+    grid_rows: list[list[InlineKeyboardButton]] = []
+    for absolute_idx, (_, meta) in enumerate(sorted_items):
+        label = str(meta.get("name", f"Track {absolute_idx + 1}"))
+        grid_rows.append(
+            [
+                InlineKeyboardButton(
+                    f"🎵 {label}",
+                    callback_data=f"{GALLERY_SELECT_PREFIX}{absolute_idx:03d}",
+                )
+            ]
+        )
+
+    next_idx = (current_idx + 1) % len(sorted_items)
+    grid_rows.append([InlineKeyboardButton("NEXT", callback_data=f"{GALLERY_NEXT_PREFIX}{next_idx:03d}")])
+    return InlineKeyboardMarkup(grid_rows)
 
 
 def _gallery_markup(page: int, sorted_items: list[tuple[str, dict]]) -> InlineKeyboardMarkup:
@@ -248,12 +267,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     sorted_items = _sorted_song_items()
-    await _send_gallery_page_cards_to_chat(
-        context=context,
-        chat_id=update.message.chat_id,
-        sorted_items=sorted_items,
-        page=0,
-    )
+    await _send_single_track_card(context=context, chat_id=update.message.chat_id, sorted_items=sorted_items, song_idx=0)
 
 
 async def _delete_previous_gallery_batch(
@@ -339,6 +353,53 @@ async def _send_gallery_page_cards_to_chat(
     context.user_data[UD_LAST_GALLERY_SHOWN_PAGE] = safe_page
 
 
+async def _send_single_track_card(
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    sorted_items: list[tuple[str, dict]],
+    song_idx: int,
+) -> None:
+    """Показывает только одну карточку трека и полную клавиатуру из 16 кнопок + NEXT."""
+    if not sorted_items:
+        await context.bot.send_message(chat_id=chat_id, text="No tracks available right now.")
+        return
+
+    safe_idx = max(0, min(song_idx, len(sorted_items) - 1))
+    song_id, song_meta = sorted_items[safe_idx]
+    song_name = str(song_meta.get("name", song_id))
+    price_usd = int(song_meta.get("price_usd", 0) or 0)
+    track_desc = _track_description_for_meta(song_meta)
+    caption = _caption_html_for_track_card(song_name=song_name, price_usd=price_usd, description=track_desc)
+    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=safe_idx)
+
+    last_msg_id = context.user_data.get(UD_LAST_GALLERY_CARD_MSG_ID)
+    if isinstance(last_msg_id, int):
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=last_msg_id)
+        except Exception:
+            pass
+
+    cover_path = _cover_path_for_song(song_meta)
+    if cover_path:
+        with cover_path.open("rb") as photo:
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=markup,
+            )
+    else:
+        msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=caption,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    context.user_data[UD_LAST_GALLERY_CARD_MSG_ID] = msg.message_id
+
+
 async def _send_gallery_controls_for_page(
     query,
     context: ContextTypes.DEFAULT_TYPE,
@@ -358,13 +419,9 @@ async def _send_gallery_controls_for_page(
 
 
 async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Обработчик сетки: переключение страниц и открытие карточки конкретного трека."""
+    """Обработчик витрины: выбор трека и кнопка NEXT (по одному треку за раз)."""
     query = update.callback_query
     if query is None or query.data is None:
-        return
-
-    if query.data == "noop":
-        await query.answer()
         return
 
     sorted_items = _sorted_song_items()
@@ -374,13 +431,9 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.message.reply_text("No tracks available right now.")
         return
 
-    page_idx = _parse_gallery_index(query.data, GALLERY_PAGE_PREFIX)
-    if page_idx is not None:
-        await query.answer()
-        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=page_idx)
-        return
-
     song_idx = _parse_gallery_index(query.data, GALLERY_SELECT_PREFIX)
+    if song_idx is None:
+        song_idx = _parse_gallery_index(query.data, GALLERY_NEXT_PREFIX)
     if song_idx is None or song_idx < 0 or song_idx >= len(sorted_items):
         await query.answer()
         if query.message:
@@ -391,19 +444,6 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     song_name = str(song_meta.get("name", song_id))
     price_usd = int(song_meta.get("price_usd", 0) or 0)
     track_desc = _track_description_for_meta(song_meta)
-    caption = _caption_html_for_track_card(song_name=song_name, price_usd=price_usd, description=track_desc)
-
-    tg_callback_by_song_id: dict[str, str] = {}
-    for idx, row in enumerate(sorted_buy_rows(_mp3_only_songs(discover_songs()))):
-        tg_callback_by_song_id[row.song_id] = index_to_callback(idx)
-
-    buttons = [[InlineKeyboardButton("Pay via external link", callback_data=song_id)]]
-    tg_callback = tg_callback_by_song_id.get(song_id)
-    if tg_callback:
-        buttons.append([InlineKeyboardButton("Pay inside Telegram", callback_data=tg_callback)])
-    markup = InlineKeyboardMarkup(buttons)
-
-    cover_path = _cover_path_for_song(song_meta)
     try:
         # Сообщаем владельцу о клике по конкретному треку.
         await notify_owner_async(
@@ -412,35 +452,21 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             event="Track clicked",
             song_name=song_name,
         )
-        if cover_path and query.message is not None and query.message.chat is not None:
-            with cover_path.open("rb") as photo:
-                await context.bot.send_photo(
-                    chat_id=query.message.chat.id,
-                    photo=photo,
-                    caption=caption,
-                    parse_mode="HTML",
-                    reply_markup=markup,
-                )
-        elif query.message:
-            await query.message.reply_text(
-                caption,
-                parse_mode="HTML",
-                reply_markup=markup,
+        if query.message is not None and query.message.chat is not None:
+            await _send_single_track_card(
+                context=context,
+                chat_id=query.message.chat.id,
+                sorted_items=sorted_items,
+                song_idx=song_idx,
             )
-        # После открытия карточки показываем панель для текущей видимой страницы,
-        # чтобы выбор трека не "прыгал" на другую страницу обложек.
-        shown_page = context.user_data.get(UD_LAST_GALLERY_SHOWN_PAGE)
-        if not isinstance(shown_page, int):
-            shown_page = song_idx // GALLERY_PAGE_SIZE
-        await _send_gallery_controls_for_page(query, context, sorted_items=sorted_items, page=shown_page)
         await query.answer()
     except Exception as e:
-        user_text, err_code = _gallery_error_user_text_and_code(e, has_cover=cover_path is not None)
+        user_text, err_code = _gallery_error_user_text_and_code(e, has_cover=False)
         logger.exception(
             "Failed to open track card: code=%s song_id=%s has_cover=%s error=%s",
             err_code,
             song_id,
-            cover_path is not None,
+            False,
             e,
         )
         try:
