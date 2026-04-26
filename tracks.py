@@ -5,6 +5,7 @@ from __future__ import annotations
 TRACKS: list[dict] = [
     {
         "id": 1,
+        "short_title": "🎵 Crown Chakra",
         "title": "Divine sound Crownchakra Browchakra and Throatchakra from God",
         "description": (
             "Speak your truth with calm, clarity, and confidence.\n"
@@ -20,6 +21,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 2,
+        "short_title": "🎵 Estrogen",
         "title": "Divine sound Estrogen from God",
         "description": (
             "Support feminine balance, harmony, and natural flow.\n"
@@ -35,6 +37,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 3,
+        "short_title": "🎵 Heart",
         "title": "Divine sound Heart from God",
         "description": (
             "Open your heart to love, peace, and deep inner harmony.\n"
@@ -51,6 +54,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 4,
+        "short_title": "🎵 Heart Chakra",
         "title": "Divine sound Heartchakra and Diaphragmchakra from God",
         "description": (
             "Expand love, compassion, and connection in your life.\n"
@@ -66,6 +70,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 5,
+        "short_title": "🎵 Immune Defence",
         "title": "Divine sound Immunedefence from God",
         "description": (
             "Strengthen your body's natural protection and inner power.\n"
@@ -82,6 +87,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 6,
+        "short_title": "🎵 Kidney",
         "title": "Divine sound Kidney from God",
         "description": (
             "Restore balance, flow, and deep inner stability.\n"
@@ -97,6 +103,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 7,
+        "short_title": "🎵 Liver",
         "title": "Divine sound Liver from God",
         "description": (
             "Cleanse, renew, and bring clarity to your whole body.\n"
@@ -112,6 +119,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 8,
+        "short_title": "🎵 Lungs",
         "title": "Divine sound Lungs from God",
         "description": (
             "Breathe deeper, relax fully, and awaken your life energy.\n"
@@ -127,6 +135,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 9,
+        "short_title": "🎵 Minerals",
         "title": "Divine sound Minerals from God",
         "description": (
             "Restore balance, strength, and deep cellular harmony.\n"
@@ -143,6 +152,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 10,
+        "short_title": "🎵 NO Alcohol",
         "title": "Divine sound NO Alcohol from God",
         "description": (
             "Release alcohol and return to clarity and control.\n"
@@ -158,6 +168,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 11,
+        "short_title": "🎵 NO Smoking",
         "title": "Divine sound NO Smoking from God",
         "description": (
             "Break free from smoking and reclaim your health.\n"
@@ -174,6 +185,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 12,
+        "short_title": "🎵 Root Chakra",
         "title": "Divine sound Rootchakra from God",
         "description": (
             "Feel grounded, safe, and strong in your foundation.\n"
@@ -189,6 +201,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 13,
+        "short_title": "🎵 Sacral & Navel Chakra",
         "title": "Divine sound Sacralchakra and Navelchakra from God",
         "description": (
             "Awaken joy, creativity, and emotional flow.\n"
@@ -204,6 +217,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 14,
+        "short_title": "🎵 Solar Plexus",
         "title": "Divine sound Solarplexuschakra and Spleenchakra from God",
         "description": (
             "Step into your power with confidence and clarity.\n"
@@ -219,6 +233,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 15,
+        "short_title": "🎵 Testosterone",
         "title": "Divine sound Testosteron from God",
         "description": (
             "Build strength, focus, and powerful inner energy.\n"
@@ -234,6 +249,7 @@ TRACKS: list[dict] = [
     },
     {
         "id": 16,
+        "short_title": "🎵 Vitamins",
         "title": "Divine sound Vitamins from God",
         "description": (
             "Nourish your body with essential energy and divine vitality.\n"

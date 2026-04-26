@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from tracks import TRACKS, get_track
@@ -28,49 +28,95 @@ logger = logging.getLogger(__name__)
 _stripe = os.getenv("STRIPE_TOKEN", "").strip()
 
 
-def _button_label(track: dict, max_len: int = 64) -> str:
-    """Telegram inline button text max 64 chars."""
-    prefix = f"{track['id']}. "
-    rest = max_len - len(prefix)
-    title = track["title"]
-    if len(title) <= rest:
-        return prefix + title
-    if rest <= 1:
-        return prefix[:max_len]
-    return prefix + title[: rest - 1] + "…"
-
-
-def _buy_keyboard(track: dict) -> InlineKeyboardMarkup | None:
+def _buy_keyboard(track: dict) -> InlineKeyboardMarkup:
+    """Кнопки для детального экрана трека."""
     url = (track.get("buy_url") or "").strip()
-    if url.startswith(("http://", "https://")):
-        return InlineKeyboardMarkup([[InlineKeyboardButton("Buy", url=url)]])
-    return None
+    buy_button = (
+        InlineKeyboardButton("💳 Buy Now", url=url)
+        if url.startswith(("http://", "https://"))
+        else InlineKeyboardButton("💳 Buy Now", callback_data="buy_unavailable")
+    )
+    return InlineKeyboardMarkup(
+        [
+            [buy_button],
+            [InlineKeyboardButton("🏠 Back to Catalog", callback_data="browse")],
+        ]
+    )
 
 
-def _caption(track: dict) -> str:
+def _detail_text(track: dict) -> str:
+    """Текст карточки трека в детальном просмотре."""
     esc = html.escape
-    lines = [
-        f"<b>{esc(track['title'])}</b>",
-        "",
-        esc(track["description"]).replace("\n", "\n"),
-        "",
-        f"<b>{esc(track['price'])}</b>",
-    ]
-    if not (track.get("buy_url") or "").strip().startswith(("http://", "https://")):
-        lines += ["", "<i>Buy link not set yet — replace PLACEHOLDER_URL_* in tracks.py</i>"]
-    return "\n".join(lines)
+    return (
+        f"✨ {esc(track['title'])}\n\n"
+        f"{esc(track['description'])}\n\n"
+        f"💰 Price: {esc(track['price'])}"
+    )
+
+
+def _catalog_keyboard() -> InlineKeyboardMarkup:
+    """Собираем каталог 16 треков в 2 колонки."""
+    rows: list[list[InlineKeyboardButton]] = []
+    for i in range(0, len(TRACKS), 2):
+        left = TRACKS[i]
+        row = [InlineKeyboardButton(left["short_title"], callback_data=str(left["id"]))]
+        if i + 1 < len(TRACKS):
+            right = TRACKS[i + 1]
+            row.append(InlineKeyboardButton(right["short_title"], callback_data=str(right["id"])))
+        rows.append(row)
+    return InlineKeyboardMarkup(rows)
+
+
+async def _send_catalog_view(chat_id: int, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показываем витрину: сначала альбом из 4 обложек, потом сетка кнопок 2x8."""
+    try:
+        first_four = TRACKS[:4]
+        media_group: list[InputMediaPhoto] = []
+        missing_titles: list[str] = []
+
+        # Отправляем обложки треков одним альбомом, если файлы найдены.
+        for track in first_four:
+            cover_path = ROOT / track["cover"]
+            if cover_path.is_file():
+                with cover_path.open("rb") as photo:
+                    media_group.append(
+                        InputMediaPhoto(
+                            media=photo.read(),
+                            caption=f"🎵 {track['title']}\n💰 $16",
+                        )
+                    )
+            else:
+                missing_titles.append(track["title"])
+                logger.warning("Cover not found for track %s: %s", track["id"], cover_path)
+
+        if media_group:
+            await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+
+        # Если части обложек нет, показываем аккуратный fallback-текст.
+        for title in missing_titles:
+            await context.bot.send_message(chat_id=chat_id, text=f"🎵 {title}")
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Choose a track:",
+            reply_markup=_catalog_keyboard(),
+        )
+    except Exception:
+        logger.exception("Failed to send catalog view")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Something went wrong while loading the catalog. Please try again.",
+        )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
-    rows = [
-        [InlineKeyboardButton(_button_label(t), callback_data=f"track:{t['id']}")]
-        for t in TRACKS
-    ]
     await update.message.reply_text(
-        "Choose a track (16 items):",
-        reply_markup=InlineKeyboardMarkup(rows),
+        "Welcome! Tap the button to browse music.",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🎵 Browse Music", callback_data="browse")]]
+        ),
     )
 
 
@@ -79,40 +125,51 @@ async def on_track_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if query is None or query.data is None:
         return
     await query.answer()
-    if not query.data.startswith("track:"):
-        return
-    try:
-        tid = int(query.data.split(":", 1)[1])
-    except ValueError:
-        return
-    track = get_track(tid)
-    if track is None:
-        if query.message:
-            await query.message.reply_text("Unknown track.")
-        return
-
-    cover_path = ROOT / track["cover"]
-    caption = _caption(track)
-    kb = _buy_keyboard(track)
+    logger.info("Callback clicked: %s", query.data)
     chat = query.message.chat if query.message else None
     if chat is None:
         return
 
-    if cover_path.is_file():
-        with cover_path.open("rb") as photo:
-            await context.bot.send_photo(
-                chat_id=chat.id,
-                photo=photo,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
-    else:
+    if query.data == "browse":
+        await _send_catalog_view(chat.id, context)
+        return
+
+    if query.data == "buy_unavailable":
         await context.bot.send_message(
             chat_id=chat.id,
-            text=caption,
+            text="Payment link is not set yet. Please contact support.",
+        )
+        return
+
+    if not query.data.isdigit():
+        return
+
+    try:
+        tid = int(query.data)
+        track = get_track(tid)
+        if track is None:
+            await context.bot.send_message(chat_id=chat.id, text="Unknown track.")
+            return
+
+        cover_path = ROOT / track["cover"]
+        if cover_path.is_file():
+            with cover_path.open("rb") as photo:
+                await context.bot.send_photo(chat_id=chat.id, photo=photo)
+        else:
+            logger.warning("Cover missing in detail view for track %s: %s", tid, cover_path)
+            await context.bot.send_message(chat_id=chat.id, text=f"🎵 {track['title']}")
+
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=_detail_text(track),
             parse_mode="HTML",
-            reply_markup=kb,
+            reply_markup=_buy_keyboard(track),
+        )
+    except Exception:
+        logger.exception("Failed to process track callback: %s", query.data)
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text="Something went wrong while opening this track. Please try again.",
         )
 
 
@@ -140,7 +197,7 @@ def main() -> None:
 
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(on_track_button, pattern=r"^track:\d+$"))
+    app.add_handler(CallbackQueryHandler(on_track_button, pattern=r"^(browse|buy_unavailable|\d+)$"))
     app.add_error_handler(error_handler)
     logger.info("Bot polling…")
     app.run_polling()
