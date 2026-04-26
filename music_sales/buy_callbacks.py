@@ -21,6 +21,7 @@ from music_sales.buy_constants import (
     sorted_buy_rows,
 )
 from music_sales.catalog import discover_songs
+from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,16 @@ def _mp3_only_songs(all_songs: dict) -> dict:
         if file_path.endswith(".mp3"):
             out[song_id] = meta
     return out
+
+
+def _user_display_name(user) -> str:
+    """Имя пользователя без Telegram ID для уведомлений и метаданных."""
+    if user is None:
+        return "Unknown user"
+    if user.username:
+        return f"@{user.username}"
+    full = " ".join(x for x in (user.first_name, user.last_name or "") if x).strip()
+    return full or "Unknown user"
 
 
 async def buy_track_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,6 +86,12 @@ async def buy_track_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if query.message:
         await query.message.reply_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     logger.info("buy track selected: user_id=%s song_id=%s", query.from_user.id if query.from_user else "-", song_id)
+    await notify_owner_async(
+        context,
+        actor=query.from_user,
+        event="Track clicked",
+        song_name=title,
+    )
 
 
 async def buy_pay_method(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,7 +121,14 @@ async def buy_pay_method(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     price_usd = int(meta["price_usd"])
 
     if method == PAY_CB_LINK:
-        await _stripe_checkout_link(query, backend_url=config.BACKEND_URL, song_id=song_id, user_id=query.from_user.id)
+        await _stripe_checkout_link(
+            query,
+            context=context,
+            backend_url=config.BACKEND_URL,
+            song_id=song_id,
+            user_id=query.from_user.id,
+            song_title=title,
+        )
         logger.info("buy external checkout: user_id=%s song_id=%s", query.from_user.id, song_id)
         return
 
@@ -144,7 +168,15 @@ async def buy_pay_method(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info("buy telegram invoice sent: user_id=%s song_id=%s currency=%s", query.from_user.id, song_id, currency)
 
 
-async def _stripe_checkout_link(query, *, backend_url: str, song_id: str, user_id: int) -> None:
+async def _stripe_checkout_link(
+    query,
+    *,
+    context: ContextTypes.DEFAULT_TYPE,
+    backend_url: str,
+    song_id: str,
+    user_id: int,
+    song_title: str,
+) -> None:
     if query.message is None:
         return
 
@@ -152,7 +184,11 @@ async def _stripe_checkout_link(query, *, backend_url: str, song_id: str, user_i
         response = await asyncio.to_thread(
             lambda: requests.post(
                 f"{backend_url}/create-checkout",
-                json={"song_id": song_id, "telegram_id": user_id},
+                json={
+                    "song_id": song_id,
+                    "telegram_id": user_id,
+                    "telegram_name": _user_display_name(query.from_user),
+                },
                 timeout=30,
             )
         )
@@ -167,6 +203,14 @@ async def _stripe_checkout_link(query, *, backend_url: str, song_id: str, user_i
 
     if not payment_url:
         await query.message.reply_text("Could not create a checkout session right now. Please try again later.")
+        await notify_owner_async(
+            context,
+            actor=query.from_user,
+            event="Payment result",
+            song_name=song_title,
+            payment_ok=False,
+            reason="Checkout session was not created",
+        )
         return
 
     await query.message.reply_text(f"Pay here:\n{payment_url}")

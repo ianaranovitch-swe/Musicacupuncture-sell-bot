@@ -29,6 +29,7 @@ def test_create_checkout_returns_stripe_url(mocker):
     kwargs = create.call_args.kwargs
     assert kwargs["line_items"][0]["price_data"]["currency"] == "usd"
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 1600
+    assert kwargs["metadata"]["telegram_name"] == "Unknown user"
 
 
 def test_create_checkout_400_when_missing_fields(mocker):

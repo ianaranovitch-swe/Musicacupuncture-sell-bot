@@ -10,6 +10,7 @@ from telegram import Bot
 
 from music_sales import config
 from music_sales.catalog import discover_songs, project_root, unit_amount_for_song
+from music_sales.owner_notify import notify_owner_sync
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,7 @@ def create_app(
         data = request.get_json(silent=True) or {}
         song_id = data.get("song_id")
         telegram_id = data.get("telegram_id")
+        telegram_name = str(data.get("telegram_name") or "Unknown user")
         if song_id is None or telegram_id is None:
             return jsonify({"error": "song_id and telegram_id are required"}), 400
         catalog = get_catalog()
@@ -120,7 +122,11 @@ def create_app(
                 mode="payment",
                 success_url=domain + "/success",
                 cancel_url=domain + "/cancel",
-                metadata={"telegram_id": str(telegram_id), "song_id": song_id},
+                metadata={
+                    "telegram_id": str(telegram_id),
+                    "telegram_name": telegram_name[:120],
+                    "song_id": song_id,
+                },
             )
         except stripe.error.StripeError as e:
             logger.exception("Stripe checkout failed: %s", e)
@@ -139,6 +145,8 @@ def create_app(
             session = event["data"]["object"]
             telegram_id = session["metadata"]["telegram_id"]
             song_id = session["metadata"]["song_id"]
+            telegram_name = str(session.get("metadata", {}).get("telegram_name") or "Unknown user")
+            song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             try:
                 deliver_purchase(
                     bot,
@@ -147,10 +155,48 @@ def create_app(
                     get_catalog(),
                     root_path(),
                 )
+                notify_owner_sync(
+                    bot,
+                    actor_name=telegram_name,
+                    event="Payment result",
+                    song_name=song_name,
+                    payment_ok=True,
+                )
             except OSError as e:
                 logger.exception("Failed to send audio: %s", e)
+                notify_owner_sync(
+                    bot,
+                    actor_name=telegram_name,
+                    event="Payment result",
+                    song_name=song_name,
+                    payment_ok=False,
+                    reason="Audio delivery failed",
+                )
             except KeyError:
                 logger.exception("Unknown song in webhook metadata: %s", song_id)
+                notify_owner_sync(
+                    bot,
+                    actor_name=telegram_name,
+                    event="Payment result",
+                    song_name=song_id,
+                    payment_ok=False,
+                    reason="Unknown song in metadata",
+                )
+
+        if event["type"] in ("checkout.session.expired", "checkout.session.async_payment_failed"):
+            session = event["data"]["object"]
+            meta = session.get("metadata", {}) if isinstance(session, dict) else {}
+            song_id = str(meta.get("song_id") or "unknown")
+            song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
+            telegram_name = str(meta.get("telegram_name") or "Unknown user")
+            notify_owner_sync(
+                bot,
+                actor_name=telegram_name,
+                event="Payment result",
+                song_name=song_name,
+                payment_ok=False,
+                reason=event["type"],
+            )
 
         return "", 200
 

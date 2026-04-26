@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
@@ -140,7 +140,7 @@ async def test_button_requests_checkout_and_replies_with_url(mocker):
 
     mock_post.assert_called_once_with(
         "http://backend.test/create-checkout",
-        json={"song_id": "s1", "telegram_id": 999},
+        json={"song_id": "s1", "telegram_id": 999, "telegram_name": ANY},
         timeout=30,
     )
     query.message.reply_text.assert_awaited_once()
@@ -179,7 +179,7 @@ async def test_start_sends_owner_notification(mocker):
 
     owner_calls = [c for c in context.bot.send_message.await_args_list if c.kwargs.get("chat_id") == 555]
     assert len(owner_calls) == 1
-    assert "111" in owner_calls[0].kwargs["text"]
+    assert "@buyer" in owner_calls[0].kwargs["text"]
 
 
 @pytest.mark.asyncio

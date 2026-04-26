@@ -16,8 +16,8 @@ DOMAIN = _env("DOMAIN", "http://localhost:5000")
 PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
 # Валюта инвойса Telegram Payments (должна совпадать с валютой Stripe Checkout)
 PAYMENTS_CURRENCY = _env("PAYMENTS_CURRENCY", "USD")
-# Владелец бота: получает личное сообщение, когда кто-то нажал /start (можно переопределить OWNER_TELEGRAM_ID)
-OWNER_TELEGRAM_ID = _env("OWNER_TELEGRAM_ID", "7846059164")
+# Владелец бота: получает личные события о запуске, кликах и статусах оплаты.
+OWNER_TELEGRAM_ID = _env("OWNER_TELEGRAM_ID", "7973899604")
 # Папка в корне проекта с аудио для витрины (по умолчанию `songs`; для старых установок можно задать `SONGS`)
 AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
 # Цена по умолчанию (USD, целые доллары) для файлов в этой папке, если не задано иначе в коде/окружении

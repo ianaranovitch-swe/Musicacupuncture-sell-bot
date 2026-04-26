@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 from music_sales import config
 from music_sales.buy_constants import index_to_callback, sorted_buy_rows
 from music_sales.catalog import discover_songs
+from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
 
@@ -26,35 +27,13 @@ UD_LAST_GALLERY_BATCH_MSG_IDS = "gallery_last_batch_msg_ids"
 UD_LAST_GALLERY_SHOWN_PAGE = "gallery_last_shown_page"
 
 
-def _format_visitor_notice(visitor: User) -> str:
-    """Короткое HTML-сообщение владельцу бота."""
-    uname = f"@{visitor.username}" if visitor.username else "(no username)"
-    name = " ".join(x for x in (visitor.first_name, visitor.last_name or "") if x).strip() or "—"
-    return (
-        "🛎 <b>Someone opened the bot</b> (/start)\n\n"
-        f"<b>User ID:</b> <code>{visitor.id}</code>\n"
-        f"<b>Name:</b> {html.escape(name)}\n"
-        f"<b>Username:</b> {html.escape(uname)}"
-    )
-
-
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
-    """Отправить владельцу личное сообщение, когда пользователь запустил бота (/start)."""
-    owner_id = config.owner_telegram_id_int()
-    if owner_id is None:
-        return
-    if visitor.id == owner_id:
-        return
-    text = _format_visitor_notice(visitor)
-    try:
-        await context.bot.send_message(
-            chat_id=owner_id,
-            text=text,
-            parse_mode="HTML",
-        )
-        logger.info("Owner %s notified about visitor %s", owner_id, visitor.id)
-    except Exception as e:
-        logger.warning("Could not notify owner %s: %s", owner_id, e)
+    """Отправить владельцу событие о запуске бота без показа ID пользователя."""
+    await notify_owner_async(
+        context,
+        actor=visitor,
+        event="Bot started",
+    )
 
 
 def _mp3_only_songs(all_songs: dict) -> dict:
@@ -186,6 +165,16 @@ def _track_description_for_meta(song_meta: dict) -> str | None:
                 if isinstance(desc, str) and desc.strip():
                     return desc.strip()
     return None
+
+
+def _user_display_name(user: User | None) -> str:
+    """Безопасное имя пользователя для логов/метаданных платежа."""
+    if user is None:
+        return "Unknown user"
+    if user.username:
+        return f"@{user.username}"
+    full = " ".join(x for x in (user.first_name, user.last_name or "") if x).strip()
+    return full or "Unknown user"
 
 
 def _caption_html_for_track_card(*, song_name: str, price_usd: int, description: str | None) -> str:
@@ -416,6 +405,13 @@ async def gallery_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     cover_path = _cover_path_for_song(song_meta)
     try:
+        # Сообщаем владельцу о клике по конкретному треку.
+        await notify_owner_async(
+            context,
+            actor=query.from_user,
+            event="Track clicked",
+            song_name=song_name,
+        )
         if cover_path and query.message is not None and query.message.chat is not None:
             with cover_path.open("rb") as photo:
                 await context.bot.send_photo(
@@ -478,7 +474,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url
         response = await asyncio.to_thread(
             lambda: requests.post(
                 f"{backend_url}/create-checkout",
-                json={"song_id": song_id, "telegram_id": user_id},
+                json={
+                    "song_id": song_id,
+                    "telegram_id": user_id,
+                    "telegram_name": _user_display_name(query.from_user),
+                },
                 timeout=30,
             )
         )
