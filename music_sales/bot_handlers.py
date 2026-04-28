@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 GALLERY_SELECT_PREFIX = "g:s:"
 GALLERY_NEXT_PREFIX = "g:n:"
+PAY_CURRENCY_PREFIX = "pay:"
 GALLERY_PAGE_SIZE = 4
 # Лимит подписи к фото в Telegram (символы; для HTML обычно хватает len() как грубой оценки).
 MAX_PHOTO_CAPTION_LEN = 1024
@@ -25,6 +26,9 @@ UD_LAST_GALLERY_CONTROLS_MSG_ID = "gallery_last_controls_msg_id"
 UD_LAST_GALLERY_BATCH_MSG_IDS = "gallery_last_batch_msg_ids"
 UD_LAST_GALLERY_SHOWN_PAGE = "gallery_last_shown_page"
 UD_LAST_GALLERY_CARD_MSG_ID = "gallery_last_card_msg_id"
+UD_PENDING_CHECKOUT_SONG_ID = "pending_checkout_song_id"
+
+SUPPORTED_CURRENCIES = ("usd", "eur", "sek")
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
@@ -498,13 +502,40 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url
         return
     await query.answer()
 
-    song_id = query.data
     user_id = query.from_user.id
-    logger.info("Checkout button: user_id=%s song_id=%s", user_id, song_id)
+    callback_data = str(query.data or "")
+    songs = discover_songs()
 
-    if song_id not in discover_songs():
+    # Шаг 1: пользователь нажал Buy у текущего трека — просим выбрать валюту.
+    if callback_data in songs:
+        context.user_data[UD_PENDING_CHECKOUT_SONG_ID] = callback_data
         if query.message:
-            await query.message.reply_text("This track is not available anymore.")
+            await query.message.reply_text(
+                "Choose your payment currency:",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton("USD", callback_data=f"{PAY_CURRENCY_PREFIX}usd")],
+                        [InlineKeyboardButton("EUR", callback_data=f"{PAY_CURRENCY_PREFIX}eur")],
+                        [InlineKeyboardButton("SEK", callback_data=f"{PAY_CURRENCY_PREFIX}sek")],
+                    ]
+                ),
+            )
+        return
+
+    if not callback_data.startswith(PAY_CURRENCY_PREFIX):
+        return
+    currency = callback_data.split(":", 1)[1].lower()
+    if currency not in SUPPORTED_CURRENCIES:
+        if query.message:
+            await query.message.reply_text("Unknown currency. Please try again.")
+        return
+
+    song_id = str(context.user_data.get(UD_PENDING_CHECKOUT_SONG_ID) or "")
+    logger.info("Checkout currency chosen: user_id=%s song_id=%s currency=%s", user_id, song_id, currency)
+
+    if not song_id or song_id not in songs:
+        if query.message:
+            await query.message.reply_text("Please choose a track first.")
         return
 
     try:
@@ -515,6 +546,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url
                     "song_id": song_id,
                     "telegram_id": user_id,
                     "telegram_name": _user_display_name(query.from_user),
+                    "currency": currency,
                 },
                 timeout=30,
             )
@@ -540,4 +572,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url
         return
 
     logger.info("Checkout URL sent to user_id=%s song_id=%s", user_id, song_id)
-    await query.message.reply_text(f"Click here to pay:\n{payment_url}")
+    # Отправляем URL-кнопку, чтобы пользователь сразу открывал Stripe Checkout.
+    await query.message.reply_text(
+        "Tap to open secure Stripe checkout:",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("💳 Open Stripe Checkout", url=payment_url)]]
+        ),
+    )

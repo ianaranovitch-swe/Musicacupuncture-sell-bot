@@ -13,6 +13,7 @@ from music_sales.catalog import discover_songs, project_root, unit_amount_for_so
 from music_sales.owner_notify import notify_owner_sync
 
 logger = logging.getLogger(__name__)
+SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
 
 
 def deliver_purchase(
@@ -98,8 +99,11 @@ def create_app(
         song_id = data.get("song_id")
         telegram_id = data.get("telegram_id")
         telegram_name = str(data.get("telegram_name") or "Unknown user")
+        currency = str(data.get("currency") or "usd").strip().lower()
         if song_id is None or telegram_id is None:
             return jsonify({"error": "song_id and telegram_id are required"}), 400
+        if currency not in SUPPORTED_CHECKOUT_CURRENCIES:
+            return jsonify({"error": "Unsupported currency"}), 400
         catalog = get_catalog()
         try:
             song = catalog[song_id]
@@ -107,12 +111,15 @@ def create_app(
             return jsonify({"error": "Unknown song_id"}), 400
 
         try:
+            # Цена хранится как фиксированное число "16" в каталоге.
+            # Сейчас используем это число как номинал для выбранной валюты.
+            # При необходимости можно добавить отдельные цены по валютам.
             session = stripe.checkout.Session.create(
-                payment_method_types=["card"],
+                automatic_payment_methods={"enabled": True},
                 line_items=[
                     {
                         "price_data": {
-                            "currency": "usd",
+                            "currency": currency,
                             "product_data": {"name": song["name"]},
                             "unit_amount": unit_amount_for_song(song),
                         },

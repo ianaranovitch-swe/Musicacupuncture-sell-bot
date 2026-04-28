@@ -87,13 +87,9 @@ def test_gallery_markup_shows_next_page_track_buttons_for_first_page():
 
 
 @pytest.mark.asyncio
-async def test_button_requests_checkout_and_replies_with_url(mocker):
+async def test_button_first_click_shows_currency_buttons(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
     mock_post = mocker.patch("music_sales.bot_handlers.requests.post")
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"url": "https://checkout.example/pay"}
-    mock_resp.raise_for_status = MagicMock()
-    mock_post.return_value = mock_resp
 
     update = MagicMock()
     query = MagicMock()
@@ -106,14 +102,49 @@ async def test_button_requests_checkout_and_replies_with_url(mocker):
 
     await button(update, MagicMock(), backend_url="http://backend.test")
 
+    mock_post.assert_not_called()
+    query.message.reply_text.assert_awaited_once()
+    args = query.message.reply_text.call_args.args
+    kwargs = query.message.reply_text.call_args.kwargs
+    assert args[0] == "Choose your payment currency:"
+    buttons = [btn.text for row in kwargs["reply_markup"].inline_keyboard for btn in row]
+    assert buttons == ["USD", "EUR", "SEK"]
+
+
+@pytest.mark.asyncio
+async def test_button_currency_click_creates_checkout_and_replies_with_url(mocker):
+    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
+    mock_post = mocker.patch("music_sales.bot_handlers.requests.post")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"url": "https://checkout.example/pay"}
+    mock_resp.raise_for_status = MagicMock()
+    mock_post.return_value = mock_resp
+
+    update = MagicMock()
+    query = MagicMock()
+    query.data = "pay:sek"
+    query.from_user.id = 999
+    query.answer = AsyncMock()
+    query.message = MagicMock()
+    query.message.reply_text = AsyncMock()
+    update.callback_query = query
+
+    context = MagicMock()
+    context.user_data = {"pending_checkout_song_id": "s1"}
+
+    await button(update, context, backend_url="http://backend.test")
+
     mock_post.assert_called_once_with(
         "http://backend.test/create-checkout",
-        json={"song_id": "s1", "telegram_id": 999, "telegram_name": ANY},
+        json={"song_id": "s1", "telegram_id": 999, "telegram_name": ANY, "currency": "sek"},
         timeout=30,
     )
     query.message.reply_text.assert_awaited_once()
-    sent = query.message.reply_text.call_args[0][0]
-    assert "https://checkout.example/pay" in sent
+    args = query.message.reply_text.call_args.args
+    kwargs = query.message.reply_text.call_args.kwargs
+    assert args[0] == "Tap to open secure Stripe checkout:"
+    markup = kwargs["reply_markup"]
+    assert markup.inline_keyboard[0][0].url == "https://checkout.example/pay"
 
 
 @pytest.mark.asyncio

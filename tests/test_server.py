@@ -30,6 +30,28 @@ def test_create_checkout_returns_stripe_url(mocker):
     assert kwargs["line_items"][0]["price_data"]["currency"] == "usd"
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 1600
     assert kwargs["metadata"]["telegram_name"] == "Unknown user"
+    assert kwargs["automatic_payment_methods"]["enabled"] is True
+
+
+def test_create_checkout_accepts_selected_currency(mocker):
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 42, "currency": "sek"})
+
+    assert resp.status_code == 200
+    kwargs = create.call_args.kwargs
+    assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
 
 
 def test_create_checkout_400_when_missing_fields(mocker):
@@ -61,6 +83,20 @@ def test_create_checkout_400_when_unknown_song(mocker):
     )
     assert resp.status_code == 400
     assert "Unknown" in resp.get_json().get("error", "")
+
+
+def test_create_checkout_400_when_unsupported_currency(mocker):
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 1, "currency": "pln"})
+    assert resp.status_code == 400
 
 
 def test_webhook_completed_sends_audio(mocker, tmp_path):
