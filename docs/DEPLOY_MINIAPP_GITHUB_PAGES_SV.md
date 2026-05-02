@@ -4,8 +4,10 @@ Den här guiden visar hur du hostar **bara** vetrinen (`miniapp.html` + mappen `
 
 ## 1. Förbered repo
 
-1. Lägg alla omslagsbilder i **`covers/`** i repot (samma filnamn som i `tracks.py` / `miniapp.html`).
+1. Lägg alla omslagsbilder i **`covers/`** i repot. Filnamnen måste vara **exakt** som i fältet `cover` i `tracks.py` och som i `miniapp.html` (t.ex. `Divine sound Heart from God.jpg` — inte `1) Divine sound ...`).
 2. Pusha till GitHub (gren `main` eller `experiment` — samma som i workflow).
+
+**Helhetsguide för bot + Pages + Railway:** se `docs/DEPLOY_BOT_KOMPLETT_SV.md`.
 
 ## 2. Slå på GitHub Pages
 
