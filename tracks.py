@@ -164,7 +164,7 @@ TRACKS: list[dict] = [
         "price_amount": 1600,
         "cover": "covers/Divine sound NO Alcohol from God.jpg",
         "audio": "songs/Divine sound NO Alcohol from God.mp3",
-        "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
+        "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
     },
     {
         "id": 11,
@@ -181,7 +181,7 @@ TRACKS: list[dict] = [
         "price_amount": 1600,
         "cover": "covers/Divine sound NO Smoking from God.jpg",
         "audio": "songs/Divine sound NO Smoking from God.mp3",
-        "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
+        "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
     },
     {
         "id": 12,
