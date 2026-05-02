@@ -4,6 +4,7 @@ Simple Telegram bot: list 16 tracks from tracks.py, show cover + text, buy link 
 Run:  python bot.py
 
 Needs in .env: BOT_TOKEN (and STRIPE_TOKEN if you add Stripe later).
+Optional: MINIAPP_URL=https://.../miniapp.html (HTTPS) for the Music Store WebApp button.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from tracks import TRACKS, get_track
@@ -23,6 +24,17 @@ load_dotenv()
 
 ROOT = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
+
+
+def _miniapp_url() -> str:
+    """HTTPS URL страницы Mini App: MINIAPP_URL или {DOMAIN}/miniapp.html."""
+    direct = (os.getenv("MINIAPP_URL") or "").strip()
+    if direct.startswith("https://"):
+        return direct
+    base = (os.getenv("DOMAIN") or "").strip().rstrip("/")
+    if base.startswith("https://"):
+        return f"{base}/miniapp.html"
+    return ""
 
 # Optional: Stripe secret for future checkout code (not used in this minimal bot).
 _stripe = os.getenv("STRIPE_TOKEN", "").strip()
@@ -54,8 +66,11 @@ def _next_track_id(track_id: int) -> int:
 
 
 def _track_card_keyboard(track: dict) -> InlineKeyboardMarkup:
-    """Полная клавиатура: 16 кнопок треков + Buy + NEXT."""
+    """Полная клавиатура: опционально Mini App + 16 кнопок треков + Buy + NEXT."""
     rows: list[list[InlineKeyboardButton]] = []
+    store_url = _miniapp_url()
+    if store_url:
+        rows.append([InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))])
     for i in range(0, len(TRACKS), 2):
         left = TRACKS[i]
         row = [InlineKeyboardButton(left["short_title"], callback_data=str(left["id"]))]

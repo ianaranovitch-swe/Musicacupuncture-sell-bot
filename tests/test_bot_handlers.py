@@ -86,6 +86,17 @@ def test_gallery_markup_shows_next_page_track_buttons_for_first_page():
     assert "NEXT" in labels
 
 
+def test_full_catalog_markup_includes_music_store_when_miniapp_configured(mocker):
+    mocker.patch("music_sales.bot_handlers.config.resolved_miniapp_url", return_value="https://app.example/miniapp.html")
+    sorted_items = sorted(_SAMPLE_SONGS.items(), key=lambda kv: kv[1]["name"].lower())
+    markup = _full_catalog_markup(sorted_items=sorted_items, current_idx=0, current_song_id="s1")
+    first_row = markup.inline_keyboard[0]
+    assert len(first_row) == 1
+    assert first_row[0].text == "🎵 Open Music Store"
+    assert first_row[0].web_app is not None
+    assert first_row[0].web_app.url == "https://app.example/miniapp.html"
+
+
 @pytest.mark.asyncio
 async def test_button_first_click_shows_currency_buttons(mocker):
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)

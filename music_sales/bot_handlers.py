@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 import requests
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User, WebAppInfo
 from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
@@ -77,6 +77,14 @@ def _gallery_page_count(total_items: int) -> int:
     return max(1, (total_items + GALLERY_PAGE_SIZE - 1) // GALLERY_PAGE_SIZE)
 
 
+def _miniapp_store_row() -> list[InlineKeyboardButton] | None:
+    """Одна строка с Mini App, если задан валидный HTTPS URL (требование Telegram)."""
+    url = config.resolved_miniapp_url()
+    if not url.startswith("https://"):
+        return None
+    return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
+
+
 def _full_catalog_markup(
     *,
     sorted_items: list[tuple[str, dict]],
@@ -85,6 +93,9 @@ def _full_catalog_markup(
 ) -> InlineKeyboardMarkup:
     """Клавиатура каталога: Buy для текущего трека + 16 кнопок + NEXT."""
     grid_rows: list[list[InlineKeyboardButton]] = []
+    mini_row = _miniapp_store_row()
+    if mini_row:
+        grid_rows.append(mini_row)
     # Кнопка покупки текущего трека всегда сверху, рядом с карточкой/обложкой.
     grid_rows.append([InlineKeyboardButton("💳 Buy this track", callback_data=current_song_id)])
     for absolute_idx, (_, meta) in enumerate(sorted_items):

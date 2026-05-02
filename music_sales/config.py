@@ -11,6 +11,9 @@ STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
 # Секрет подписи вебхука Stripe (Stripe Dashboard → Webhooks → Signing secret). В проде обязателен.
 STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
 DOMAIN = _env("DOMAIN", "http://localhost:5000")
+# Полный HTTPS URL Mini App (например https://your-service.up.railway.app/miniapp.html).
+# Если пусто, при HTTPS в DOMAIN подставляется {DOMAIN}/miniapp.html
+MINIAPP_URL = _env("MINIAPP_URL")
 
 # Telegram Payments (Stripe): provider token из BotFather (нужен для sendInvoice)
 PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
@@ -24,6 +27,21 @@ AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
 DEFAULT_TRACK_PRICE_USD = _env("DEFAULT_TRACK_PRICE_USD", "16")
 # Обратная совместимость (старое имя переменной): используется только если DEFAULT_TRACK_PRICE_USD пустой
 DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")
+
+
+def resolved_miniapp_url() -> str:
+    """
+    URL для кнопки WebApp в Telegram.
+
+    Telegram Mini App в проде требует https://.
+    """
+    direct = (MINIAPP_URL or "").strip()
+    if direct.startswith("https://"):
+        return direct
+    base = (DOMAIN or "").strip().rstrip("/")
+    if base.startswith("https://"):
+        return f"{base}/miniapp.html"
+    return ""
 
 
 def owner_telegram_id_int() -> int | None:

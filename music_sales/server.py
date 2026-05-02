@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 import stripe
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from telegram import Bot
 
 from music_sales import config
@@ -92,6 +92,27 @@ def create_app(
 
     def root_path() -> Path:
         return project_root_override if project_root_override is not None else project_root()
+
+    @app.route("/miniapp.html")
+    def miniapp_page() -> Any:
+        """Статическая страница Telegram Mini App (один HTML-файл в корне репозитория)."""
+        return send_from_directory(str(root_path()), "miniapp.html", mimetype="text/html")
+
+    @app.route("/covers/<path:filename>")
+    def miniapp_cover(filename: str) -> Any:
+        """Обложки для Mini App: только файлы внутри папки covers (без выхода вверх по путям)."""
+        covers_dir = (root_path() / "covers").resolve()
+        try:
+            target = (covers_dir / filename).resolve()
+        except OSError:
+            return jsonify({"error": "Invalid path"}), 400
+        try:
+            target.relative_to(covers_dir)
+        except ValueError:
+            return jsonify({"error": "Invalid path"}), 400
+        if not target.is_file():
+            return jsonify({"error": "Not found"}), 404
+        return send_from_directory(str(covers_dir), filename)
 
     @app.route("/create-checkout", methods=["POST"])
     def create_checkout() -> Any:

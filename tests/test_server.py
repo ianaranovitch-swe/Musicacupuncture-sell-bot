@@ -168,3 +168,53 @@ def test_success_and_cancel_pages():
     client = app.test_client()
     assert client.get("/success").status_code == 200
     assert client.get("/cancel").status_code == 200
+
+
+def test_miniapp_html_route(mocker, tmp_path):
+    (tmp_path / "miniapp.html").write_text("<!doctype html><title>x</title>", encoding="utf-8")
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=MagicMock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/miniapp.html")
+    assert resp.status_code == 200
+    assert b"doctype html" in resp.data.lower()
+
+
+def test_covers_route_serves_file(mocker, tmp_path):
+    covers = tmp_path / "covers"
+    covers.mkdir()
+    (covers / "sample.jpg").write_bytes(b"\xff\xd8\xff")
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=MagicMock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    assert client.get("/covers/sample.jpg").status_code == 200
+    assert client.get("/covers/../.env").status_code == 400
+
+
+def test_covers_route_404_when_missing(mocker, tmp_path):
+    (tmp_path / "covers").mkdir()
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=MagicMock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    assert client.get("/covers/nope.jpg").status_code == 404

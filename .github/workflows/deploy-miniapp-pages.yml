@@ -1,0 +1,54 @@
+# Publicerar endast Mini App (miniapp.html + covers/) till GitHub Pages — utan Flask/Railway för vetrinen.
+name: Deploy Mini App (GitHub Pages)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main", "experiment"]
+    paths:
+      - "miniapp.html"
+      - "covers/**"
+      - ".github/workflows/deploy-miniapp-pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Samla statiska filer i _site (GitHub Pages rot för denna deploy).
+      - name: Build static site folder
+        run: |
+          mkdir -p _site/covers
+          cp miniapp.html _site/miniapp.html
+          cp miniapp.html _site/index.html
+          touch _site/.nojekyll
+          if [ -d covers ]; then
+            find covers -maxdepth 1 -type f -exec cp {} _site/covers/ \;
+          fi
+          echo "Published files:" && find _site -type f | head -50
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
