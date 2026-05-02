@@ -29,6 +29,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Tydligt fel om filen aldrig pushats till GitHub (annars misslyckas deploy eller ger 404).
+      - name: Verify miniapp.html exists in repo root
+        run: |
+          if [ ! -f miniapp.html ]; then
+            echo "::error::miniapp.html is missing at repository root. Add it, commit, and push."
+            exit 1
+          fi
+
       # Samla statiska filer i _site (GitHub Pages rot för denna deploy).
       - name: Build static site folder
         run: |

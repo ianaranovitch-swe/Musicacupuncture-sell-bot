@@ -56,8 +56,10 @@ Du kan lämna `DOMAIN` på Railway som din Stripe-webb om du fortfarande kör `w
 
 | Problem | Åtgärd |
 |--------|--------|
+| **404 på hela sidan** (`miniapp.html` eller rot-URL) | 1) Öppna repot på **github.com** → kontrollera att **`miniapp.html` ligger i roten** (samma nivå som `README`). Finns den inte: kopiera från din dator, `git add miniapp.html`, `git commit`, `git push`. 2) **Settings → Pages → Source: GitHub Actions** (inte “Deploy from a branch”). 3) **Actions** → kör **Deploy Mini App (GitHub Pages)** manuellt och vänta tills den är grön. 4) Rätt URL för *project site*: `https://<användare>.github.io/<repo-namn>/miniapp.html` — **repo-namnet** ska med (om det inte är `username.github.io`-repo). |
 | 404 på bilder | Kontrollera att filerna finns i `covers/` i repot och att namnen matchar exakt (inkl. mellanslag). |
 | Workflow kräver godkännande | **Settings** → **Environments** → **github-pages** → lägg till regler eller godkänn körning. |
+| Workflow röd: “miniapp.html saknas” | Filen finns inte i den gren som Actions bygger — lägg till i repot och pusha igen. |
 | Gammal sida i Telegram | Hård uppdatering / vänta på CDN; ändra t.ex. en kommentar i `miniapp.html` och pusha om. |
 
 ## 8. Säkerhet
