@@ -352,29 +352,31 @@
      * После выбора показываем цены и Stripe-ссылку под эту валюту.
      */
     const LS_CURRENCY_KEY = "musicacupuncture_currency";
+    const LS_CHECKOUT_API = "musicacupuncture_checkout_api";
+    const LS_CHECKOUT_SECRET = "musicacupuncture_checkout_secret";
     const CURRENCY_USD = "USD";
     const CURRENCY_SEK = "SEK";
 
     /**
-     * Каталог: buyUrl = USD (Stripe), buyUrlSEK = SEK (пока те же заглушки, потом заменить вручную).
+     * Каталог треков. Оплата только через бэкенд POST /create-checkout (webhook пришлёт MP3).
      */
     const tracks = [
-      { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg", buyUrl: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00", buyUrlSEK: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00" },
-      { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.jpg", buyUrl: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02", buyUrlSEK: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02" },
-      { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.jpg", buyUrl: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03", buyUrlSEK: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03" },
-      { id: 4, emoji: "💗", shortName: "Heart & Diaphragm Chakra", fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God", description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.", cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg", buyUrl: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04", buyUrlSEK: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04" },
-      { id: 5, emoji: "🛡️", shortName: "Immune Defence", fullTitle: "Divine sound Immunedefence from God", description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.", cover: "covers/Divine sound Immunedefence from God.jpg", buyUrl: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05", buyUrlSEK: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05" },
-      { id: 6, emoji: "💧", shortName: "Kidney", fullTitle: "Divine sound Kidney from God", description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.", cover: "covers/Divine sound Kidney from God.jpg", buyUrl: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06", buyUrlSEK: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06" },
-      { id: 7, emoji: "🌿", shortName: "Liver", fullTitle: "Divine sound Liver from God", description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", cover: "covers/Divine sound Liver from God.jpg", buyUrl: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07", buyUrlSEK: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07" },
-      { id: 8, emoji: "🫁", shortName: "Lungs", fullTitle: "Divine sound Lungs from God", description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", cover: "covers/Divine sound Lungs from God.jpg", buyUrl: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08", buyUrlSEK: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08" },
-      { id: 9, emoji: "💎", shortName: "Minerals", fullTitle: "Divine sound Minerals from God", description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", cover: "covers/Divine sound Minerals from God.jpg", buyUrl: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09", buyUrlSEK: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09" },
-      { id: 10, emoji: "🚫", shortName: "NO Alcohol", fullTitle: "Divine sound NO Alcohol from God", description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", cover: "covers/Divine sound NO Alcohol from God.jpg", buyUrl: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a", buyUrlSEK: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a" },
-      { id: 11, emoji: "🚭", shortName: "NO Smoking", fullTitle: "Divine sound NO Smoking from God", description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", cover: "covers/Divine sound NO Smoking from God.jpg", buyUrl: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b", buyUrlSEK: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b" },
-      { id: 12, emoji: "🌱", shortName: "Root Chakra", fullTitle: "Divine sound Rootchakra from God", description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", cover: "covers/Divine sound Rootchakra from God.jpg", buyUrl: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c", buyUrlSEK: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c" },
-      { id: 13, emoji: "🌊", shortName: "Sacral & Navel Chakra", fullTitle: "Divine sound Sacralchakra and Navelchakra from God", description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", cover: "covers/Divine sound Sacralchakra and Navelchakra from God.jpg", buyUrl: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d", buyUrlSEK: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d" },
-      { id: 14, emoji: "☀️", shortName: "Solar Plexus & Spleen", fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God", description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg", buyUrl: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e", buyUrlSEK: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e" },
-      { id: 15, emoji: "💪", shortName: "Testosterone", fullTitle: "Divine sound Testosteron from God", description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.", cover: "covers/Divine sound Testosteron from God.jpg", buyUrl: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f", buyUrlSEK: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f" },
-      { id: 16, emoji: "✨", shortName: "Vitamins", fullTitle: "Divine sound Vitamins from God", description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.", cover: "covers/Divine sound Vitamins from God.jpg", buyUrl: "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g", buyUrlSEK: "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g" }
+      { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg" },
+      { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.jpg" },
+      { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.jpg" },
+      { id: 4, emoji: "💗", shortName: "Heart & Diaphragm Chakra", fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God", description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.", cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg" },
+      { id: 5, emoji: "🛡️", shortName: "Immune Defence", fullTitle: "Divine sound Immunedefence from God", description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.", cover: "covers/Divine sound Immunedefence from God.jpg" },
+      { id: 6, emoji: "💧", shortName: "Kidney", fullTitle: "Divine sound Kidney from God", description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.", cover: "covers/Divine sound Kidney from God.jpg" },
+      { id: 7, emoji: "🌿", shortName: "Liver", fullTitle: "Divine sound Liver from God", description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", cover: "covers/Divine sound Liver from God.jpg" },
+      { id: 8, emoji: "🫁", shortName: "Lungs", fullTitle: "Divine sound Lungs from God", description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", cover: "covers/Divine sound Lungs from God.jpg" },
+      { id: 9, emoji: "💎", shortName: "Minerals", fullTitle: "Divine sound Minerals from God", description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", cover: "covers/Divine sound Minerals from God.jpg" },
+      { id: 10, emoji: "🚫", shortName: "NO Alcohol", fullTitle: "Divine sound NO Alcohol from God", description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", cover: "covers/Divine sound NO Alcohol from God.jpg" },
+      { id: 11, emoji: "🚭", shortName: "NO Smoking", fullTitle: "Divine sound NO Smoking from God", description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", cover: "covers/Divine sound NO Smoking from God.jpg" },
+      { id: 12, emoji: "🌱", shortName: "Root Chakra", fullTitle: "Divine sound Rootchakra from God", description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", cover: "covers/Divine sound Rootchakra from God.jpg" },
+      { id: 13, emoji: "🌊", shortName: "Sacral & Navel Chakra", fullTitle: "Divine sound Sacralchakra and Navelchakra from God", description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", cover: "covers/Divine sound Sacralchakra and Navelchakra from God.jpg" },
+      { id: 14, emoji: "☀️", shortName: "Solar Plexus & Spleen", fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God", description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg" },
+      { id: 15, emoji: "💪", shortName: "Testosterone", fullTitle: "Divine sound Testosteron from God", description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.", cover: "covers/Divine sound Testosteron from God.jpg" },
+      { id: 16, emoji: "✨", shortName: "Vitamins", fullTitle: "Divine sound Vitamins from God", description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.", cover: "covers/Divine sound Vitamins from God.jpg" }
     ];
 
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -423,15 +425,31 @@
       return "$16";
     }
 
-    /** Stripe: USD → buyUrl, SEK → buyUrlSEK */
-    function paymentUrlForTrack(track, currency) {
-      if (!track) return "";
-      if (currency === CURRENCY_SEK) {
-        const u = (track.buyUrlSEK || "").trim();
-        if (u.startsWith("http://") || u.startsWith("https://")) return u;
+    /** Берём из query (бот открывает ссылку с checkout_api=) и кладём в sessionStorage. */
+    function syncCheckoutParamsFromUrl() {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        const api = (q.get("checkout_api") || "").trim();
+        const sec = (q.get("checkout_secret") || "").trim();
+        if (api) sessionStorage.setItem(LS_CHECKOUT_API, api);
+        if (sec) sessionStorage.setItem(LS_CHECKOUT_SECRET, sec);
+      } catch (e) { /* ignore */ }
+    }
+
+    function getCheckoutApiBase() {
+      try {
+        return (sessionStorage.getItem(LS_CHECKOUT_API) || "").trim().replace(/\/$/, "");
+      } catch (e) {
+        return "";
       }
-      const u = (track.buyUrl || "").trim();
-      return u.startsWith("http://") || u.startsWith("https://") ? u : "";
+    }
+
+    function getMiniappCheckoutSecretForHeader() {
+      try {
+        return (sessionStorage.getItem(LS_CHECKOUT_SECRET) || "").trim();
+      } catch (e) {
+        return "";
+      }
     }
 
     function updateBadge() {
@@ -520,15 +538,65 @@
 
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
-    document.getElementById("btn-buy").addEventListener("click", () => {
+    document.getElementById("btn-buy").addEventListener("click", async () => {
       if (!selected || !currentCurrency) return;
-      const url = paymentUrlForTrack(selected, currentCurrency);
-      if (!url) return;
-      if (tg && typeof tg.openLink === "function") {
-        tg.openLink(url);
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
+      const apiBase = getCheckoutApiBase();
+      const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      const telegram_id = u && u.id;
+      const telegram_name =
+        [u && u.first_name, u && u.last_name].filter(Boolean).join(" ") || (u && u.username) || "Telegram user";
+      if (!telegram_id) {
+        if (tg && tg.showAlert) tg.showAlert("Open this app inside Telegram to purchase.");
+        else alert("Open this app inside Telegram to purchase.");
+        return;
       }
+      if (!apiBase) {
+        if (tg && tg.showAlert) {
+          tg.showAlert(
+            "Payment server URL is missing. Open the Music Store from the bot button (not only this page in a browser)."
+          );
+        } else {
+          alert("Payment server URL is missing.");
+        }
+        return;
+      }
+      const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
+      const headers = { "Content-Type": "application/json" };
+      const sec = getMiniappCheckoutSecretForHeader();
+      if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
+      let res;
+      try {
+        res = await fetch(`${apiBase}/create-checkout`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            track_id: selected.id,
+            telegram_id,
+            telegram_name,
+            currency,
+          }),
+        });
+      } catch (e) {
+        if (tg && tg.showAlert) tg.showAlert("Network error. Try again.");
+        return;
+      }
+      if (!res.ok) {
+        if (tg && tg.showAlert) tg.showAlert("Could not start checkout. Try again later.");
+        return;
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (e) {
+        return;
+      }
+      const payUrl = data && data.url;
+      if (!payUrl || typeof payUrl !== "string") {
+        if (tg && tg.showAlert) tg.showAlert("Invalid response from payment server.");
+        return;
+      }
+      if (tg && typeof tg.openLink === "function") tg.openLink(payUrl);
+      else window.open(payUrl, "_blank", "noopener,noreferrer");
     });
 
     document.getElementById("btn-preview").addEventListener("click", () => {
@@ -547,8 +615,9 @@
       }
     });
 
-    /** Старт: если валюта уже в localStorage — сразу сетка, иначе экран выбора. */
+    /** Старт: параметры checkout из URL; валюта из localStorage. */
     (function init() {
+      syncCheckoutParamsFromUrl();
       const stored = readStoredCurrency();
       if (stored) {
         currentCurrency = stored;

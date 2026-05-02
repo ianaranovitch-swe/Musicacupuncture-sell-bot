@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote
 
 
 def _env(name: str, default: str = "") -> str:
@@ -14,6 +15,13 @@ DOMAIN = _env("DOMAIN", "http://localhost:5000")
 # Полный HTTPS URL Mini App (например https://your-service.up.railway.app/miniapp.html).
 # Если пусто, при HTTPS в DOMAIN подставляется {DOMAIN}/miniapp.html
 MINIAPP_URL = _env("MINIAPP_URL")
+# Разрешённые Origin для CORS к POST /create-checkout (Mini App на GitHub Pages), через запятую.
+# Пример: https://dittnamn.github.io
+MINIAPP_CORS_ORIGINS = _env("MINIAPP_CORS_ORIGINS")
+# Опционально: общий секрет; Mini App шлёт заголовок X-Miniapp-Checkout-Secret (тот же текст в .env).
+MINIAPP_CHECKOUT_SECRET = _env("MINIAPP_CHECKOUT_SECRET")
+# Stripe Checkout: сумма в öre для валюты sek (169 kr = 16900).
+CHECKOUT_SEK_UNIT_AMOUNT = _env("CHECKOUT_SEK_UNIT_AMOUNT", "16900")
 
 # Telegram Payments (Stripe): provider token из BotFather (нужен для sendInvoice)
 PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
@@ -34,14 +42,26 @@ def resolved_miniapp_url() -> str:
     URL для кнопки WebApp в Telegram.
 
     Telegram Mini App в проде требует https://.
+    Если задан HTTPS BACKEND_URL — добавляем checkout_api=... чтобы Mini App мог вызвать create-checkout.
     """
     direct = (MINIAPP_URL or "").strip()
     if direct.startswith("https://"):
-        return direct
-    base = (DOMAIN or "").strip().rstrip("/")
-    if base.startswith("https://"):
-        return f"{base}/miniapp.html"
-    return ""
+        base = direct
+    else:
+        base_dom = (DOMAIN or "").strip().rstrip("/")
+        if base_dom.startswith("https://"):
+            base = f"{base_dom}/miniapp.html"
+        else:
+            return ""
+    api = (BACKEND_URL or "").strip().rstrip("/")
+    if api.startswith("https://"):
+        sep = "&" if "?" in base else "?"
+        out = f"{base}{sep}checkout_api={quote(api, safe='')}"
+        cs = (MINIAPP_CHECKOUT_SECRET or "").strip()
+        if cs:
+            out += f"&checkout_secret={quote(cs, safe='')}"
+        return out
+    return base
 
 
 def owner_telegram_id_int() -> int | None:

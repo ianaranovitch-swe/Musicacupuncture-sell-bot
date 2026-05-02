@@ -73,6 +73,21 @@ def _song_id_from_stem(stem: str) -> str:
     return s or "track"
 
 
+def resolve_song_id_by_audio_stem(stem: str) -> str | None:
+    """
+    Находит song_id в каталоге discover_songs() по stem имени файла .mp3
+    (совпадает с логикой имён из папки songs).
+    """
+    stem = (stem or "").strip()
+    if not stem:
+        return None
+    for song_id, meta in discover_songs().items():
+        file_stem = Path(str(meta.get("file", ""))).stem
+        if file_stem == stem:
+            return song_id
+    return None
+
+
 def discover_songs() -> Dict[str, Dict[str, Any]]:
     """
     Сканирует папку `songs/` (или значение `AUDIO_SALES_DIR`) и собирает аудио-файлы (по одному треку на файл).

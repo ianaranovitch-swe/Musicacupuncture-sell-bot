@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from music_sales import config
+from music_sales.secret_redact import SecretRedactFilter
 
 _configured = False
 
@@ -24,12 +25,14 @@ def setup_logging() -> None:
         level = logging.INFO
 
     formatter = logging.Formatter(fmt=LOG_FORMAT, datefmt=DATE_FORMAT)
+    redact = SecretRedactFilter()
     root = logging.getLogger()
     root.setLevel(level)
 
     if not root.handlers:
         stream = logging.StreamHandler(sys.stdout)
         stream.setFormatter(formatter)
+        stream.addFilter(redact)
         root.addHandler(stream)
 
     if config.LOG_FILE:
@@ -37,9 +40,12 @@ def setup_logging() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(path, encoding="utf-8")
         file_handler.setFormatter(formatter)
+        file_handler.addFilter(redact)
         root.addHandler(file_handler)
 
     # python-telegram-bot и HTTP-стек слишком болтливы на уровне INFO
     logging.getLogger("telegram").setLevel(max(level, logging.WARNING))
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    # Stripe SDK: на DEBUG может печатать чувствительные детали — держим не ниже WARNING.
+    logging.getLogger("stripe").setLevel(logging.WARNING)

@@ -9,11 +9,14 @@ from flask import Flask, jsonify, request, send_from_directory
 from telegram import Bot
 
 from music_sales import config
-from music_sales.catalog import discover_songs, project_root, unit_amount_for_song
+from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
 from music_sales.owner_notify import notify_owner_sync
 
 logger = logging.getLogger(__name__)
 SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
+
+# Не даём Stripe SDK засорять логи на уровне DEBUG (там могут быть чувствительные поля).
+logging.getLogger("stripe").setLevel(logging.WARNING)
 
 
 def deliver_purchase(
@@ -93,6 +96,38 @@ def create_app(
     def root_path() -> Path:
         return project_root_override if project_root_override is not None else project_root()
 
+    def _cors_headers_for_create_checkout() -> dict[str, str]:
+        """CORS для Mini App на другом origin (например GitHub Pages)."""
+        origin = (request.headers.get("Origin") or "").strip()
+        raw = (config.MINIAPP_CORS_ORIGINS or "").strip()
+        if not origin or not raw:
+            return {}
+        allowed = {x.strip() for x in raw.split(",") if x.strip()}
+        if origin not in allowed:
+            return {}
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Miniapp-Checkout-Secret",
+            "Access-Control-Max-Age": "86400",
+        }
+
+    @app.after_request
+    def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
+        if request.path == "/create-checkout":
+            for k, v in _cors_headers_for_create_checkout().items():
+                response.headers[k] = v
+        return response
+
+    def _checkout_unit_amount(song: Dict[str, Any], currency: str) -> int:
+        """Для sek — фиксированная сумма в öre (из env); для usd/eur — из каталога."""
+        if currency == "sek":
+            try:
+                return int((config.CHECKOUT_SEK_UNIT_AMOUNT or "16900").strip() or "16900")
+            except ValueError:
+                return 16900
+        return unit_amount_for_song(song)
+
     @app.route("/miniapp.html")
     def miniapp_page() -> Any:
         """Статическая страница Telegram Mini App (один HTML-файл в корне репозитория)."""
@@ -114,15 +149,43 @@ def create_app(
             return jsonify({"error": "Not found"}), 404
         return send_from_directory(str(covers_dir), filename)
 
+    @app.route("/create-checkout", methods=["OPTIONS"])
+    def create_checkout_options() -> Any:
+        """Preflight для браузера (Mini App на другом домене)."""
+        return "", 204
+
     @app.route("/create-checkout", methods=["POST"])
     def create_checkout() -> Any:
         data = request.get_json(silent=True) or {}
         song_id = data.get("song_id")
+        track_id = data.get("track_id")
+        # Только для Mini App (track_id): опциональный секрет в заголовке. /buy шлёт только song_id — без секрета.
+        sec = (config.MINIAPP_CHECKOUT_SECRET or "").strip()
+        if track_id is not None and sec:
+            if (request.headers.get("X-Miniapp-Checkout-Secret") or "").strip() != sec:
+                return jsonify({"error": "Unauthorized"}), 401
+
         telegram_id = data.get("telegram_id")
         telegram_name = str(data.get("telegram_name") or "Unknown user")
         currency = str(data.get("currency") or "usd").strip().lower()
+
+        # Mini App шлёт track_id 1..16 — сопоставляем с файлом в tracks.py и song_id каталога.
+        if song_id is None and track_id is not None:
+            try:
+                from pathlib import Path as _Path
+
+                from tracks import get_track as _get_track
+
+                t = _get_track(int(track_id))
+            except (ImportError, ValueError, TypeError, AttributeError):
+                t = None
+            if t:
+                stem = _Path(str(t.get("audio", ""))).stem
+                if stem:
+                    song_id = resolve_song_id_by_audio_stem(stem)
+
         if song_id is None or telegram_id is None:
-            return jsonify({"error": "song_id and telegram_id are required"}), 400
+            return jsonify({"error": "song_id (or track_id) and telegram_id are required"}), 400
         if currency not in SUPPORTED_CHECKOUT_CURRENCIES:
             return jsonify({"error": "Unsupported currency"}), 400
         catalog = get_catalog()
@@ -132,9 +195,7 @@ def create_app(
             return jsonify({"error": "Unknown song_id"}), 400
 
         try:
-            # Цена хранится как фиксированное число "16" в каталоге.
-            # Сейчас используем это число как номинал для выбранной валюты.
-            # При необходимости можно добавить отдельные цены по валютам.
+            unit_amount = _checkout_unit_amount(song, currency)
             session = stripe.checkout.Session.create(
                 automatic_payment_methods={"enabled": True},
                 line_items=[
@@ -142,7 +203,7 @@ def create_app(
                         "price_data": {
                             "currency": currency,
                             "product_data": {"name": song["name"]},
-                            "unit_amount": unit_amount_for_song(song),
+                            "unit_amount": unit_amount,
                         },
                         "quantity": 1,
                     }

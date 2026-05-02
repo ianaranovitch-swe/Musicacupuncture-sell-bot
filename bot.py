@@ -27,14 +27,27 @@ logger = logging.getLogger(__name__)
 
 
 def _miniapp_url() -> str:
-    """HTTPS URL страницы Mini App: MINIAPP_URL или {DOMAIN}/miniapp.html."""
+    """HTTPS URL Mini App + query checkout_api (BACKEND_URL) для fetch create-checkout."""
+    from urllib.parse import quote
+
     direct = (os.getenv("MINIAPP_URL") or "").strip()
     if direct.startswith("https://"):
-        return direct
-    base = (os.getenv("DOMAIN") or "").strip().rstrip("/")
-    if base.startswith("https://"):
-        return f"{base}/miniapp.html"
-    return ""
+        base = direct
+    else:
+        base_dom = (os.getenv("DOMAIN") or "").strip().rstrip("/")
+        if base_dom.startswith("https://"):
+            base = f"{base_dom}/miniapp.html"
+        else:
+            return ""
+    api = (os.getenv("BACKEND_URL") or "").strip().rstrip("/")
+    if api.startswith("https://"):
+        sep = "&" if "?" in base else "?"
+        out = f"{base}{sep}checkout_api={quote(api, safe='')}"
+        cs = (os.getenv("MINIAPP_CHECKOUT_SECRET") or "").strip()
+        if cs:
+            out += f"&checkout_secret={quote(cs, safe='')}"
+        return out
+    return base
 
 # Optional: Stripe secret for future checkout code (not used in this minimal bot).
 _stripe = os.getenv("STRIPE_TOKEN", "").strip()
