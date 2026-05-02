@@ -117,6 +117,15 @@ async def _send_track_card(chat_id: int, track: dict, context: ContextTypes.DEFA
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
+    # Первое сообщение в чате: только WebApp — пользователь сразу открывает витрину.
+    store_url = _miniapp_url()
+    if store_url:
+        await update.message.reply_text(
+            "Welcome! Tap the button below to open the Music Store.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))]]
+            ),
+        )
     first_track = get_track(1)
     if first_track is None:
         await update.message.reply_text("No tracks available.")

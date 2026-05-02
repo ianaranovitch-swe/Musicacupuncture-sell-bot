@@ -1,4 +1,7 @@
-"""Catalog of 16 tracks: cover and audio share the same base filename (.jpg / .mp3)."""
+"""Catalog of 16 tracks: cover and audio share the same base filename (.jpg / .mp3).
+
+Поле buy_url_sek — ссылка Stripe в шведских кронах для Mini App; пока дублирует buy_url, замените на реальные SEK-ссылки.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg",
         "audio": "songs/Divine sound Crownchakra-Browchakra-Throatchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
+        "buy_url_sek": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"
     },
     {
         "id": 2,
@@ -34,6 +38,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Estrogen from God.jpg",
         "audio": "songs/Divine sound Estrogen from God.mp3",
         "buy_url": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
+        "buy_url_sek": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02"
     },
     {
         "id": 3,
@@ -51,6 +56,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Heart from God.jpg",
         "audio": "songs/Divine sound Heart from God.mp3",
         "buy_url": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
+        "buy_url_sek": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03"
     },
     {
         "id": 4,
@@ -67,6 +73,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg",
         "audio": "songs/Divine sound Heartchakra and Diaphragmchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
+        "buy_url_sek": "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04"
     },
     {
         "id": 5,
@@ -84,6 +91,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Immunedefence from God.jpg",
         "audio": "songs/Divine sound Immunedefence from God.mp3",
         "buy_url": "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
+        "buy_url_sek": "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05"
     },
     {
         "id": 6,
@@ -100,6 +108,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Kidney from God.jpg",
         "audio": "songs/Divine sound Kidney from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
+        "buy_url_sek": "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06"
     },
     {
         "id": 7,
@@ -116,6 +125,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Liver from God.jpg",
         "audio": "songs/Divine sound Liver from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
+        "buy_url_sek": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07"
     },
     {
         "id": 8,
@@ -132,6 +142,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Lungs from God.jpg",
         "audio": "songs/Divine sound Lungs from God.mp3",
         "buy_url": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
+        "buy_url_sek": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08"
     },
     {
         "id": 9,
@@ -149,6 +160,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Minerals from God.jpg",
         "audio": "songs/Divine sound Minerals from God.mp3",
         "buy_url": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
+        "buy_url_sek": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09"
     },
     {
         "id": 10,
@@ -165,6 +177,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound NO Alcohol from God.jpg",
         "audio": "songs/Divine sound NO Alcohol from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
+        "buy_url_sek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"
     },
     {
         "id": 11,
@@ -182,6 +195,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound NO Smoking from God.jpg",
         "audio": "songs/Divine sound NO Smoking from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
+        "buy_url_sek": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"
     },
     {
         "id": 12,
@@ -198,6 +212,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Rootchakra from God.jpg",
         "audio": "songs/Divine sound Rootchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
+        "buy_url_sek": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c"
     },
     {
         "id": 13,
@@ -214,6 +229,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Sacralchakra and Navelchakra from God.jpg",
         "audio": "songs/Divine sound Sacralchakra and Navelchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
+        "buy_url_sek": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d"
     },
     {
         "id": 14,
@@ -230,6 +246,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg",
         "audio": "songs/Divine sound Solarplexuschakra and Spleenchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
+        "buy_url_sek": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e"
     },
     {
         "id": 15,
@@ -246,6 +263,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Testosteron from God.jpg",
         "audio": "songs/Divine sound Testosteron from God.mp3",
         "buy_url": "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
+        "buy_url_sek": "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f"
     },
     {
         "id": 16,
@@ -263,6 +281,7 @@ TRACKS: list[dict] = [
         "cover": "covers/Divine sound Vitamins from God.jpg",
         "audio": "songs/Divine sound Vitamins from God.mp3",
         "buy_url": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g",
+        "buy_url_sek": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"
     },
 ]
 

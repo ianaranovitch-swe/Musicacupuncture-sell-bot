@@ -85,6 +85,22 @@ def _miniapp_store_row() -> list[InlineKeyboardButton] | None:
     return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
 
 
+async def _send_miniapp_store_opener_if_configured(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Первое сообщение при /start: кнопка WebApp (тексты UI на английском)."""
+    if update.message is None:
+        return
+    row = _miniapp_store_row()
+    if not row:
+        return
+    await update.message.reply_text(
+        "Welcome! Tap the button below to open the Music Store.",
+        reply_markup=InlineKeyboardMarkup([row]),
+    )
+
+
 def _full_catalog_markup(
     *,
     sorted_items: list[tuple[str, dict]],
@@ -276,6 +292,8 @@ def _gallery_error_user_text_and_code(exc: Exception, *, has_cover: bool) -> tup
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
+    # Сначала приветствие с WebApp — витрина открывается одним тапом.
+    await _send_miniapp_store_opener_if_configured(update, context)
     user = update.effective_user
     if user is not None:
         logger.info("/start from user_id=%s username=%s", user.id, user.username or "-")

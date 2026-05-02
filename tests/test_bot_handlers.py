@@ -16,6 +16,7 @@ _SAMPLE_SONGS_8 = {
 
 @pytest.mark.asyncio
 async def test_start_replies_with_catalog_keyboard(mocker):
+    mocker.patch("music_sales.bot_handlers.config.resolved_miniapp_url", return_value="")
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=None)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
     send_card = mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
@@ -32,6 +33,32 @@ async def test_start_replies_with_catalog_keyboard(mocker):
     kwargs = send_card.call_args.kwargs
     assert kwargs["chat_id"] == 777
     assert kwargs["song_idx"] == 0
+    update.message.reply_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_start_sends_store_opener_before_catalog_when_miniapp_url_set(mocker):
+    mocker.patch(
+        "music_sales.bot_handlers.config.resolved_miniapp_url",
+        return_value="https://user.github.io/repo/miniapp.html",
+    )
+    mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=None)
+    mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
+    send_card = mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
+    update = MagicMock()
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    update.message.chat_id = 777
+    update.effective_user = MagicMock()
+    context = MagicMock()
+
+    await start(update, context)
+
+    update.message.reply_text.assert_awaited_once()
+    rt_kwargs = update.message.reply_text.call_args.kwargs
+    assert "Music Store" in rt_kwargs["reply_markup"].inline_keyboard[0][0].text
+    assert rt_kwargs["reply_markup"].inline_keyboard[0][0].web_app is not None
+    send_card.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -168,6 +195,7 @@ async def test_start_no_message_does_nothing():
 
 @pytest.mark.asyncio
 async def test_start_sends_owner_notification(mocker):
+    mocker.patch("music_sales.bot_handlers.config.resolved_miniapp_url", return_value="")
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=555)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
     mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
@@ -194,6 +222,7 @@ async def test_start_sends_owner_notification(mocker):
 
 @pytest.mark.asyncio
 async def test_start_skips_notify_when_visitor_is_owner(mocker):
+    mocker.patch("music_sales.bot_handlers.config.resolved_miniapp_url", return_value="")
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=7846059164)
     mocker.patch("music_sales.bot_handlers.discover_songs", return_value=_SAMPLE_SONGS)
     mocker.patch("music_sales.bot_handlers._send_single_track_card", new_callable=AsyncMock)
