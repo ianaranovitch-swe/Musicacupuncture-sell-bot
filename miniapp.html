@@ -597,6 +597,9 @@
 
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
+    /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
+    const CHECKOUT_FETCH_TIMEOUT_MS = 25000;
+
     async function startCheckout() {
       if (checkoutInFlight) return;
       if (!selected || !currentCurrency) {
@@ -613,86 +616,97 @@
         else alert("Open this app inside Telegram to purchase.");
         return;
       }
-      checkoutInFlight = true;
-      if (tg && tg.MainButton && typeof tg.MainButton.showProgress === "function") tg.MainButton.showProgress();
-      const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
-      const headers = { "Content-Type": "application/json" };
-      const sec = getMiniappCheckoutSecretForHeader();
-      if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
-      if (typeof window !== "undefined" && window.location && window.location.protocol === "https:" && apiBase.startsWith("http://")) {
-        if (tg && tg.showAlert) {
-          tg.showAlert(
-            "The store is on HTTPS but the payment API URL is HTTP — the browser blocks that. Set BACKEND_URL to https://… on Railway (bot + Web) and open the store again from the bot so checkout_api updates."
-          );
-        }
+
+      const mb = tg && tg.MainButton;
+      const stopCheckoutSpinner = () => {
         checkoutInFlight = false;
-        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
-        return;
-      }
-      let res;
+        if (mb && typeof mb.hideProgress === "function") mb.hideProgress();
+        if (mb && typeof mb.enable === "function") mb.enable();
+      };
+
+      checkoutInFlight = true;
+      if (mb && typeof mb.showProgress === "function") mb.showProgress();
+
       try {
-        res = await fetch(`${apiBase}${PAYMENT_CREATE_PATH}`, {
-          method: "POST",
-          mode: "cors",
-          headers,
-          body: JSON.stringify({
-            track_id: selected.id,
-            telegram_id,
-            telegram_name,
-            currency,
-          }),
-        });
+        const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
+        const headers = { "Content-Type": "application/json" };
+        const sec = getMiniappCheckoutSecretForHeader();
+        if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
+        if (typeof window !== "undefined" && window.location && window.location.protocol === "https:" && apiBase.startsWith("http://")) {
+          if (tg && tg.showAlert) {
+            tg.showAlert(
+              "The store is on HTTPS but the payment API URL is HTTP — the browser blocks that. Set BACKEND_URL to https://… on Railway (bot + Web) and open the store again from the bot so checkout_api updates."
+            );
+          }
+          return;
+        }
+
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), CHECKOUT_FETCH_TIMEOUT_MS);
+        let res;
+        try {
+          res = await fetch(`${apiBase}${PAYMENT_CREATE_PATH}`, {
+            method: "POST",
+            mode: "cors",
+            signal: controller.signal,
+            headers,
+            body: JSON.stringify({
+              track_id: selected.id,
+              telegram_id,
+              telegram_name,
+              currency,
+            }),
+          });
+        } finally {
+          clearTimeout(tId);
+        }
+
+        if (!res.ok) {
+          if (tg && tg.showAlert) tg.showAlert("Could not start checkout. Try again later.");
+          return;
+        }
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          if (tg && tg.showAlert) tg.showAlert("Invalid JSON from payment server.");
+          return;
+        }
+
+        const payUrl = data && data.url;
+        if (!payUrl || typeof payUrl !== "string") {
+          if (tg && tg.showAlert) tg.showAlert("Invalid response from payment server.");
+          return;
+        }
+
+        /* Stripe: öppna i extern webbläsare (snurran stoppas i finally). */
+        if (tg && typeof tg.openLink === "function") {
+          try {
+            tg.openLink(payUrl, { try_instant_view: false });
+          } catch (e) {
+            try {
+              tg.openLink(payUrl);
+            } catch (e2) {
+              if (tg && tg.showAlert) tg.showAlert("Could not open payment page. Copy the link from email or try again.");
+            }
+          }
+        } else {
+          window.open(payUrl, "_blank", "noopener,noreferrer");
+        }
+        return;
       } catch (e) {
         const origin = typeof window !== "undefined" && window.location ? String(window.location.origin || "") : "";
-        const errMsg = e && e.message ? String(e.message) : "";
+        const errMsg = e && e.name === "AbortError" ? "timeout (server did not answer in time)" : e && e.message ? String(e.message) : "";
         const corsHint = origin
           ? `Request failed (${errMsg || "no details"}).\n\nIf this is CORS: Railway → Web service only → Variables → MINIAPP_CORS_ORIGINS must be exactly:\n${origin}\n\nThen redeploy Web. Also confirm the Buy request goes to your Railway Web URL (checkout_api in the bot link), not an old host.`
           : `Request failed (${errMsg || "no details"}). Check payment server URL and CORS.`;
         if (tg && tg.showAlert) tg.showAlert(corsHint);
         else alert(corsHint);
-        checkoutInFlight = false;
-        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
-        return;
+      } finally {
+        /* Alltid stoppa snurran (även om openLink kastar eller vi returnerade tidigare). */
+        stopCheckoutSpinner();
       }
-      if (!res.ok) {
-        if (tg && tg.showAlert) tg.showAlert("Could not start checkout. Try again later.");
-        checkoutInFlight = false;
-        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
-        return;
-      }
-      let data;
-      try {
-        data = await res.json();
-      } catch (e) {
-        checkoutInFlight = false;
-        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
-        return;
-      }
-      const payUrl = data && data.url;
-      if (!payUrl || typeof payUrl !== "string") {
-        if (tg && tg.showAlert) tg.showAlert("Invalid response from payment server.");
-        checkoutInFlight = false;
-        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
-        return;
-      }
-      /* Stripe: öppna i extern webbläsare, inte Instant View. */
-      if (tg && typeof tg.openLink === "function") {
-        try {
-          tg.openLink(payUrl, { try_instant_view: false });
-        } catch (e) {
-          tg.openLink(payUrl);
-        }
-      } else {
-        window.open(payUrl, "_blank", "noopener,noreferrer");
-      }
-      checkoutInFlight = false;
-      if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
-      if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
     }
 
     if (tg && tg.MainButton && typeof tg.MainButton.onClick === "function") {
