@@ -2,6 +2,7 @@
 python-telegram-bot>=22.7,<23
 python-dotenv>=1.0
 flask
+gunicorn
 stripe
 requests
 pytest>=8.0
