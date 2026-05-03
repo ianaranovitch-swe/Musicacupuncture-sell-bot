@@ -96,17 +96,27 @@ def create_app(
     def root_path() -> Path:
         return project_root_override if project_root_override is not None else project_root()
 
+    def _normalize_cors_origin(origin: str) -> str:
+        """Сравниваем Origin без пробелов и хвостового / (частая опечатка в MINIAPP_CORS_ORIGINS)."""
+        return (origin or "").strip().rstrip("/").lower()
+
     def _cors_headers_for_create_checkout() -> dict[str, str]:
         """CORS для Mini App на другом origin (например GitHub Pages)."""
-        origin = (request.headers.get("Origin") or "").strip()
+        origin_raw = (request.headers.get("Origin") or "").strip()
         raw = (config.MINIAPP_CORS_ORIGINS or "").strip()
-        if not origin or not raw:
+        if not origin_raw or not raw:
             return {}
-        allowed = {x.strip() for x in raw.split(",") if x.strip()}
-        if origin not in allowed:
+        origin_key = _normalize_cors_origin(origin_raw)
+        allowed_keys = {_normalize_cors_origin(x) for x in raw.split(",") if x.strip()}
+        if origin_key not in allowed_keys:
+            logger.warning(
+                "CORS: checkout request Origin=%r not in MINIAPP_CORS_ORIGINS (normalized keys mismatch)",
+                origin_raw[:160],
+            )
             return {}
+        # В заголовке ответа должно совпадать с тем, что прислал браузер (обычно без хвостового /).
         return {
-            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Origin": origin_raw,
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, X-Miniapp-Checkout-Secret",
             "Access-Control-Max-Age": "86400",

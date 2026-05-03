@@ -123,6 +123,26 @@ def test_create_checkout_options_preflight(mocker):
     assert resp2.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
 
 
+def test_create_checkout_cors_accepts_trailing_slash_in_env(mocker):
+    """В MINIAPP_CORS_ORIGINS часто добавляют / в конце — сравнение нормализуем."""
+    mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://example.github.io/")
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.options(
+        "/create-payment",
+        headers={"Origin": "https://example.github.io"},
+    )
+    assert resp.status_code == 204
+    assert resp.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
+
+
 def test_create_payment_post_same_as_checkout(mocker):
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"

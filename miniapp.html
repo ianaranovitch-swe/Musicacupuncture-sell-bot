@@ -632,7 +632,12 @@
           }),
         });
       } catch (e) {
-        if (tg && tg.showAlert) tg.showAlert("Network error. Try again.");
+        const origin = typeof window !== "undefined" && window.location ? String(window.location.origin || "") : "";
+        const corsHint = origin
+          ? `Browser blocked the request (often CORS). On Railway → Web → Variables add or fix MINIAPP_CORS_ORIGINS so it includes exactly:\n\n${origin}\n\nThen redeploy / restart and open the store again.`
+          : "Browser blocked the request (network/CORS). Check Railway MINIAPP_CORS_ORIGINS matches your store URL origin.";
+        if (tg && tg.showAlert) tg.showAlert(corsHint);
+        else alert(corsHint);
         checkoutInFlight = false;
         if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
         if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
