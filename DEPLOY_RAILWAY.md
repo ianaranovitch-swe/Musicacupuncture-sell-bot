@@ -4,8 +4,8 @@
 
 Есть 2 отдельных процесса:
 
-- `worker` — Telegram-бот (polling), команда: `python run_bot.py`
-- `web` — Flask backend для Stripe webhook, команда: `python run_server.py`
+- `worker` — Telegram-бот (polling), команда: `python -m music_sales.bot_entry` (или `python run_bot.py`)
+- `web` — Flask backend для Stripe webhook, команда: `python -m music_sales.web_entry` (или `python run_server.py`)
 
 Для старта продаж по Stripe ссылкам из `tracks.py` достаточно **только worker**.
 `web` нужен, если используешь команду `/buy` с webhook и авто-отправкой трека после оплаты.
@@ -22,10 +22,11 @@
 В проект уже добавлено:
 
 - `Procfile`
-  - `worker: python run_bot.py`
-  - `web: python run_server.py`
+  - `worker: python -m music_sales.bot_entry`
+  - `web: python -m music_sales.web_entry`
 - `railway.json` (политика рестартов)
-- `run_server.py` читает `PORT` и слушает `0.0.0.0`
+- **Root Directory** в настройках сервиса Railway должен быть **корень репозитория** (пусто / `.`), иначе в контейнере не окажется `run_server.py` и импорт сломается.
+- `run_server.py` / `run_bot.py` — тонкие обёртки; порт по-прежнему из `PORT`, хост `0.0.0.0`
 
 ## 4) Инструкция: deploy `worker` (бот)
 
@@ -33,7 +34,7 @@
 2. Выбери этот репозиторий.
 3. В сервисе открой **Settings** -> **Start Command**.
 4. Укажи команду:
-   - `python run_bot.py`
+   - `python -m music_sales.bot_entry`
 5. Открой **Variables** и добавь:
    - `BOT_TOKEN=...`
    - `OWNER_TELEGRAM_ID=...`
@@ -55,7 +56,7 @@
 1. В том же Railway проекте создай второй сервис (**New Service**).
 2. Source тот же репозиторий.
 3. **Start Command**:
-   - `python run_server.py`
+   - `python -m music_sales.web_entry`
 4. Добавь переменные:
    - `BOT_TOKEN=...`
    - `STRIPE_SECRET_KEY=...`
@@ -101,7 +102,7 @@ PAYMENTS_CURRENCY=USD
 ### Симптом: бот не отвечает
 
 - Проверь `BOT_TOKEN`.
-- Проверь, что старт-команда именно `python run_bot.py`.
+- Проверь, что старт-команда: `python -m music_sales.bot_entry` (или `python run_bot.py`).
 - Проверь логи сервиса `worker`.
 
 ### Симптом: `/buy` не открывает оплату
