@@ -114,7 +114,7 @@ def create_app(
 
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
-        if request.path == "/create-checkout":
+        if request.path in ("/create-checkout", "/create-payment"):
             for k, v in _cors_headers_for_create_checkout().items():
                 response.headers[k] = v
         return response
@@ -150,11 +150,13 @@ def create_app(
         return send_from_directory(str(covers_dir), filename)
 
     @app.route("/create-checkout", methods=["OPTIONS"])
+    @app.route("/create-payment", methods=["OPTIONS"])
     def create_checkout_options() -> Any:
         """Preflight для браузера (Mini App на другом домене)."""
         return "", 204
 
     @app.route("/create-checkout", methods=["POST"])
+    @app.route("/create-payment", methods=["POST"])
     def create_checkout() -> Any:
         data = request.get_json(silent=True) or {}
         song_id = data.get("song_id")

@@ -115,6 +115,38 @@ def test_create_checkout_options_preflight(mocker):
     assert resp.status_code == 204
     assert resp.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
 
+    resp2 = client.options(
+        "/create-payment",
+        headers={"Origin": "https://example.github.io"},
+    )
+    assert resp2.status_code == 204
+    assert resp2.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
+
+
+def test_create_payment_post_same_as_checkout(mocker):
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=mocker.Mock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post(
+        "/create-payment",
+        json={"track_id": 1, "telegram_id": 99, "telegram_name": "Test User", "currency": "usd"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["url"] == "https://stripe.test/session"
+    create.assert_called_once()
+
 
 def test_create_checkout_400_when_missing_fields(mocker):
     from music_sales.server import create_app

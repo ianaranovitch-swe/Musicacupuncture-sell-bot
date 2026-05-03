@@ -358,7 +358,14 @@
     const CURRENCY_SEK = "SEK";
 
     /**
-     * Каталог треков. Оплата только через бэкенд POST /create-checkout (webhook пришлёт MP3).
+     * Базовый URL платёжного backend на Railway (если бот не передал ?checkout_api= — используем это).
+     * Buy Now: POST {PAYMENT_CREATE_PATH} на этом хосте.
+     */
+    const DEFAULT_PAYMENT_SERVER_URL = "https://web-production-ed267.up.railway.app";
+    const PAYMENT_CREATE_PATH = "/create-payment";
+
+    /**
+     * Каталог треков. Оплата через бэкенд POST /create-payment (тот же Stripe Checkout + webhook → MP3).
      */
     const tracks = [
       { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg" },
@@ -438,10 +445,10 @@
 
     function getCheckoutApiBase() {
       try {
-        return (sessionStorage.getItem(LS_CHECKOUT_API) || "").trim().replace(/\/$/, "");
-      } catch (e) {
-        return "";
-      }
+        const fromStore = (sessionStorage.getItem(LS_CHECKOUT_API) || "").trim().replace(/\/$/, "");
+        if (fromStore) return fromStore;
+      } catch (e) { /* ignore */ }
+      return DEFAULT_PAYMENT_SERVER_URL.replace(/\/$/, "");
     }
 
     function getMiniappCheckoutSecretForHeader() {
@@ -550,23 +557,13 @@
         else alert("Open this app inside Telegram to purchase.");
         return;
       }
-      if (!apiBase) {
-        if (tg && tg.showAlert) {
-          tg.showAlert(
-            "Payment server URL is missing. Open the Music Store from the bot button (not only this page in a browser)."
-          );
-        } else {
-          alert("Payment server URL is missing.");
-        }
-        return;
-      }
       const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
       const headers = { "Content-Type": "application/json" };
       const sec = getMiniappCheckoutSecretForHeader();
       if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
       let res;
       try {
-        res = await fetch(`${apiBase}/create-checkout`, {
+        res = await fetch(`${apiBase}${PAYMENT_CREATE_PATH}`, {
           method: "POST",
           headers,
           body: JSON.stringify({
