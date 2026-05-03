@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://js.stripe.com/v3/"></script>
   <style>
     :root {
       --bg: #1a0533;
@@ -230,7 +229,7 @@
     .detail-inner {
       max-width: 480px;
       margin: 0 auto;
-      padding: 10px 14px 32px;
+      padding: 10px 14px max(40px, calc(24px + env(safe-area-inset-bottom)));
       padding-top: max(10px, env(safe-area-inset-top));
     }
     .back-row {
@@ -277,6 +276,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      position: relative;
+      z-index: 2;
     }
     .btn-buy {
       font-family: inherit;
@@ -421,13 +422,11 @@
       tg.setBackgroundColor("#1a0533");
     }
 
-    if (window.Stripe) {
-      /* const stripe = Stripe("pk_live_..."); */
-    }
-
     /** Текущая валюта из localStorage или null, пока пользователь не выбрал. */
     let currentCurrency = null;
     let selected = null;
+    /** Чтобы не отправить два checkout подряд (MainButton + HTML). */
+    let checkoutInFlight = false;
 
     function escapeHtml(s) {
       const d = document.createElement("div");
@@ -543,6 +542,31 @@
       });
     }
 
+    /**
+     * Нативная нижняя кнопка Telegram — тапы доходят надёжнее, чем до HTML в WebView.
+     */
+    function syncMainButtonForDetail(open) {
+      if (!tg || !tg.MainButton) return;
+      if (open) {
+        if (typeof tg.MainButton.setParams === "function") {
+          tg.MainButton.setParams({
+            text: "💳 Buy Now",
+            color: "#FFD700",
+            text_color: "#1a0533",
+            is_visible: true,
+            is_active: true,
+          });
+        } else {
+          tg.MainButton.setText("💳 Buy Now");
+          if ("color" in tg.MainButton) tg.MainButton.color = "#FFD700";
+          if ("textColor" in tg.MainButton) tg.MainButton.textColor = "#1a0533";
+        }
+        tg.MainButton.show();
+      } else {
+        tg.MainButton.hide();
+      }
+    }
+
     function openDetail(track) {
       if (!track || !currentCurrency) return;
       selected = track;
@@ -554,12 +578,14 @@
       document.getElementById("detail-price").textContent = formatPrice(currentCurrency);
       panel.classList.add("open");
       panel.setAttribute("aria-hidden", "false");
+      syncMainButtonForDetail(true);
     }
 
     function closeDetail() {
       const panel = document.getElementById("detail-screen");
       panel.classList.remove("open");
       panel.setAttribute("aria-hidden", "true");
+      syncMainButtonForDetail(false);
     }
 
     document.getElementById("btn-curr-sek").addEventListener("click", () => pickCurrency(CURRENCY_SEK));
@@ -571,7 +597,8 @@
 
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
-    document.getElementById("btn-buy").addEventListener("click", async () => {
+    async function startCheckout() {
+      if (checkoutInFlight) return;
       if (!selected || !currentCurrency) {
         if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy Now.");
         return;
@@ -586,6 +613,8 @@
         else alert("Open this app inside Telegram to purchase.");
         return;
       }
+      checkoutInFlight = true;
+      if (tg && tg.MainButton && typeof tg.MainButton.showProgress === "function") tg.MainButton.showProgress();
       const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
       const headers = { "Content-Type": "application/json" };
       const sec = getMiniappCheckoutSecretForHeader();
@@ -604,25 +633,56 @@
         });
       } catch (e) {
         if (tg && tg.showAlert) tg.showAlert("Network error. Try again.");
+        checkoutInFlight = false;
+        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
         return;
       }
       if (!res.ok) {
         if (tg && tg.showAlert) tg.showAlert("Could not start checkout. Try again later.");
+        checkoutInFlight = false;
+        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
         return;
       }
       let data;
       try {
         data = await res.json();
       } catch (e) {
+        checkoutInFlight = false;
+        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
         return;
       }
       const payUrl = data && data.url;
       if (!payUrl || typeof payUrl !== "string") {
         if (tg && tg.showAlert) tg.showAlert("Invalid response from payment server.");
+        checkoutInFlight = false;
+        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
         return;
       }
-      if (tg && typeof tg.openLink === "function") tg.openLink(payUrl);
-      else window.open(payUrl, "_blank", "noopener,noreferrer");
+      /* Stripe: öppna i extern webbläsare, inte Instant View. */
+      if (tg && typeof tg.openLink === "function") {
+        try {
+          tg.openLink(payUrl, { try_instant_view: false });
+        } catch (e) {
+          tg.openLink(payUrl);
+        }
+      } else {
+        window.open(payUrl, "_blank", "noopener,noreferrer");
+      }
+      checkoutInFlight = false;
+      if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+      if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
+    }
+
+    if (tg && tg.MainButton && typeof tg.MainButton.onClick === "function") {
+      tg.MainButton.onClick(startCheckout);
+    }
+
+    document.getElementById("btn-buy").addEventListener("click", () => {
+      startCheckout();
     });
 
     document.getElementById("btn-preview").addEventListener("click", () => {
