@@ -220,9 +220,12 @@
       transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      /* Пока панель уехала вправо, не перехватываем тапы (иначе в Telegram WebView сетка может «не кликаться»). */
+      pointer-events: none;
     }
     #detail-screen.open {
       transform: translateX(0);
+      pointer-events: auto;
     }
     .detail-inner {
       max-width: 480px;
@@ -286,6 +289,9 @@
       background: var(--gold);
       color: #1a0533;
       animation: pulseBuy 2.2s ease-in-out infinite;
+      touch-action: manipulation;
+      position: relative;
+      z-index: 1;
     }
     @keyframes pulseBuy {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.45); }
@@ -387,6 +393,26 @@
     ];
 
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+
+    /**
+     * Данные пользователя из Mini App: обычно в initDataUnsafe; если пусто — парсим initData (строка query).
+     */
+    function getTelegramUserFromWebApp(webApp) {
+      if (!webApp) return null;
+      const u = webApp.initDataUnsafe && webApp.initDataUnsafe.user;
+      if (u && u.id != null) return u;
+      const raw = (webApp.initData || "").trim();
+      if (!raw) return null;
+      try {
+        const params = new URLSearchParams(raw);
+        const userJson = params.get("user");
+        if (!userJson) return null;
+        const parsed = JSON.parse(userJson);
+        return parsed && parsed.id != null ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
 
     if (tg) {
       tg.ready();
@@ -546,9 +572,12 @@
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
     document.getElementById("btn-buy").addEventListener("click", async () => {
-      if (!selected || !currentCurrency) return;
+      if (!selected || !currentCurrency) {
+        if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy Now.");
+        return;
+      }
       const apiBase = getCheckoutApiBase();
-      const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      const u = getTelegramUserFromWebApp(tg);
       const telegram_id = u && u.id;
       const telegram_name =
         [u && u.first_name, u && u.last_name].filter(Boolean).join(" ") || (u && u.username) || "Telegram user";
