@@ -619,10 +619,22 @@
       const headers = { "Content-Type": "application/json" };
       const sec = getMiniappCheckoutSecretForHeader();
       if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
+      if (typeof window !== "undefined" && window.location && window.location.protocol === "https:" && apiBase.startsWith("http://")) {
+        if (tg && tg.showAlert) {
+          tg.showAlert(
+            "The store is on HTTPS but the payment API URL is HTTP — the browser blocks that. Set BACKEND_URL to https://… on Railway (bot + Web) and open the store again from the bot so checkout_api updates."
+          );
+        }
+        checkoutInFlight = false;
+        if (tg && tg.MainButton && typeof tg.MainButton.hideProgress === "function") tg.MainButton.hideProgress();
+        if (tg && tg.MainButton && typeof tg.MainButton.enable === "function") tg.MainButton.enable();
+        return;
+      }
       let res;
       try {
         res = await fetch(`${apiBase}${PAYMENT_CREATE_PATH}`, {
           method: "POST",
+          mode: "cors",
           headers,
           body: JSON.stringify({
             track_id: selected.id,
@@ -633,9 +645,10 @@
         });
       } catch (e) {
         const origin = typeof window !== "undefined" && window.location ? String(window.location.origin || "") : "";
+        const errMsg = e && e.message ? String(e.message) : "";
         const corsHint = origin
-          ? `Browser blocked the request (often CORS). On Railway → Web → Variables add or fix MINIAPP_CORS_ORIGINS so it includes exactly:\n\n${origin}\n\nThen redeploy / restart and open the store again.`
-          : "Browser blocked the request (network/CORS). Check Railway MINIAPP_CORS_ORIGINS matches your store URL origin.";
+          ? `Request failed (${errMsg || "no details"}).\n\nIf this is CORS: Railway → Web service only → Variables → MINIAPP_CORS_ORIGINS must be exactly:\n${origin}\n\nThen redeploy Web. Also confirm the Buy request goes to your Railway Web URL (checkout_api in the bot link), not an old host.`
+          : `Request failed (${errMsg || "no details"}). Check payment server URL and CORS.`;
         if (tg && tg.showAlert) tg.showAlert(corsHint);
         else alert(corsHint);
         checkoutInFlight = false;

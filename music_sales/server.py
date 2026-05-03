@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -100,14 +101,27 @@ def create_app(
         """Сравниваем Origin без пробелов и хвостового / (частая опечатка в MINIAPP_CORS_ORIGINS)."""
         return (origin or "").strip().rstrip("/").lower()
 
+    def _cors_origins_from_env() -> str:
+        """Читаем при каждом запросе: на Railway env иногда важнее, чем значение при первом import."""
+        return (os.environ.get("MINIAPP_CORS_ORIGINS") or config.MINIAPP_CORS_ORIGINS or "").strip()
+
+    def _strip_fragment_quotes(fragment: str) -> str:
+        """Убираем лишние кавычки вокруг origin из UI (Railway / .env)."""
+        s = (fragment or "").strip()
+        if len(s) >= 2 and ((s[0] == s[-1] == '"') or (s[0] == s[-1] == "'")):
+            s = s[1:-1].strip()
+        return s
+
     def _cors_headers_for_create_checkout() -> dict[str, str]:
         """CORS для Mini App на другом origin (например GitHub Pages)."""
         origin_raw = (request.headers.get("Origin") or "").strip()
-        raw = (config.MINIAPP_CORS_ORIGINS or "").strip()
+        raw = _cors_origins_from_env()
         if not origin_raw or not raw:
             return {}
         origin_key = _normalize_cors_origin(origin_raw)
-        allowed_keys = {_normalize_cors_origin(x) for x in raw.split(",") if x.strip()}
+        allowed_keys = {
+            _normalize_cors_origin(_strip_fragment_quotes(x)) for x in raw.split(",") if x.strip()
+        }
         if origin_key not in allowed_keys:
             logger.warning(
                 "CORS: checkout request Origin=%r not in MINIAPP_CORS_ORIGINS (normalized keys mismatch)",
@@ -115,16 +129,24 @@ def create_app(
             )
             return {}
         # В заголовке ответа должно совпадать с тем, что прислал браузер (обычно без хвостового /).
+        # «*» для Allow-Headers: без credentials браузеры (в т.ч. Telegram WebView) чаще проходят preflight.
         return {
             "Access-Control-Allow-Origin": origin_raw,
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, X-Miniapp-Checkout-Secret",
+            "Access-Control-Allow-Headers": "*",
             "Access-Control-Max-Age": "86400",
         }
 
+    def _path_is_checkout_cors() -> bool:
+        """Путь к checkout (иногда за прокси бывает префикс — проверяем и точное совпадение)."""
+        p = (request.path or "").rstrip("/") or ""
+        return p in ("/create-checkout", "/create-payment") or p.endswith(
+            ("/create-checkout", "/create-payment")
+        )
+
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
-        if request.path in ("/create-checkout", "/create-payment"):
+        if _path_is_checkout_cors():
             for k, v in _cors_headers_for_create_checkout().items():
                 response.headers[k] = v
         return response
