@@ -61,6 +61,22 @@ def _parse_webhook_event(
     return stripe.Event.construct_from(body, stripe.api_key)
 
 
+_bot_instance: Optional[Bot] = None
+
+
+def _get_bot() -> Bot:
+    """Return the cached Bot instance, creating it on first call.
+
+    Using a lazy singleton means Gunicorn workers that never handle a webhook
+    request will never instantiate a Bot, so they won't compete with the
+    worker service's polling loop for the same Telegram token.
+    """
+    global _bot_instance
+    if _bot_instance is None:
+        _bot_instance = Bot(token=config.BOT_TOKEN)
+    return _bot_instance
+
+
 def create_app(
     bot: Optional[Bot] = None,
     songs_catalog: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -83,7 +99,8 @@ def create_app(
         raise RuntimeError(
             "BOT_TOKEN is not set. The server needs it to send purchased audio in Telegram."
         )
-    bot = bot or Bot(token=config.BOT_TOKEN)
+
+    _injected_bot = bot
 
     if stripe_webhook_secret is not None:
         effective_wh_secret = stripe_webhook_secret
@@ -264,6 +281,8 @@ def create_app(
             return parsed
         event = parsed
 
+        active_bot = _injected_bot or _get_bot()
+
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
             telegram_id = session["metadata"]["telegram_id"]
@@ -272,14 +291,14 @@ def create_app(
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             try:
                 deliver_purchase(
-                    bot,
+                    active_bot,
                     int(telegram_id),
                     song_id,
                     get_catalog(),
                     root_path(),
                 )
                 notify_owner_sync(
-                    bot,
+                    active_bot,
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
@@ -288,7 +307,7 @@ def create_app(
             except OSError as e:
                 logger.exception("Failed to send audio: %s", e)
                 notify_owner_sync(
-                    bot,
+                    active_bot,
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
@@ -298,7 +317,7 @@ def create_app(
             except KeyError:
                 logger.exception("Unknown song in webhook metadata: %s", song_id)
                 notify_owner_sync(
-                    bot,
+                    active_bot,
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_id,
@@ -313,7 +332,7 @@ def create_app(
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
             notify_owner_sync(
-                bot,
+                active_bot,
                 actor_name=telegram_name,
                 event="Payment result",
                 song_name=song_name,
