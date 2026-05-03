@@ -1,5 +1,0 @@
-# Nixpacks: installera lokala paketet så ``import music_sales`` fungerar i Railway-världen
-# (annars hittas inte modulen när cwd inte är repo-roten).
-
-[phases.install]
-cmds = ["pip install -r requirements.txt", "pip install ."]

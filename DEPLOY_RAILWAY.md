@@ -4,8 +4,8 @@
 
 Есть 2 отдельных процесса:
 
-- `worker` — Telegram-бот (polling), команда: `python -m music_sales.bot_entry` (или `python run_bot.py`)
-- `web` — Flask backend для Stripe webhook, команда: `python -m music_sales.web_entry` (или `python run_server.py`)
+- `worker` — Telegram-бот (polling), команда: `python run_bot.py`
+- `web` — Flask backend для Stripe webhook, команда: `python run_server.py`
 
 Для старта продаж по Stripe ссылкам из `tracks.py` достаточно **только worker**.
 `web` нужен, если используешь команду `/buy` с webhook и авто-отправкой трека после оплаты.
@@ -22,8 +22,9 @@
 В проект уже добавлено:
 
 - `Procfile`
-  - `worker: python -m music_sales.bot_entry`
-  - `web: python -m music_sales.web_entry`
+  - `worker: python run_bot.py`
+  - `web: python run_server.py`
+- Если в Railway вручную задан **Start Command** (`python -m music_sales.web_entry`), **убери его** или замени на `python run_server.py` — иначе Python ищет пакет до запуска кода и снова будет `ModuleNotFoundError`.
 - `railway.json` (политика рестартов)
 - **Root Directory** в настройках **Web** и **Worker** должен быть **пустым** (корень репозитория). Если указать подпапку вроде `music_sales`, пакет `music_sales` не соберётся и появится `ModuleNotFoundError`.
 - Случайный сервис вроде **Function / Bun** после экспериментов с Root Directory можно **удалить** в Railway (Delete Service), если ты его не настраивал осознанно — к боту он не относится.
@@ -35,7 +36,7 @@
 2. Выбери этот репозиторий.
 3. В сервисе открой **Settings** -> **Start Command**.
 4. Укажи команду:
-   - `python -m music_sales.bot_entry`
+   - `python run_bot.py`
 5. Открой **Variables** и добавь:
    - `BOT_TOKEN=...`
    - `OWNER_TELEGRAM_ID=...`
@@ -57,7 +58,7 @@
 1. В том же Railway проекте создай второй сервис (**New Service**).
 2. Source тот же репозиторий.
 3. **Start Command**:
-   - `python -m music_sales.web_entry`
+   - `python run_server.py`
 4. Добавь переменные:
    - `BOT_TOKEN=...`
    - `STRIPE_SECRET_KEY=...`
@@ -103,7 +104,7 @@ PAYMENTS_CURRENCY=USD
 ### Симптом: бот не отвечает
 
 - Проверь `BOT_TOKEN`.
-- Проверь, что старт-команда: `python -m music_sales.bot_entry` (или `python run_bot.py`).
+- Проверь, что старт-команда: `python run_bot.py`.
 - Проверь логи сервиса `worker`.
 
 ### Симптом: `/buy` не открывает оплату
