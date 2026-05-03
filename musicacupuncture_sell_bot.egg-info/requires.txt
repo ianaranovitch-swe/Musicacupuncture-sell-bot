@@ -1,0 +1,10 @@
+python-telegram-bot<23,>=22.7
+python-dotenv>=1.0
+flask
+stripe
+requests
+
+[dev]
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-mock>=3.14

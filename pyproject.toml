@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "musicacupuncture-sell-bot"
+version = "0.0.0"
+requires-python = ">=3.11"
+description = "Telegram bot + Flask Stripe backend"
+dependencies = [
+    "python-telegram-bot>=22.7,<23",
+    "python-dotenv>=1.0",
+    "flask",
+    "stripe",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-mock>=3.14",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["music_sales*"]

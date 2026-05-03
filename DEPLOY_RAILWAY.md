@@ -25,7 +25,8 @@
   - `worker: python -m music_sales.bot_entry`
   - `web: python -m music_sales.web_entry`
 - `railway.json` (политика рестартов)
-- **Root Directory** в настройках сервиса Railway должен быть **корень репозитория** (пусто / `.`), иначе в контейнере не окажется `run_server.py` и импорт сломается.
+- **Root Directory** в настройках **Web** и **Worker** должен быть **пустым** (корень репозитория). Если указать подпапку вроде `music_sales`, пакет `music_sales` не соберётся и появится `ModuleNotFoundError`.
+- Случайный сервис вроде **Function / Bun** после экспериментов с Root Directory можно **удалить** в Railway (Delete Service), если ты его не настраивал осознанно — к боту он не относится.
 - `run_server.py` / `run_bot.py` — тонкие обёртки; порт по-прежнему из `PORT`, хост `0.0.0.0`
 
 ## 4) Инструкция: deploy `worker` (бот)
