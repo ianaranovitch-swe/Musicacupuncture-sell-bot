@@ -29,6 +29,8 @@ PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
 PAYMENTS_CURRENCY = _env("PAYMENTS_CURRENCY", "USD")
 # Владелец бота: получает личные события о запуске, кликах и статусах оплаты.
 OWNER_TELEGRAM_ID = _env("OWNER_TELEGRAM_ID", "7973899604")
+# Разработчик: тот же доступ к /health, что и у владельца (можно переопределить в .env).
+DEVELOPER_TELEGRAM_ID = _env("DEVELOPER_TELEGRAM_ID", "7973899604")
 # Папка в корне проекта с аудио для витрины (по умолчанию `songs`; для старых установок можно задать `SONGS`)
 AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
 # Цена по умолчанию (USD, целые доллары) для файлов в этой папке, если не задано иначе в коде/окружении
@@ -71,6 +73,28 @@ def owner_telegram_id_int() -> int | None:
         return int(OWNER_TELEGRAM_ID)
     except ValueError:
         return None
+
+
+def developer_telegram_id_int() -> int | None:
+    """Telegram user id разработчика (команда /health). Пустое значение — не добавлять в список."""
+    if not DEVELOPER_TELEGRAM_ID:
+        return None
+    try:
+        return int(DEVELOPER_TELEGRAM_ID)
+    except ValueError:
+        return None
+
+
+def health_command_allowed_user_ids() -> set[int]:
+    """Кто может вызывать /health: владелец и (если задан) разработчик."""
+    out: set[int] = set()
+    o = owner_telegram_id_int()
+    if o is not None:
+        out.add(o)
+    d = developer_telegram_id_int()
+    if d is not None:
+        out.add(d)
+    return out
 
 
 # Логирование (бот): LOG_LEVEL=DEBUG|INFO|WARNING|ERROR; LOG_FILE по умолчанию logs/bot.log

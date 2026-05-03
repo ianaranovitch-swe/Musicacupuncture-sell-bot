@@ -9,6 +9,14 @@ from music_sales.secret_redact import SecretRedactFilter
 
 _configured = False
 
+
+class _FlushingFileHandler(logging.FileHandler):
+    """Пишем в файл и сразу flush — последние строки не теряются при внезапном падении процесса."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        self.flush()
+
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -38,10 +46,15 @@ def setup_logging() -> None:
     if config.LOG_FILE:
         path = Path(config.LOG_FILE)
         path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(path, encoding="utf-8")
-        file_handler.setFormatter(formatter)
-        file_handler.addFilter(redact)
-        root.addHandler(file_handler)
+        try:
+            file_handler = _FlushingFileHandler(path, encoding="utf-8")
+            file_handler.setFormatter(formatter)
+            file_handler.addFilter(redact)
+            root.addHandler(file_handler)
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Could not open LOG_FILE %s: %s — file logging disabled", path, e
+            )
 
     # python-telegram-bot и HTTP-стек слишком болтливы на уровне INFO
     logging.getLogger("telegram").setLevel(max(level, logging.WARNING))

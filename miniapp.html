@@ -598,7 +598,17 @@
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
     /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
-    const CHECKOUT_FETCH_TIMEOUT_MS = 25000;
+    const CHECKOUT_FETCH_TIMEOUT_MS = 22000;
+
+    /** Kort text om betal-URL (för felsökning utan att spamma hela querysträngar). */
+    function checkoutHostHint(apiBase) {
+        try {
+          const u = new URL(apiBase.startsWith("http") ? apiBase : `https://${apiBase}`);
+          return u.host || apiBase;
+        } catch (e) {
+          return String(apiBase || "").slice(0, 80);
+        }
+    }
 
     async function startCheckout() {
       if (checkoutInFlight) return;
@@ -662,7 +672,27 @@
         }
 
         if (!res.ok) {
-          if (tg && tg.showAlert) tg.showAlert("Could not start checkout. Try again later.");
+          let bodyHint = "";
+          try {
+            const t = (await res.text()).trim();
+            if (t) bodyHint = t.length > 220 ? `${t.slice(0, 220)}…` : t;
+          } catch (e2) {
+            bodyHint = "";
+          }
+          const host = checkoutHostHint(apiBase);
+          const tip401 =
+            res.status === 401
+              ? "\n\nHTTP 401: MINIAPP_CHECKOUT_SECRET on Railway Web must match the secret in the bot WebApp URL (?checkout_secret=…). Open the store again from the bot after changing env."
+              : "";
+          const tip502 =
+            res.status === 502 || res.status === 503
+              ? "\n\nServer error: check Railway Web logs, STRIPE_SECRET_KEY, and that Stripe is reachable."
+              : "";
+          const msg = `Could not start checkout (HTTP ${res.status} from ${host}).${tip401}${tip502}${
+            bodyHint ? `\n\nServer said:\n${bodyHint}` : "\n\nTip: open Railway → Web → Logs while you tap Buy."
+          }`;
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
           return;
         }
 
@@ -670,13 +700,19 @@
         try {
           data = await res.json();
         } catch (e) {
-          if (tg && tg.showAlert) tg.showAlert("Invalid JSON from payment server.");
+          const msg =
+            "The payment server answered but the response was not valid JSON. Check Railway Web logs for /create-payment errors.";
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
           return;
         }
 
         const payUrl = data && data.url;
         if (!payUrl || typeof payUrl !== "string") {
-          if (tg && tg.showAlert) tg.showAlert("Invalid response from payment server.");
+          const msg =
+            "Payment server did not return a checkout URL. Check Railway Web: Stripe keys, DOMAIN, and logs for /create-payment.";
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
           return;
         }
 
@@ -688,19 +724,36 @@
             try {
               tg.openLink(payUrl);
             } catch (e2) {
-              if (tg && tg.showAlert) tg.showAlert("Could not open payment page. Copy the link from email or try again.");
+              const msg =
+                "Telegram could not open the payment link. Try: Settings → disable data saver / VPN; update Telegram; or open the Mini App from Wi‑Fi.";
+              if (tg && tg.showAlert) tg.showAlert(msg);
+              else alert(msg);
             }
           }
+          /* openLink kastar ofta inte även om inget syns — kort tips efter en stund. */
+          setTimeout(() => {
+            if (tg && typeof tg.showAlert === "function") {
+              tg.showAlert(
+                "If Stripe did not open: check Telegram allows opening links, try Wi‑Fi, and confirm Railway Web + Stripe work (owner: check Web deploy logs)."
+              );
+            }
+          }, 1200);
         } else {
           window.open(payUrl, "_blank", "noopener,noreferrer");
         }
         return;
       } catch (e) {
         const origin = typeof window !== "undefined" && window.location ? String(window.location.origin || "") : "";
-        const errMsg = e && e.name === "AbortError" ? "timeout (server did not answer in time)" : e && e.message ? String(e.message) : "";
+        const host = checkoutHostHint(apiBase);
+        const errMsg =
+          e && e.name === "AbortError"
+            ? `timeout after ${CHECKOUT_FETCH_TIMEOUT_MS / 1000}s — no answer from ${host}`
+            : e && e.message
+              ? String(e.message)
+              : "unknown error";
         const corsHint = origin
-          ? `Request failed (${errMsg || "no details"}).\n\nIf this is CORS: Railway → Web service only → Variables → MINIAPP_CORS_ORIGINS must be exactly:\n${origin}\n\nThen redeploy Web. Also confirm the Buy request goes to your Railway Web URL (checkout_api in the bot link), not an old host.`
-          : `Request failed (${errMsg || "no details"}). Check payment server URL and CORS.`;
+          ? `Request failed: ${errMsg}\n\nStore origin: ${origin}\nPayment API: ${host}\n\nIf this is CORS: Railway → Web → Variables → MINIAPP_CORS_ORIGINS = exactly:\n${origin}\n\nIf timeout: Web service may be sleeping/crashed — open Railway Web logs and redeploy Web.`
+          : `Request failed: ${errMsg}. Check payment API host and CORS.`;
         if (tg && tg.showAlert) tg.showAlert(corsHint);
         else alert(corsHint);
       } finally {

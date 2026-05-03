@@ -323,6 +323,17 @@ def create_app(
 
         return "", 200
 
+    @app.route("/health")
+    def health_json() -> Any:
+        """JSON: файлы songs/covers, Stripe, backend, Mini App / CORS (без секретов)."""
+        try:
+            from music_sales.health_report import build_health_report
+
+            return jsonify(build_health_report())
+        except Exception as e:
+            logger.exception("GET /health failed")
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/success")
     def success() -> str:
         return "Payment successful! You can return to Telegram."

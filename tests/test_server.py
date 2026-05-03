@@ -332,3 +332,23 @@ def test_covers_route_404_when_missing(mocker, tmp_path):
     )
     client = app.test_client()
     assert client.get("/covers/nope.jpg").status_code == 404
+
+
+def test_health_http_route(mocker, tmp_path):
+    mocker.patch(
+        "music_sales.health_report.build_health_report",
+        return_value={"ready": False, "checks": {}},
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        bot=MagicMock(),
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.get_json()["ready"] is False
