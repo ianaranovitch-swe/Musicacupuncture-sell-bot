@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import socket
 from functools import partial
 
 import requests
@@ -23,6 +25,27 @@ from music_sales.health_report import cmd_health
 from music_sales.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
+
+
+def _log_worker_identity() -> None:
+    """В Railway по одной строке видно: не крутятся ли два контейнера с одним токеном (разные PID/hostname)."""
+    railway_bits = []
+    for key in (
+        "RAILWAY_SERVICE_NAME",
+        "RAILWAY_ENVIRONMENT_NAME",
+        "RAILWAY_REPLICA_ID",
+        "RAILWAY_DEPLOYMENT_ID",
+    ):
+        val = os.environ.get(key)
+        if val:
+            railway_bits.append(f"{key}={val}")
+    extra = (" " + " ".join(railway_bits)) if railway_bits else ""
+    logger.info(
+        "Worker identity: pid=%s hostname=%s%s",
+        os.getpid(),
+        socket.gethostname(),
+        extra,
+    )
 
 
 def _log_webhook_preflight(token: str) -> None:
@@ -97,6 +120,7 @@ def _register_handlers(application) -> None:
 def main() -> None:
     setup_logging()
     logger.info("Starting Telegram bot (polling)")
+    _log_worker_identity()
     try:
         _log_webhook_preflight(config.BOT_TOKEN)
         application = build_application().build()
