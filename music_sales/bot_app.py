@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 
+import requests
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -22,6 +23,40 @@ from music_sales.health_report import cmd_health
 from music_sales.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
+
+
+def _log_webhook_preflight(token: str) -> None:
+    """
+    Один HTTP-запрос до PTB: если webhook уже висит на боте, в логах это видно.
+    Сама ошибка Conflict почти всегда = второй процесс с тем же BOT_TOKEN (другой деплой / реплика).
+    """
+    t = (token or "").strip()
+    if not t:
+        return
+    try:
+        r = requests.get(
+            f"https://api.telegram.org/bot{t}/getWebhookInfo",
+            timeout=10,
+        )
+        data = r.json()
+        if not data.get("ok"):
+            logger.warning("Preflight getWebhookInfo: telegram ok=false %s", data)
+            return
+        result = data.get("result") or {}
+        url = (result.get("url") or "").strip()
+        pending = result.get("pending_update_count")
+        logger.info(
+            "Preflight getWebhookInfo: webhook_configured=%s pending_update_count=%s",
+            bool(url),
+            pending,
+        )
+        if url:
+            logger.warning(
+                "Telegram still has a webhook URL set. python-telegram-bot will call "
+                "delete_webhook when polling starts. If you use webhooks elsewhere, stop that first."
+            )
+    except Exception as exc:
+        logger.warning("Preflight getWebhookInfo failed (network?): %s", exc)
 
 
 async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -65,6 +100,7 @@ def main() -> None:
     setup_logging()
     logger.info("Starting Telegram bot (polling)")
     try:
+        _log_webhook_preflight(config.BOT_TOKEN)
         build_application().run_polling()
     except Exception:
         logger.exception("Bot stopped due to an error (see traceback below)")

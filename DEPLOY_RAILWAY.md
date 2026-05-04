@@ -124,3 +124,18 @@ PAYMENTS_CURRENCY=USD
 - Проверь `song_id` в metadata (из checkout session).
 - Проверь наличие файла в `songs/`.
 - Проверь `BOT_TOKEN` у `web` сервиса (он отправляет файл в Telegram).
+
+### Симптом: `Conflict` / `terminated by other getUpdates` (через несколько секунд)
+
+У Telegram **один** активный способ получать апдейты на токен: либо long polling (`getUpdates`), либо webhook. Сообщение **Conflict** при polling почти всегда значит: **уже есть второй клиент**, который держит тот же `getUpdates` (тот же `BOT_TOKEN`).
+
+Чеклист:
+
+1. **Replicas** у сервиса `worker` в Railway должны быть **1**. Две реплики = два процесса = Conflict.
+2. **Только один** сервис/процесс с командой `python run_bot.py` (или `python -m music_sales.bot_entry`). Отдельный старый сервис, Preview environment, второй проект Railway с тем же репо и **общими Variables** — частая причина.
+3. **Локально** не запускай `python run_bot.py` / `python bot.py` с тем же `BOT_TOKEN`, пока крутится Railway worker.
+4. Корневой **`bot.py`** — отдельный демо-бот с `run_polling`; в проде используй только **`run_bot.py`** (см. `Procfile`).
+5. На время проверки создай **новый токен** у [@BotFather](https://t.me/BotFather) и подставь только в один worker: если Conflict пропал — старый токен где-то ещё «жил».
+6. В логах после деплоя смотри строку **`Preflight getWebhookInfo`**: если webhook был случайно включён, библиотека всё равно сделает `delete_webhook` при старте; если Conflict остаётся — снова пункты 1–3.
+
+«Старое соединение Telegram» само по себе не держит второй `getUpdates`; как только процесс умер, слот освобождается. Повторяющийся Conflict через пару секунд указывает на **постоянно живый второй процесс** или на **второй деплой того же worker**.
