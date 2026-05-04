@@ -5,13 +5,12 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
+import requests
 import stripe
 from flask import Flask, jsonify, request, send_from_directory
-from telegram import Bot
 
 from music_sales import config
 from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
-from music_sales.owner_notify import notify_owner_sync
 
 logger = logging.getLogger(__name__)
 SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
@@ -20,8 +19,12 @@ SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
 logging.getLogger("stripe").setLevel(logging.WARNING)
 
 
+def _tg_api_url(method: str) -> str:
+    """Return the Telegram Bot API URL for the given method."""
+    return f"https://api.telegram.org/bot{config.BOT_TOKEN}/{method}"
+
+
 def deliver_purchase(
-    bot: Bot,
     telegram_id: int,
     song_id: str,
     songs_catalog: Dict[str, Dict[str, Any]],
@@ -30,7 +33,13 @@ def deliver_purchase(
     song = songs_catalog[song_id]
     path = root / song["file"]
     with open(path, "rb") as audio:
-        bot.send_audio(chat_id=telegram_id, audio=audio, title=song["name"])
+        resp = requests.post(
+            _tg_api_url("sendAudio"),
+            data={"chat_id": telegram_id, "title": song["name"]},
+            files={"audio": audio},
+            timeout=60,
+        )
+        resp.raise_for_status()
 
 
 def _parse_webhook_event(
@@ -61,24 +70,7 @@ def _parse_webhook_event(
     return stripe.Event.construct_from(body, stripe.api_key)
 
 
-_bot_instance: Optional[Bot] = None
-
-
-def _get_bot() -> Bot:
-    """Return the cached Bot instance, creating it on first call.
-
-    Using a lazy singleton means Gunicorn workers that never handle a webhook
-    request will never instantiate a Bot, so they won't compete with the
-    worker service's polling loop for the same Telegram token.
-    """
-    global _bot_instance
-    if _bot_instance is None:
-        _bot_instance = Bot(token=config.BOT_TOKEN)
-    return _bot_instance
-
-
 def create_app(
-    bot: Optional[Bot] = None,
     songs_catalog: Optional[Dict[str, Dict[str, Any]]] = None,
     stripe_secret: Optional[str] = None,
     domain: Optional[str] = None,
@@ -95,12 +87,10 @@ def create_app(
     def get_catalog() -> Dict[str, Dict[str, Any]]:
         return songs_catalog if songs_catalog is not None else discover_songs()
     domain = domain or config.DOMAIN
-    if bot is None and not config.BOT_TOKEN:
+    if not config.BOT_TOKEN:
         raise RuntimeError(
             "BOT_TOKEN is not set. The server needs it to send purchased audio in Telegram."
         )
-
-    _injected_bot = bot
 
     if stripe_webhook_secret is not None:
         effective_wh_secret = stripe_webhook_secret
@@ -274,14 +264,44 @@ def create_app(
 
         return jsonify({"url": session.url})
 
+    def _notify_owner_via_api(
+        *,
+        actor_name: str,
+        event: str,
+        song_name: Optional[str] = None,
+        payment_ok: Optional[bool] = None,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Send an owner notification directly via the Telegram Bot API (no Bot instance)."""
+        import html as _html
+
+        owner_id = config.owner_telegram_id_int()
+        if owner_id is None:
+            return
+        lines = [f"🛎 <b>{_html.escape(event)}</b>", f"User: {_html.escape(actor_name)}"]
+        if song_name:
+            lines.append(f"Track: {_html.escape(song_name)}")
+        if payment_ok is True:
+            lines.append("Payment: ✅ success")
+        elif payment_ok is False:
+            lines.append("Payment: ❌ failed")
+        if reason:
+            lines.append(f"Reason: {_html.escape(reason)}")
+        try:
+            requests.post(
+                _tg_api_url("sendMessage"),
+                json={"chat_id": owner_id, "text": "\n".join(lines), "parse_mode": "HTML"},
+                timeout=10,
+            )
+        except Exception:
+            logger.exception("Failed to notify owner via Telegram API")
+
     @app.route("/webhook", methods=["POST"])
     def webhook() -> Any:
         parsed = _parse_webhook_event(effective_wh_secret)
         if isinstance(parsed, tuple):
             return parsed
         event = parsed
-
-        active_bot = _injected_bot or _get_bot()
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
@@ -291,14 +311,12 @@ def create_app(
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             try:
                 deliver_purchase(
-                    active_bot,
                     int(telegram_id),
                     song_id,
                     get_catalog(),
                     root_path(),
                 )
-                notify_owner_sync(
-                    active_bot,
+                _notify_owner_via_api(
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
@@ -306,8 +324,7 @@ def create_app(
                 )
             except OSError as e:
                 logger.exception("Failed to send audio: %s", e)
-                notify_owner_sync(
-                    active_bot,
+                _notify_owner_via_api(
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
@@ -316,8 +333,7 @@ def create_app(
                 )
             except KeyError:
                 logger.exception("Unknown song in webhook metadata: %s", song_id)
-                notify_owner_sync(
-                    active_bot,
+                _notify_owner_via_api(
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_id,
@@ -331,8 +347,7 @@ def create_app(
             song_id = str(meta.get("song_id") or "unknown")
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
-            notify_owner_sync(
-                active_bot,
+            _notify_owner_via_api(
                 actor_name=telegram_name,
                 event="Payment result",
                 song_name=song_name,
