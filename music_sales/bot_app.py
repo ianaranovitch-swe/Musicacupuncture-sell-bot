@@ -37,11 +37,10 @@ def build_application():
         raise RuntimeError(
             "BOT_TOKEN is not set. Set the environment variable BOT_TOKEN (see .env.example)."
         )
-    application = (
-        ApplicationBuilder()
-        .token(config.BOT_TOKEN)
-        .build()
-    )
+    return ApplicationBuilder().token(config.BOT_TOKEN)
+
+
+def _register_handlers(application) -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("buy", buy))
     application.add_handler(CommandHandler("health", cmd_health))
@@ -58,14 +57,15 @@ def build_application():
         CallbackQueryHandler(partial(button, backend_url=config.BACKEND_URL))
     )
     application.add_error_handler(_error_handler)
-    return application
 
 
 def main() -> None:
     setup_logging()
     logger.info("Starting Telegram bot (polling)")
     try:
-        build_application().run_polling()
+        application = build_application().build()
+        _register_handlers(application)
+        application.run_polling()
     except Exception:
         logger.exception("Bot stopped due to an error (see traceback below)")
         raise
