@@ -13,7 +13,6 @@ def test_create_checkout_returns_stripe_url(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         domain="http://localhost:5000",
         stripe_webhook_secret="",
@@ -41,7 +40,6 @@ def test_create_checkout_accepts_selected_currency(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -65,7 +63,6 @@ def test_create_checkout_accepts_track_id_when_resolved(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -87,7 +84,6 @@ def test_create_checkout_track_id_401_when_secret_required_but_missing(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -102,7 +98,6 @@ def test_create_checkout_options_preflight(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -129,7 +124,6 @@ def test_create_checkout_cors_accepts_trailing_slash_in_env(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -153,7 +147,6 @@ def test_create_payment_post_same_as_checkout(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -172,7 +165,6 @@ def test_create_checkout_400_when_missing_fields(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -186,7 +178,6 @@ def test_create_checkout_400_when_unknown_song(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -203,7 +194,6 @@ def test_create_checkout_400_when_unsupported_currency(mocker):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mocker.Mock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -217,7 +207,6 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
     (tmp_path / "songs").mkdir()
     (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
 
-    mock_bot = MagicMock()
     event = {
         "type": "checkout.session.completed",
         "data": {
@@ -230,11 +219,12 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
         },
     }
     mocker.patch("stripe.Event.construct_from", return_value=event)
+    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post.return_value.raise_for_status = MagicMock()
 
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mock_bot,
         stripe_secret="sk_test_fake",
         project_root_override=tmp_path,
         stripe_webhook_secret="",
@@ -244,20 +234,21 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
     resp = client.post("/webhook", json=event)
 
     assert resp.status_code == 200
-    mock_bot.send_audio.assert_called_once()
-    kwargs = mock_bot.send_audio.call_args[1]
-    assert kwargs["chat_id"] == 555
-    assert kwargs["title"] == "Relaxing Sound"
+    # The first requests.post call must be the sendAudio delivery
+    assert mock_post.call_count >= 1
+    send_audio_call = mock_post.call_args_list[0]
+    assert "sendAudio" in send_audio_call.args[0]
+    assert send_audio_call.kwargs["data"]["chat_id"] == 555
+    assert send_audio_call.kwargs["data"]["title"] == "Relaxing Sound"
 
 
 def test_webhook_ignores_other_events(mocker, tmp_path):
     mocker.patch("stripe.Event.construct_from", return_value={"type": "charge.succeeded"})
-    mock_bot = MagicMock()
+    mock_post = mocker.patch("music_sales.server.requests.post")
 
     from music_sales.server import create_app
 
     app = create_app(
-        bot=mock_bot,
         stripe_secret="sk_test_fake",
         project_root_override=tmp_path,
         stripe_webhook_secret="",
@@ -267,14 +258,17 @@ def test_webhook_ignores_other_events(mocker, tmp_path):
     resp = client.post("/webhook", json={})
 
     assert resp.status_code == 200
-    mock_bot.send_audio.assert_not_called()
+    # No Telegram API calls should be made for unrecognised events
+    send_audio_calls = [
+        c for c in mock_post.call_args_list if "sendAudio" in (c.args[0] if c.args else "")
+    ]
+    assert send_audio_calls == []
 
 
 def test_success_and_cancel_pages():
     from music_sales.server import create_app
 
     app = create_app(
-        bot=MagicMock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -289,7 +283,6 @@ def test_miniapp_html_route(mocker, tmp_path):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=MagicMock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -308,7 +301,6 @@ def test_covers_route_serves_file(mocker, tmp_path):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=MagicMock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -324,7 +316,6 @@ def test_covers_route_404_when_missing(mocker, tmp_path):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=MagicMock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
@@ -342,7 +333,6 @@ def test_health_http_route(mocker, tmp_path):
     from music_sales.server import create_app
 
     app = create_app(
-        bot=MagicMock(),
         stripe_secret="sk_test_fake",
         stripe_webhook_secret="",
         songs_catalog=_TEST_CATALOG,
