@@ -37,7 +37,6 @@ def test_create_checkout_returns_stripe_url(mocker):
     assert kwargs["line_items"][0]["price_data"]["currency"] == "usd"
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 1600
     assert kwargs["metadata"]["telegram_name"] == "Unknown user"
-    assert kwargs["automatic_payment_methods"]["enabled"] is True
 
 
 def test_create_checkout_accepts_selected_currency(mocker):

@@ -238,7 +238,6 @@ def create_app(
         try:
             unit_amount = _checkout_unit_amount(song, currency)
             session = stripe.checkout.Session.create(
-                automatic_payment_methods={"enabled": True},
                 line_items=[
                     {
                         "price_data": {
