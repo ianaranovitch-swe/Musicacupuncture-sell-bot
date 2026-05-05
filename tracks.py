@@ -277,7 +277,7 @@ TRACKS: list[dict] = [
             "Listen daily for best results."
         ),
         "price": "$16",
-        "price_amount": 1600,
+        "price_amount": 100,
         "cover": "covers/Divine sound Vitamins from God.jpg",
         "audio": "songs/Divine sound Vitamins from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
