@@ -280,7 +280,7 @@ TRACKS: list[dict] = [
         "price_amount": 1600,
         "cover": "covers/Divine sound Vitamins from God.jpg",
         "audio": "songs/Divine sound Vitamins from God.mp3",
-        "buy_url": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g",
+        "buy_url": "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
         "buy_url_sek": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"
     },
 ]
