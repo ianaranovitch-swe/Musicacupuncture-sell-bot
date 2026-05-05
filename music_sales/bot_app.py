@@ -18,7 +18,7 @@ from telegram.ext import (
 )
 
 from music_sales import config
-from music_sales.bot_handlers import button, gallery_callback, start
+from music_sales.bot_handlers import button, gallery_callback, help_command, start
 from music_sales.buy_callbacks import buy_pay_method, buy_track_select
 from music_sales.buy_command import buy
 from music_sales.buy_payments import pre_checkout, successful_payment
@@ -102,6 +102,7 @@ def build_application():
 def _register_handlers(application) -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("buy", buy))
+    application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("health", cmd_health))
 
     # /buy: отдельные префиксы callback_data, чтобы не пересекаться с callback'ами /start

@@ -2,7 +2,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
-from music_sales.bot_handlers import _full_catalog_markup, button, gallery_callback, start
+from music_sales.bot_handlers import _full_catalog_markup, button, gallery_callback, help_command, start
 
 _SAMPLE_SONGS = {
     "s1": {"name": "Relaxing Sound", "price_usd": 16, "file": "songs/s1.mp3"},
@@ -180,9 +180,31 @@ async def test_button_currency_click_creates_checkout_and_replies_with_url(mocke
     query.message.reply_text.assert_awaited_once()
     args = query.message.reply_text.call_args.args
     kwargs = query.message.reply_text.call_args.kwargs
-    assert args[0] == "Tap to open secure Stripe checkout:"
+    assert "Tap to open secure Stripe checkout:" in args[0]
+    assert "https://checkout.example/pay" in args[0]
+    assert "background" in args[0]
     markup = kwargs["reply_markup"]
     assert markup.inline_keyboard[0][0].url == "https://checkout.example/pay"
+
+
+@pytest.mark.asyncio
+async def test_help_command_shows_usage_and_quick_command_buttons():
+    update = MagicMock()
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+    context = MagicMock()
+
+    await help_command(update, context)
+
+    update.message.reply_text.assert_awaited_once()
+    args = update.message.reply_text.call_args.args
+    kwargs = update.message.reply_text.call_args.kwargs
+    assert "/start" in args[0]
+    assert "/buy" in args[0]
+    assert "/help" in args[0]
+    keyboard = kwargs["reply_markup"].keyboard
+    labels = [btn.text for row in keyboard for btn in row]
+    assert labels == ["/start", "/buy", "/help", "/health"]
 
 
 @pytest.mark.asyncio

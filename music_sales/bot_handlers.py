@@ -6,7 +6,15 @@ import logging
 from pathlib import Path
 
 import requests
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User, WebAppInfo
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    Update,
+    User,
+    WebAppInfo,
+)
 from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes
 
@@ -310,6 +318,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _send_single_track_card(context=context, chat_id=update.message.chat_id, sorted_items=sorted_items, song_idx=0)
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает краткую справку по функциям бота и быстрые кнопки-команды."""
+    if update.message is None:
+        return
+
+    lines = [
+        "This bot sells MP3 tracks and sends paid audio in Telegram.",
+        "",
+        "Commands:",
+        "• /start — open the track catalog with covers",
+        "• /buy — open the compact buy list",
+        "• /help — show this help message",
+        "• /health — owner/developer diagnostics only",
+        "",
+        "How to buy:",
+        "1) Choose a track in /start or /buy",
+        "2) Choose currency/payment method",
+        "3) Open Stripe checkout and complete payment",
+        "",
+        "Tip: if checkout opened in background, tap Buy again and open the latest checkout link/button.",
+    ]
+
+    # Кнопки помогают быстро отправлять команды без ручного ввода.
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton("/start"), KeyboardButton("/buy")],
+            [KeyboardButton("/help"), KeyboardButton("/health")],
+        ],
+        resize_keyboard=True,
+    )
+    await update.message.reply_text("\n".join(lines), reply_markup=keyboard)
+
+
 async def _delete_previous_gallery_batch(
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
@@ -603,7 +644,9 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE, backend_url
     logger.info("Checkout URL sent to user_id=%s song_id=%s", user_id, song_id)
     # Отправляем URL-кнопку, чтобы пользователь сразу открывал Stripe Checkout.
     await query.message.reply_text(
-        "Tap to open secure Stripe checkout:",
+        "Tap to open secure Stripe checkout:\n"
+        f"{payment_url}\n\n"
+        "If it opened in background, tap the button again.",
         reply_markup=InlineKeyboardMarkup(
             [[InlineKeyboardButton("💳 Open Stripe Checkout", url=payment_url)]]
         ),

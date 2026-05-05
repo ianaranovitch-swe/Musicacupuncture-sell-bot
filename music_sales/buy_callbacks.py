@@ -213,4 +213,11 @@ async def _stripe_checkout_link(
         )
         return
 
-    await query.message.reply_text(f"Pay here:\n{payment_url}")
+    await query.message.reply_text(
+        "Tap to open secure Stripe checkout:\n"
+        f"{payment_url}\n\n"
+        "If it opened in background, tap the button again.",
+        reply_markup=InlineKeyboardMarkup(
+            [[InlineKeyboardButton("💳 Open Stripe Checkout", url=payment_url)]]
+        ),
+    )
