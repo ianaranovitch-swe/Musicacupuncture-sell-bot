@@ -18,6 +18,24 @@ def test_log_worker_identity_does_not_raise():
     _log_worker_identity()
 
 
+def test_delay_before_polling_skips_when_unset(mocker, monkeypatch):
+    monkeypatch.delenv("BOT_POLLING_START_DELAY_SECONDS", raising=False)
+    sleep = mocker.patch("music_sales.bot_app.time.sleep")
+    from music_sales.bot_app import _delay_before_polling_if_configured
+
+    _delay_before_polling_if_configured()
+    sleep.assert_not_called()
+
+
+def test_delay_before_polling_calls_sleep_when_positive(mocker, monkeypatch):
+    monkeypatch.setenv("BOT_POLLING_START_DELAY_SECONDS", "2.5")
+    sleep = mocker.patch("music_sales.bot_app.time.sleep")
+    from music_sales.bot_app import _delay_before_polling_if_configured
+
+    _delay_before_polling_if_configured()
+    sleep.assert_called_once_with(2.5)
+
+
 def test_build_application_requires_bot_token(mocker):
     mocker.patch("music_sales.bot_app.config.BOT_TOKEN", "")
     from music_sales.bot_app import build_application

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import socket
+import time
 from functools import partial
 
 import requests
@@ -117,6 +118,28 @@ def _register_handlers(application) -> None:
     application.add_error_handler(_error_handler)
 
 
+def _delay_before_polling_if_configured() -> None:
+    """
+    На Railway при смене деплоя кратко живут два контейнера с одним BOT_TOKEN — оба держат getUpdates → Conflict.
+    Пауза перед run_polling даёт старому контейнеру чаще успеть завершиться (см. BOT_POLLING_START_DELAY_SECONDS).
+    """
+    raw = (os.environ.get("BOT_POLLING_START_DELAY_SECONDS") or "").strip()
+    if not raw:
+        return
+    try:
+        sec = float(raw)
+    except ValueError:
+        logger.warning("Invalid BOT_POLLING_START_DELAY_SECONDS=%r, ignoring", raw)
+        return
+    if sec <= 0:
+        return
+    logger.info(
+        "Sleeping %.1f s before run_polling (BOT_POLLING_START_DELAY_SECONDS; mitigates deploy overlap).",
+        sec,
+    )
+    time.sleep(sec)
+
+
 def main() -> None:
     setup_logging()
     logger.info("Starting Telegram bot (polling)")
@@ -125,6 +148,7 @@ def main() -> None:
         _log_webhook_preflight(config.BOT_TOKEN)
         application = build_application().build()
         _register_handlers(application)
+        _delay_before_polling_if_configured()
         application.run_polling()
     except Exception:
         logger.exception("Bot stopped due to an error (see traceback below)")
