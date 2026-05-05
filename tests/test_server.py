@@ -144,6 +144,69 @@ def test_create_checkout_cors_accepts_trailing_slash_in_env(mocker):
     assert resp.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
 
 
+def test_create_checkout_cors_accepts_full_page_url_in_env(mocker):
+    """В env копируют полный URL Mini App — Origin всё равно только scheme+host."""
+    mocker.patch(
+        "music_sales.config.MINIAPP_CORS_ORIGINS",
+        "https://user.github.io/repo-name/miniapp.html, https://other.example",
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.options(
+        "/create-payment",
+        headers={"Origin": "https://user.github.io"},
+    )
+    assert resp.status_code == 204
+    assert resp.headers.get("Access-Control-Allow-Origin") == "https://user.github.io"
+
+
+def test_miniapp_pricing_get_and_cors(mocker):
+    mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://pages.example")
+    mocker.patch("music_sales.config.test_mode_active", return_value=False)
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    opt = client.options("/miniapp-pricing", headers={"Origin": "https://pages.example"})
+    assert opt.status_code == 204
+    assert opt.headers.get("Access-Control-Allow-Origin") == "https://pages.example"
+
+    got = client.get("/miniapp-pricing", headers={"Origin": "https://pages.example"})
+    assert got.status_code == 200
+    body = got.get_json()
+    assert body.get("test_mode") is False
+    assert "$" in (body.get("usd_display") or "")
+
+
+def test_miniapp_pricing_test_mode_response(mocker):
+    mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://t.example")
+    mocker.patch("music_sales.config.test_mode_active", return_value=True)
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    got = client.get("/miniapp-pricing", headers={"Origin": "https://t.example"})
+    assert got.status_code == 200
+    body = got.get_json()
+    assert body.get("test_mode") is True
+    assert body.get("usd_display") == "$1"
+    assert "kr" in (body.get("sek_display") or "").lower()
+
+
 def test_create_payment_post_same_as_checkout(mocker):
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"

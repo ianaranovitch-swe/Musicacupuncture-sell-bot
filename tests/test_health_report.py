@@ -121,6 +121,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     from music_sales.health_report import build_health_report
 
     r = build_health_report()
+    assert "test_mode" in r
     assert r["missing_audio_from_tracks_py"] == []
     assert r["missing_covers_from_tracks_py"] == []
     assert r["extra_mp3_files_not_in_tracks_py"] == []

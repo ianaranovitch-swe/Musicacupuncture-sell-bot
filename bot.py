@@ -26,6 +26,28 @@ ROOT = Path(__file__).resolve().parent
 logger = logging.getLogger(__name__)
 
 
+def _test_mode() -> bool:
+    """TEST_MODE из .env: дешёвые цены и префикс [TEST] в сообщениях (читаем os при каждом вызове)."""
+    v = (os.getenv("TEST_MODE") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _test_banner_prefix() -> str:
+    """Префикс в тексте, чтобы админ видел, что включён тестовый режим."""
+    return "[TEST] " if _test_mode() else ""
+
+
+def _detail_price_line(track: dict) -> str:
+    """Строка цены для карточки: в тесте — из TEST_PRICE_USD, иначе из tracks.py."""
+    if _test_mode():
+        try:
+            n = int((os.getenv("TEST_PRICE_USD") or "1").strip() or "1")
+        except ValueError:
+            n = 1
+        return f"💰 Price: ${n} (test)"
+    return f"💰 Price: {track['price']}"
+
+
 def _miniapp_url() -> str:
     """HTTPS URL Mini App + query checkout_api (BACKEND_URL) для fetch create-checkout."""
     from urllib.parse import quote
@@ -54,7 +76,11 @@ _stripe = os.getenv("STRIPE_TOKEN", "").strip()
 
 
 def _buy_keyboard(track: dict) -> InlineKeyboardButton:
-    """Кнопка оплаты для текущего трека."""
+    """Кнопка оплаты: в TEST_MODE — общая тестовая Stripe Payment Link, если задана в .env."""
+    if _test_mode():
+        test_url = (os.getenv("TEST_PAYMENT_LINK_USD") or "").strip()
+        if test_url.startswith(("http://", "https://")):
+            return InlineKeyboardButton("💳 Buy Now (test)", url=test_url)
     url = (track.get("buy_url") or "").strip()
     return (
         InlineKeyboardButton("💳 Buy Now", url=url)
@@ -66,10 +92,11 @@ def _buy_keyboard(track: dict) -> InlineKeyboardButton:
 def _detail_text(track: dict) -> str:
     """Текст карточки трека в детальном просмотре."""
     esc = html.escape
+    prefix = esc(_test_banner_prefix())
     return (
-        f"✨ {esc(track['title'])}\n\n"
+        f"{prefix}✨ {esc(track['title'])}\n\n"
         f"{esc(track['description'])}\n\n"
-        f"💰 Price: {esc(track['price'])}"
+        f"{esc(_detail_price_line(track))}"
     )
 
 
@@ -134,7 +161,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     store_url = _miniapp_url()
     if store_url:
         await update.message.reply_text(
-            "Welcome! Tap the button below to open the Music Store.",
+            _test_banner_prefix() + "Welcome! Tap the button below to open the Music Store.",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))]]
             ),
@@ -210,6 +237,8 @@ def main() -> None:
         logger.info("STRIPE_TOKEN is set (ready if you add payment code).")
     else:
         logger.info("STRIPE_TOKEN not set — only needed when you connect Stripe.")
+    if _test_mode():
+        logger.warning("TEST_MODE is ON — reduced prices and TEST_PAYMENT_LINK_USD if set.")
 
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))

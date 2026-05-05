@@ -144,6 +144,10 @@ def _delay_before_polling_if_configured() -> None:
 def main() -> None:
     setup_logging()
     logger.info("Starting Telegram bot (polling)")
+    if config.test_mode_active():
+        logger.warning(
+            "TEST_MODE is ON — track prices follow TEST_PRICE_USD/SEK; web checkout uses reduced amounts."
+        )
     _log_worker_identity()
     try:
         _log_webhook_preflight(config.BOT_TOKEN)

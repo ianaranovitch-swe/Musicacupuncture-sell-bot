@@ -102,6 +102,35 @@
     #app-shell.hidden {
       display: none;
     }
+    /* Баннер тестового режима (показываем, если backend вернул test_mode) */
+    .test-mode-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      padding: 6px 12px;
+      padding-top: max(6px, env(safe-area-inset-top));
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
+      color: #ffb3b3;
+      background: #5c1515;
+      border-bottom: 1px solid rgba(255, 80, 80, 0.45);
+    }
+    .test-mode-banner.show {
+      display: block;
+    }
+    body.has-test-banner-padding #currency-screen {
+      padding-top: max(48px, calc(36px + env(safe-area-inset-top)));
+    }
+    body.has-test-banner-padding #app-shell {
+      padding-top: 76px;
+    }
+    body.has-test-banner-padding #currency-badge {
+      top: max(40px, calc(32px + env(safe-area-inset-top)));
+    }
     /* Бейдж валюты: тап — снова экран выбора */
     #currency-badge {
       position: fixed;
@@ -327,6 +356,9 @@
   </style>
 </head>
 <body>
+  <div id="test-mode-banner" class="test-mode-banner" role="status" aria-live="polite">
+    🧪 TEST MODE — prices are reduced
+  </div>
   <!-- Экран 1: выбор валюты (до показа сетки) -->
   <div id="currency-screen" class="">
     <h1 class="hero-title">🎵 Music Acupuncture</h1>
@@ -439,6 +471,9 @@
       tg.setBackgroundColor("#1a0533");
     }
 
+    /** Ответ GET /miniapp-pricing с Railway: цены и флаг теста (или null при ошибке сети). */
+    let serverPricing = null;
+
     /** Текущая валюта из localStorage или null, пока пользователь не выбрал. */
     let currentCurrency = null;
     let selected = null;
@@ -468,8 +503,11 @@
       currentCurrency = code;
     }
 
-    /** Текст цены на карточке и в деталях: $16 или 169 kr */
+    /** Текст цены на карточке и в деталях: с backend или запасной вариант. */
     function formatPrice(currency) {
+      if (serverPricing) {
+        return currency === CURRENCY_SEK ? serverPricing.sek_display : serverPricing.usd_display;
+      }
       if (currency === CURRENCY_SEK) return "169 kr";
       return "$16";
     }
@@ -504,19 +542,52 @@
     function updateBadge() {
       const el = document.getElementById("currency-badge");
       if (!currentCurrency) return;
-      el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 169 kr" : "USD · $16";
+      if (serverPricing) {
+        el.textContent = currentCurrency === CURRENCY_SEK ? serverPricing.badge_sek : serverPricing.badge_usd;
+      } else {
+        el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 169 kr" : "USD · $16";
+      }
       el.title = "Change currency";
+    }
+
+    /** Подтягиваем цены с web-сервиса (TEST_MODE на Railway). */
+    async function loadServerPricing() {
+      try {
+        const base = getCheckoutApiBase();
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(`${base}/miniapp-pricing`, {
+          method: "GET",
+          mode: "cors",
+          signal: controller.signal,
+        });
+        clearTimeout(tId);
+        if (!r.ok) return;
+        serverPricing = await r.json();
+      } catch (e) {
+        serverPricing = null;
+      }
+    }
+
+    function syncTestModeBanner() {
+      const el = document.getElementById("test-mode-banner");
+      if (!el) return;
+      const on = Boolean(serverPricing && serverPricing.test_mode);
+      el.classList.toggle("show", on);
+      document.body.classList.toggle("has-test-banner-padding", on);
     }
 
     function showCurrencyScreen() {
       document.getElementById("currency-screen").classList.remove("hidden");
       document.getElementById("app-shell").classList.add("hidden");
+      syncTestModeBanner();
       closeDetail();
     }
 
     function showAppShell() {
       document.getElementById("currency-screen").classList.add("hidden");
       document.getElementById("app-shell").classList.remove("hidden");
+      syncTestModeBanner();
       updateBadge();
       renderGrid();
     }
@@ -803,9 +874,11 @@
       }
     });
 
-    /** Старт: параметры checkout из URL; валюта из localStorage. */
-    (function init() {
+    /** Старт: параметры checkout из URL; цены с backend; валюта из localStorage. */
+    (async function init() {
       syncCheckoutParamsFromUrl();
+      await loadServerPricing();
+      syncTestModeBanner();
       const stored = readStoredCurrency();
       if (stored) {
         currentCurrency = stored;

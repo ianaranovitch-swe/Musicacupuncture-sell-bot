@@ -4,6 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
+from urllib.parse import urlparse
 
 import requests
 import stripe
@@ -104,10 +105,6 @@ def create_app(
     def root_path() -> Path:
         return project_root_override if project_root_override is not None else project_root()
 
-    def _normalize_cors_origin(origin: str) -> str:
-        """Сравниваем Origin без пробелов и хвостового / (частая опечатка в MINIAPP_CORS_ORIGINS)."""
-        return (origin or "").strip().rstrip("/").lower()
-
     def _cors_origins_from_env() -> str:
         """Читаем при каждом запросе: на Railway env иногда важнее, чем значение при первом import."""
         return (os.environ.get("MINIAPP_CORS_ORIGINS") or config.MINIAPP_CORS_ORIGINS or "").strip()
@@ -119,16 +116,54 @@ def create_app(
             s = s[1:-1].strip()
         return s
 
+    def _cors_origin_key(value: str) -> Optional[str]:
+        """
+        Ключ для сравнения с заголовком Origin: scheme://host[:port] в нижнем регистре, без пути и без «/» в конце.
+
+        Админы часто вставляют в MINIAPP_CORS_ORIGINS полный URL страницы
+        (https://user.github.io/repo/miniapp.html) — браузер же шлёт только origin (https://user.github.io).
+        Раньше сравнение ломалось; теперь парсим URL и берём только origin.
+        """
+        s = _strip_fragment_quotes((value or "").strip())
+        s = s.lstrip("\ufeff").strip()
+        if not s:
+            return None
+        if "://" not in s:
+            s = f"https://{s}"
+        try:
+            p = urlparse(s)
+        except Exception:
+            return None
+        if not p.scheme or not p.netloc:
+            return None
+        scheme = p.scheme.lower()
+        host = (p.hostname or "").lower()
+        if not host:
+            return None
+        port = p.port
+        if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
+            netloc = f"{host}:{port}"
+        else:
+            netloc = host
+        return f"{scheme}://{netloc}"
+
     def _cors_headers_for_create_checkout() -> dict[str, str]:
         """CORS для Mini App на другом origin (например GitHub Pages)."""
         origin_raw = (request.headers.get("Origin") or "").strip()
         raw = _cors_origins_from_env()
         if not origin_raw or not raw:
             return {}
-        origin_key = _normalize_cors_origin(origin_raw)
-        allowed_keys = {
-            _normalize_cors_origin(_strip_fragment_quotes(x)) for x in raw.split(",") if x.strip()
-        }
+        origin_key = _cors_origin_key(origin_raw)
+        if not origin_key:
+            logger.warning("CORS: invalid Origin header %r", origin_raw[:160])
+            return {}
+        allowed_keys: set[str] = set()
+        for part in raw.split(","):
+            if not part.strip():
+                continue
+            k = _cors_origin_key(part)
+            if k:
+                allowed_keys.add(k)
         if origin_key not in allowed_keys:
             logger.warning(
                 "CORS: checkout request Origin=%r not in MINIAPP_CORS_ORIGINS (normalized keys mismatch)",
@@ -145,11 +180,10 @@ def create_app(
         }
 
     def _path_is_checkout_cors() -> bool:
-        """Путь к checkout (иногда за прокси бывает префикс — проверяем и точное совпадение)."""
+        """Пути Mini App → backend: checkout, preflight и JSON цен (нужен тот же CORS)."""
         p = (request.path or "").rstrip("/") or ""
-        return p in ("/create-checkout", "/create-payment") or p.endswith(
-            ("/create-checkout", "/create-payment")
-        )
+        tails = ("/create-checkout", "/create-payment", "/miniapp-pricing")
+        return p in ("/create-checkout", "/create-payment", "/miniapp-pricing") or p.endswith(tails)
 
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
@@ -159,7 +193,19 @@ def create_app(
         return response
 
     def _checkout_unit_amount(song: Dict[str, Any], currency: str) -> int:
-        """Для sek — фиксированная сумма в öre (из env); для usd/eur — из каталога."""
+        """Для sek — фиксированная сумма в öre (из env); для usd/eur — из каталога. TEST_MODE — дешёвые суммы."""
+        if config.test_mode_active():
+            if currency == "sek":
+                try:
+                    sek_whole = int((os.environ.get("TEST_PRICE_SEK") or config.TEST_PRICE_SEK or "10").strip() or "10")
+                    return max(100, sek_whole * 100)
+                except ValueError:
+                    return 1000
+            try:
+                minor = int(song.get("price_usd", 1) or 1) * 100
+                return max(50, minor)
+            except (TypeError, ValueError):
+                return 100
         if currency == "sek":
             try:
                 return int((config.CHECKOUT_SEK_UNIT_AMOUNT or "16900").strip() or "16900")
@@ -187,6 +233,53 @@ def create_app(
         if not target.is_file():
             return jsonify({"error": "Not found"}), 404
         return send_from_directory(str(covers_dir), filename)
+
+    @app.route("/miniapp-pricing", methods=["GET", "OPTIONS"])
+    def miniapp_pricing() -> Any:
+        """
+        JSON для Mini App: флаг теста и подписи цен (совпадают с Stripe Checkout на backend).
+        GET с GitHub Pages — тот же CORS, что и у /create-payment.
+        """
+        if request.method == "OPTIONS":
+            return "", 204
+        if config.test_mode_active():
+            try:
+                usd_n = int((os.environ.get("TEST_PRICE_USD") or config.TEST_PRICE_USD or "1").strip() or "1")
+            except ValueError:
+                usd_n = 1
+            try:
+                sek_n = int((os.environ.get("TEST_PRICE_SEK") or config.TEST_PRICE_SEK or "10").strip() or "10")
+            except ValueError:
+                sek_n = 10
+            usd_n = max(1, usd_n)
+            sek_n = max(1, sek_n)
+            return jsonify(
+                {
+                    "test_mode": True,
+                    "usd_display": f"${usd_n}",
+                    "sek_display": f"{sek_n} kr",
+                    "badge_usd": f"USD · ${usd_n}",
+                    "badge_sek": f"SEK · {sek_n} kr",
+                }
+            )
+        try:
+            usd_n = int((os.environ.get("DEFAULT_TRACK_PRICE_USD") or config.DEFAULT_TRACK_PRICE_USD or "16").strip() or "16")
+        except ValueError:
+            usd_n = 16
+        try:
+            ore = int((config.CHECKOUT_SEK_UNIT_AMOUNT or "16900").strip() or "16900")
+        except ValueError:
+            ore = 16900
+        kr = max(1, ore // 100)
+        return jsonify(
+            {
+                "test_mode": False,
+                "usd_display": f"${usd_n}",
+                "sek_display": f"{kr} kr",
+                "badge_usd": f"USD · ${usd_n}",
+                "badge_sek": f"SEK · {kr} kr",
+            }
+        )
 
     @app.route("/create-checkout", methods=["OPTIONS"])
     @app.route("/create-payment", methods=["OPTIONS"])
@@ -237,12 +330,13 @@ def create_app(
 
         try:
             unit_amount = _checkout_unit_amount(song, currency)
+            display_name = f"[TEST] {song['name']}" if config.test_mode_active() else song["name"]
             session = stripe.checkout.Session.create(
                 line_items=[
                     {
                         "price_data": {
                             "currency": currency,
-                            "product_data": {"name": song["name"]},
+                            "product_data": {"name": display_name},
                             "unit_amount": unit_amount,
                         },
                         "quantity": 1,

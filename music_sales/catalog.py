@@ -33,7 +33,14 @@ def _fixed_track_price_usd() -> int:
     Фиксированная цена трека в целых долларах США (USD) для всех треков.
 
     Значение можно задать через переменные окружения, но продуктовый дефолт — $16.
+    При TEST_MODE — берём TEST_PRICE_USD (по умолчанию 1).
     """
+    if config.test_mode_active():
+        raw = (os.environ.get("TEST_PRICE_USD") or config.TEST_PRICE_USD or "1").strip() or "1"
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            return 1
     primary = (config.DEFAULT_TRACK_PRICE_USD or "").strip()
     legacy = (config.DEFAULT_TRACK_PRICE_SEK or "").strip()
     raw = primary or legacy or "16"

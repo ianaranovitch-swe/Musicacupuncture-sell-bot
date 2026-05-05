@@ -6,6 +6,16 @@ def _env(name: str, default: str = "") -> str:
     return (os.environ.get(name) or default).strip()
 
 
+def test_mode_active() -> bool:
+    """
+    Режим тестовых цен и ссылок (читаем os.environ при каждом вызове — как CORS, чтобы тесты и Railway подхватывали без перезагрузки модуля).
+
+    В .env: TEST_MODE=true | 1 | yes | on
+    """
+    v = (os.environ.get("TEST_MODE") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 BOT_TOKEN = _env("BOT_TOKEN")
 BACKEND_URL = _env("BACKEND_URL", "http://localhost:5000")
 STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
@@ -37,6 +47,12 @@ AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
 DEFAULT_TRACK_PRICE_USD = _env("DEFAULT_TRACK_PRICE_USD", "16")
 # Обратная совместимость (старое имя переменной): используется только если DEFAULT_TRACK_PRICE_USD пустой
 DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")
+# TEST_MODE: см. test_mode_active(). Цены теста (целые доллары / целые SEK).
+TEST_PRICE_USD = _env("TEST_PRICE_USD", "1")
+TEST_PRICE_SEK = _env("TEST_PRICE_SEK", "10")
+# Опционально: готовые Stripe Payment Links для простого бота (bot.py), не для динамического Checkout с webhook.
+TEST_PAYMENT_LINK_USD = _env("TEST_PAYMENT_LINK_USD")
+TEST_PAYMENT_LINK_SEK = _env("TEST_PAYMENT_LINK_SEK")
 
 
 def resolved_miniapp_url() -> str:

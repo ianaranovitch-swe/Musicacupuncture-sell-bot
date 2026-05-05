@@ -24,6 +24,20 @@ def test_discover_songs_reads_audio_files(monkeypatch, tmp_path):
         assert unit_amount_for_song(song) == stripe_unit_amount_ore(sid)
 
 
+def test_discover_songs_uses_test_price_when_test_mode(monkeypatch, tmp_path):
+    """При TEST_MODE цена в каталоге берётся из TEST_PRICE_USD (для Stripe / подписей)."""
+    songs_dir = tmp_path / "songs"
+    songs_dir.mkdir()
+    (songs_dir / "alpha.mp3").write_bytes(b"x")
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("TEST_MODE", "true")
+    monkeypatch.setenv("TEST_PRICE_USD", "1")
+
+    found = discover_songs()
+    assert len(found) == 1
+    assert next(iter(found.values()))["price_usd"] == 1
+
+
 def test_song_path_joins_project_root(monkeypatch, tmp_path):
     songs_dir = tmp_path / "songs"
     songs_dir.mkdir()

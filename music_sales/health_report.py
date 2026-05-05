@@ -107,6 +107,7 @@ def build_health_report() -> Dict[str, Any]:
     pay_token_set = bool((config.PAYMENTS_PROVIDER_TOKEN or "").strip())
 
     return {
+        "test_mode": config.test_mode_active(),
         "expected_tracks": EXPECTED_TRACKS,
         "tracks_py_entries": len(TRACKS),
         "songs_folder_exists": songs_folder_exists,

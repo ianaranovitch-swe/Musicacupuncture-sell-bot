@@ -103,8 +103,11 @@ async def _send_miniapp_store_opener_if_configured(
     row = _miniapp_store_row()
     if not row:
         return
+    welcome = "Welcome! Tap the button below to open the Music Store."
+    if config.test_mode_active():
+        welcome = "[TEST] " + welcome
     await update.message.reply_text(
-        "Welcome! Tap the button below to open the Music Store.",
+        welcome,
         reply_markup=InlineKeyboardMarkup([row]),
     )
 
@@ -244,8 +247,9 @@ def _user_display_name(user: User | None) -> str:
 
 def _caption_html_for_track_card(*, song_name: str, price_usd: int, description: str | None) -> str:
     """HTML-подпись карточки трека (название, цена, описание); укладывается в лимит Telegram."""
+    test_tag = "<b>[TEST]</b> " if config.test_mode_active() else ""
     header_lines = [
-        f"<b>{html.escape(song_name)}</b>",
+        f"{test_tag}<b>{html.escape(song_name)}</b>",
         f"Price: <b>${price_usd} USD</b>",
     ]
     header = "\n".join(header_lines)
