@@ -436,7 +436,11 @@ def create_app(
             }
             for item in data:
                 try:
-                    desc = str(item.get("description") or "").strip()
+                    # Stripe line item может прийти как dict или StripeObject.
+                    if isinstance(item, dict):
+                        desc = str(item.get("description") or "").strip()
+                    else:
+                        desc = str(item["description"] or "").strip()
                 except Exception:
                     desc = ""
                 if not desc:

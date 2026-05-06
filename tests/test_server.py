@@ -357,6 +357,57 @@ def test_webhook_completed_recovers_song_id_from_stripe_line_items(mocker, tmp_p
     assert send_audio_call.kwargs["data"]["title"] == "Relaxing Sound"
 
 
+def test_webhook_completed_recovers_song_id_from_stripeobject_line_items(mocker, tmp_path):
+    (tmp_path / "songs").mkdir()
+    (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
+
+    event = {
+        "type": "checkout.session.completed",
+        "id": "evt_test_456",
+        "data": {
+            "object": {
+                "id": "cs_test_456",
+                "client_reference_id": "555",
+                "metadata": {"telegram_id": "555", "song_id": ""},
+            }
+        },
+    }
+
+    class _StripeLikeLineItem:
+        def __init__(self, description: str):
+            self._description = description
+
+        def __getitem__(self, key: str):
+            if key == "description":
+                return self._description
+            raise KeyError(key)
+
+    class _StripeLikeList:
+        data = [_StripeLikeLineItem("[TEST] Relaxing Sound")]
+
+    mocker.patch("stripe.Event.construct_from", return_value=event)
+    mocker.patch("stripe.checkout.Session.list_line_items", return_value=_StripeLikeList())
+    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post.return_value.raise_for_status = MagicMock()
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        project_root_override=tmp_path,
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/webhook", json=event)
+
+    assert resp.status_code == 200
+    send_audio_call = mock_post.call_args_list[0]
+    assert "sendAudio" in send_audio_call.args[0]
+    assert send_audio_call.kwargs["data"]["chat_id"] == 555
+    assert send_audio_call.kwargs["data"]["title"] == "Relaxing Sound"
+
+
 def test_webhook_ignores_other_events(mocker, tmp_path):
     mocker.patch("stripe.Event.construct_from", return_value={"type": "charge.succeeded"})
     mock_post = mocker.patch("music_sales.server.requests.post")
