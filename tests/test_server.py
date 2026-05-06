@@ -275,7 +275,7 @@ def test_create_checkout_400_when_unsupported_currency(mocker):
 
 def test_webhook_completed_sends_audio(mocker, tmp_path):
     (tmp_path / "songs").mkdir()
-    (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
+    (tmp_path / "songs" / "song1.mp3").write_bytes(b"x" * 4096)
 
     event = {
         "type": "checkout.session.completed",
@@ -314,7 +314,7 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
 
 def test_webhook_completed_recovers_song_id_from_stripe_line_items(mocker, tmp_path):
     (tmp_path / "songs").mkdir()
-    (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
+    (tmp_path / "songs" / "song1.mp3").write_bytes(b"x" * 4096)
 
     # metadata.song_id пустой: воспроизводим реальный инцидент из Railway logs.
     event = {
@@ -359,7 +359,7 @@ def test_webhook_completed_recovers_song_id_from_stripe_line_items(mocker, tmp_p
 
 def test_webhook_completed_recovers_song_id_from_stripeobject_line_items(mocker, tmp_path):
     (tmp_path / "songs").mkdir()
-    (tmp_path / "songs" / "song1.mp3").write_bytes(b"fake-audio")
+    (tmp_path / "songs" / "song1.mp3").write_bytes(b"x" * 4096)
 
     event = {
         "type": "checkout.session.completed",
@@ -429,6 +429,30 @@ def test_webhook_ignores_other_events(mocker, tmp_path):
         c for c in mock_post.call_args_list if "sendAudio" in (c.args[0] if c.args else "")
     ]
     assert send_audio_calls == []
+
+
+def test_deliver_purchase_rejects_git_lfs_pointer_file(mocker, tmp_path):
+    songs_dir = tmp_path / "songs"
+    songs_dir.mkdir()
+    # Имитация LFS pointer файла (в проде именно такие часто имеют ~130 B).
+    (songs_dir / "song1.mp3").write_text(
+        "version https://git-lfs.github.com/spec/v1\n"
+        "oid sha256:1234567890abcdef\n"
+        "size 12345678\n",
+        encoding="utf-8",
+    )
+    mock_post = mocker.patch("music_sales.server.requests.post")
+
+    from music_sales.server import deliver_purchase
+
+    with pytest.raises(OSError):
+        deliver_purchase(
+            telegram_id=555,
+            song_id="song1",
+            songs_catalog={"song1": {"name": "Relaxing Sound", "file": "songs/song1.mp3"}},
+            root=tmp_path,
+        )
+    mock_post.assert_not_called()
 
 
 def test_success_and_cancel_pages():

@@ -33,6 +33,21 @@ def deliver_purchase(
 ) -> None:
     song = songs_catalog[song_id]
     path = root / song["file"]
+    # Защита от битых/неполных файлов на сервере (частый случай: Git LFS pointer ~130 B).
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise OSError(f"Audio file is not readable: {path}") from exc
+    if size < 2048:
+        raise OSError(f"Audio file is too small ({size} bytes): {path}")
+    try:
+        head = path.read_bytes()[:256]
+        if b"version https://git-lfs.github.com/spec/v1" in head:
+            raise OSError(f"Audio file looks like Git LFS pointer, not real MP3: {path}")
+    except OSError:
+        raise
+    except Exception as exc:
+        raise OSError(f"Audio file validation failed: {path}") from exc
     with open(path, "rb") as audio:
         resp = requests.post(
             _tg_api_url("sendAudio"),
