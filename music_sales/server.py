@@ -409,6 +409,44 @@ def create_app(
                 return {}
             return raw_meta if isinstance(raw_meta, dict) else {}
 
+        def _recover_song_id_from_line_items(session_obj: Any, catalog: Dict[str, Dict[str, Any]]) -> str:
+            """
+            Запасной путь: если metadata.song_id пустой, пытаемся восстановить его по названию
+            товара в Stripe line items (там хранится product_data.name).
+            """
+            try:
+                session_id = str(session_obj["id"] or "")
+            except Exception:
+                return ""
+            if not session_id:
+                return ""
+            try:
+                li = stripe.checkout.Session.list_line_items(session_id, limit=5)
+            except Exception:
+                logger.warning("Could not load Stripe line items for session_id=%s", session_id)
+                return ""
+            data = li.get("data", []) if isinstance(li, dict) else getattr(li, "data", [])
+            if not data:
+                return ""
+
+            names = {
+                sid: str(meta.get("name") or "").strip().lower()
+                for sid, meta in catalog.items()
+                if str(meta.get("name") or "").strip()
+            }
+            for item in data:
+                try:
+                    desc = str(item.get("description") or "").strip()
+                except Exception:
+                    desc = ""
+                if not desc:
+                    continue
+                normalized = desc.replace("[TEST] ", "").replace("[TEST]", "").strip().lower()
+                for sid, nm in names.items():
+                    if nm and nm == normalized:
+                        return sid
+            return ""
+
         parsed = _parse_webhook_event(effective_wh_secret)
         if isinstance(parsed, tuple):
             return parsed
@@ -420,12 +458,16 @@ def create_app(
             telegram_id = str(meta.get("telegram_id") or "")
             song_id = str(meta.get("song_id") or "")
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
+            catalog = get_catalog()
             if not telegram_id:
                 # Fallback: иногда client_reference_id есть, а metadata пустая.
                 try:
                     telegram_id = str(session["client_reference_id"] or "")
                 except Exception:
                     telegram_id = ""
+            if not song_id:
+                # Fallback: если metadata.song_id пустой, пробуем восстановить из line items Stripe.
+                song_id = _recover_song_id_from_line_items(session, catalog)
             if not telegram_id or not song_id:
                 try:
                     event_id = str(event["id"] or "unknown")
@@ -438,12 +480,12 @@ def create_app(
                     song_id,
                 )
                 return "", 200
-            song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
+            song_name = str(catalog.get(song_id, {}).get("name") or song_id)
             try:
                 deliver_purchase(
                     int(telegram_id),
                     song_id,
-                    get_catalog(),
+                    catalog,
                     root_path(),
                 )
                 _notify_owner_via_api(
