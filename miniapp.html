@@ -818,14 +818,7 @@
               else alert(msg);
             }
           }
-          /* openLink kastar ofta inte även om inget syns — kort tips efter en stund. */
-          setTimeout(() => {
-            if (tg && typeof tg.showAlert === "function") {
-              tg.showAlert(
-                "If Stripe did not open: check Telegram allows opening links, try Wi‑Fi, and confirm Railway Web + Stripe work (owner: check Web deploy logs)."
-              );
-            }
-          }, 1200);
+          /* Не показываем отложенный alert после openLink: в WebView Stripe часто открывается поверх Mini App — старый setTimeout давал ложное «не открылось». */
         } else {
           window.open(payUrl, "_blank", "noopener,noreferrer");
         }
