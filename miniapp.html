@@ -631,28 +631,12 @@
     }
 
     /**
-     * Нативная нижняя кнопка Telegram — тапы доходят надёжнее, чем до HTML в WebView.
+     * Оставляем только одну кнопку Buy (HTML внутри карточки).
+     * Telegram MainButton здесь отключаем, чтобы не было дублирования.
      */
     function syncMainButtonForDetail(open) {
       if (!tg || !tg.MainButton) return;
-      if (open) {
-        if (typeof tg.MainButton.setParams === "function") {
-          tg.MainButton.setParams({
-            text: "💳 Buy Now",
-            color: "#FFD700",
-            text_color: "#1a0533",
-            is_visible: true,
-            is_active: true,
-          });
-        } else {
-          tg.MainButton.setText("💳 Buy Now");
-          if ("color" in tg.MainButton) tg.MainButton.color = "#FFD700";
-          if ("textColor" in tg.MainButton) tg.MainButton.textColor = "#1a0533";
-        }
-        tg.MainButton.show();
-      } else {
-        tg.MainButton.hide();
-      }
+      tg.MainButton.hide();
     }
 
     function openDetail(track) {
@@ -841,10 +825,6 @@
         /* Alltid stoppa snurran (även om openLink kastar eller vi returnerade tidigare). */
         stopCheckoutSpinner();
       }
-    }
-
-    if (tg && tg.MainButton && typeof tg.MainButton.onClick === "function") {
-      tg.MainButton.onClick(startCheckout);
     }
 
     document.getElementById("btn-buy").addEventListener("click", () => {

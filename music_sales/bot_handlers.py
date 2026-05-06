@@ -304,22 +304,16 @@ def _gallery_error_user_text_and_code(exc: Exception, *, has_cover: bool) -> tup
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
-    # Сначала приветствие с WebApp — витрина открывается одним тапом.
+    # Новый UX: на /start показываем только вход в Mini App (без старых карточек и сетки кнопок).
     await _send_miniapp_store_opener_if_configured(update, context)
     user = update.effective_user
     if user is not None:
         logger.info("/start from user_id=%s username=%s", user.id, user.username or "-")
         await notify_owner_about_visitor(context, user)
-    songs = discover_songs()
-    if not songs:
+    if not _miniapp_store_row():
         await update.message.reply_text(
-            "No tracks available yet. Add audio files (.mp3, .wav, .m4a, …) to the "
-            "`songs/` folder on the server (or set `AUDIO_SALES_DIR`), then try again."
+            "Music Store is not configured yet. Ask admin to set MINIAPP_URL (HTTPS) and BACKEND_URL."
         )
-        return
-
-    sorted_items = _sorted_song_items()
-    await _send_single_track_card(context=context, chat_id=update.message.chat_id, sorted_items=sorted_items, song_idx=0)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -345,6 +345,9 @@ def create_app(
                 mode="payment",
                 success_url=domain + "/success",
                 cancel_url=domain + "/cancel",
+                # Дублируем telegram_id в client_reference_id как запасной канал,
+                # если в будущем metadata потеряется в промежуточном потоке.
+                client_reference_id=str(telegram_id),
                 metadata={
                     "telegram_id": str(telegram_id),
                     "telegram_name": telegram_name[:120],
@@ -417,8 +420,20 @@ def create_app(
             telegram_id = str(meta.get("telegram_id") or "")
             song_id = str(meta.get("song_id") or "")
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
+            if not telegram_id:
+                # Fallback: иногда client_reference_id есть, а metadata пустая.
+                try:
+                    telegram_id = str(session["client_reference_id"] or "")
+                except Exception:
+                    telegram_id = ""
             if not telegram_id or not song_id:
-                logger.exception("Webhook metadata is incomplete: telegram_id or song_id missing")
+                event_id = str(event.get("id") or "unknown")
+                logger.warning(
+                    "Webhook metadata is incomplete: telegram_id or song_id missing (event_id=%s, telegram_id=%r, song_id=%r)",
+                    event_id,
+                    telegram_id,
+                    song_id,
+                )
                 return "", 200
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             try:
