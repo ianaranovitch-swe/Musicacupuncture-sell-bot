@@ -427,7 +427,10 @@ def create_app(
                 except Exception:
                     telegram_id = ""
             if not telegram_id or not song_id:
-                event_id = str(event.get("id") or "unknown")
+                try:
+                    event_id = str(event["id"] or "unknown")
+                except Exception:
+                    event_id = "unknown"
                 logger.warning(
                     "Webhook metadata is incomplete: telegram_id or song_id missing (event_id=%s, telegram_id=%r, song_id=%r)",
                     event_id,
