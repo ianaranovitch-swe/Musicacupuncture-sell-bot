@@ -391,6 +391,21 @@ def create_app(
 
     @app.route("/webhook", methods=["POST"])
     def webhook() -> Any:
+        def _session_metadata(session_obj: Any) -> dict[str, Any]:
+            """
+            Безопасно достаём metadata и из dict, и из StripeObject.
+
+            У StripeObject нет метода .get(), из-за этого webhook падал 500.
+            """
+            try:
+                if isinstance(session_obj, dict):
+                    raw_meta = session_obj.get("metadata", {})
+                else:
+                    raw_meta = session_obj["metadata"]
+            except Exception:
+                return {}
+            return raw_meta if isinstance(raw_meta, dict) else {}
+
         parsed = _parse_webhook_event(effective_wh_secret)
         if isinstance(parsed, tuple):
             return parsed
@@ -398,9 +413,13 @@ def create_app(
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            telegram_id = session["metadata"]["telegram_id"]
-            song_id = session["metadata"]["song_id"]
-            telegram_name = str(session.get("metadata", {}).get("telegram_name") or "Unknown user")
+            meta = _session_metadata(session)
+            telegram_id = str(meta.get("telegram_id") or "")
+            song_id = str(meta.get("song_id") or "")
+            telegram_name = str(meta.get("telegram_name") or "Unknown user")
+            if not telegram_id or not song_id:
+                logger.exception("Webhook metadata is incomplete: telegram_id or song_id missing")
+                return "", 200
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             try:
                 deliver_purchase(
@@ -436,7 +455,7 @@ def create_app(
 
         if event["type"] in ("checkout.session.expired", "checkout.session.async_payment_failed"):
             session = event["data"]["object"]
-            meta = session.get("metadata", {}) if isinstance(session, dict) else {}
+            meta = _session_metadata(session)
             song_id = str(meta.get("song_id") or "unknown")
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
