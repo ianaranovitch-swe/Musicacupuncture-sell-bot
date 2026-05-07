@@ -395,8 +395,7 @@
               <button type="button" class="btn-buy" id="btn-buy-usd">💳 Pay in USD</button>
               <button type="button" class="btn-buy" id="btn-buy-sek">💳 Pay in SEK</button>
             </div>
-            <button type="button" class="btn-preview" id="btn-preview">🎧 Preview</button>
-            <button type="button" class="btn-preview" id="btn-close-app">Close mini app</button>
+            <button type="button" class="btn-preview" id="btn-back-to-tracks">Back to tracks</button>
           </div>
         </div>
       </div>
@@ -857,20 +856,8 @@
       startCheckout(CURRENCY_SEK);
     });
 
-    document.getElementById("btn-preview").addEventListener("click", () => {
-      if (tg && tg.showAlert) {
-        tg.showAlert("Preview will be available in a future update.");
-      } else {
-        alert("Preview will be available in a future update.");
-      }
-    });
-
-    document.getElementById("btn-close-app").addEventListener("click", () => {
-      if (tg && typeof tg.close === "function") {
-        tg.close();
-      } else {
-        closeDetail();
-      }
+    document.getElementById("btn-back-to-tracks").addEventListener("click", () => {
+      closeDetail();
     });
 
     /** Старт: параметры checkout из URL; цены с backend; валюта из localStorage. */
