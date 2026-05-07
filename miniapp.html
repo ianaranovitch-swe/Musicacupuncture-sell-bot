@@ -395,6 +395,7 @@
               <button type="button" class="btn-buy" id="btn-buy-usd">💳 Pay in USD</button>
               <button type="button" class="btn-buy" id="btn-buy-sek">💳 Pay in SEK</button>
             </div>
+            <button type="button" class="btn-buy" id="btn-free-track" style="display:none">🎁 Get Free Track</button>
             <button type="button" class="btn-preview" id="btn-back-to-tracks">Back to tracks</button>
           </div>
         </div>
@@ -423,6 +424,7 @@
      * Оплата: POST /create-payment (Stripe Checkout + webhook → MP3).
      */
     const tracks = [
+      { id: 0, emoji: "🎁", shortName: "FREE Gift", fullTitle: "Divine sound Super Feng Shui from God", description: "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏", cover: "covers/Divine sound Super Feng Shui from God.jpg", isFree: true },
       { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg" },
       { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.jpg" },
       { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.jpg" },
@@ -442,6 +444,14 @@
     ];
 
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    const BOT_USERNAME = (function () {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        return (q.get("bot_username") || "").trim().replace(/^@/, "");
+      } catch (e) {
+        return "";
+      }
+    })();
 
     /**
      * Данные пользователя из Mini App: обычно в initDataUnsafe; если пусто — парсим initData (строка query).
@@ -595,7 +605,7 @@
           </div>
           <div class="card-body">
             <div class="card-title">${escapeHtml(t.fullTitle)}</div>
-            <div class="card-price">${escapeHtml(priceStr)}</div>
+            <div class="card-price">${t.isFree ? "🎁 FREE" : escapeHtml(priceStr)}</div>
           </div>
         </article>`
         )
@@ -631,7 +641,20 @@
       document.getElementById("detail-cover").alt = track.fullTitle;
       document.getElementById("detail-title").textContent = `${track.emoji} ${track.fullTitle}`;
       document.getElementById("detail-desc").textContent = track.description;
-      document.getElementById("detail-price").textContent = formatPrice(currentCurrency);
+      document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : formatPrice(currentCurrency);
+      // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
+      const freeBtn = document.getElementById("btn-free-track");
+      const currencyTitle = document.querySelector(".currency-choice-title");
+      const currencyRow = document.querySelector(".currency-choice-row");
+      if (track.isFree) {
+        if (currencyTitle) currencyTitle.style.display = "none";
+        if (currencyRow) currencyRow.style.display = "none";
+        if (freeBtn) freeBtn.style.display = "block";
+      } else {
+        if (currencyTitle) currencyTitle.style.display = "";
+        if (currencyRow) currencyRow.style.display = "";
+        if (freeBtn) freeBtn.style.display = "none";
+      }
       panel.classList.add("open");
       panel.setAttribute("aria-hidden", "false");
       syncMainButtonForDetail(true);
@@ -694,6 +717,20 @@
       if (checkoutInFlight) return;
       if (!selected) {
         if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy.");
+        return;
+      }
+      if (selected && selected.isFree) {
+        // Бесплатный трек: открываем чат бота и просим выдать подарок.
+        if (!BOT_USERNAME) {
+          if (tg && tg.showAlert) tg.showAlert("Please open this store from the bot so it can deliver the free track.");
+          return;
+        }
+        const deep = `https://t.me/${BOT_USERNAME}?start=gift_free_track`;
+        if (tg && typeof tg.openTelegramLink === "function") {
+          tg.openTelegramLink(deep);
+        } else {
+          window.location.href = deep;
+        }
         return;
       }
       const apiBase = getCheckoutApiBase();
@@ -854,6 +891,9 @@
     });
     document.getElementById("btn-buy-sek").addEventListener("click", () => {
       startCheckout(CURRENCY_SEK);
+    });
+    document.getElementById("btn-free-track").addEventListener("click", () => {
+      startCheckout(CURRENCY_USD);
     });
 
     document.getElementById("btn-back-to-tracks").addEventListener("click", () => {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from telegram import (
     InlineKeyboardButton,
@@ -13,9 +14,16 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from music_sales import config
+from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
+
+FREE_TRACK_TITLE = "Divine sound Super Feng Shui from God"
+FREE_TRACK_COVER = "covers/Divine sound Super Feng Shui from God.jpg"
+FREE_TRACK_AUDIO = "songs/Divine sound Super Feng Shui from God.mp3"
+FREE_TRACK_CB = "gift:free_track"
+FREE_TRACK_START_PAYLOAD = "gift_free_track"
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
@@ -27,13 +35,95 @@ async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor
     )
 
 
-def _miniapp_store_row() -> list[InlineKeyboardButton] | None:
+def _miniapp_store_row(*, url_override: str | None = None) -> list[InlineKeyboardButton] | None:
     """Одна строка с Mini App, если задан валидный HTTPS URL (требование Telegram)."""
-    url = config.resolved_miniapp_url()
+    url = (url_override or config.resolved_miniapp_url()).strip()
     if not url.startswith("https://"):
         return None
     return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
 
+
+def _free_track_markup() -> InlineKeyboardMarkup:
+    """Кнопка выдачи бесплатного трека (тексты UI — на английском)."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)]])
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обработчик кнопки бесплатного трека.
+
+    Шаги:
+    1) отправляем обложку;
+    2) отправляем описание подарка;
+    3) отправляем MP3 по file_id из FILE_IDS_JSON;
+    4) показываем каталог (Mini App).
+    """
+    # Может быть вызвано либо кнопкой (callback_query), либо deep-link /start gift_free_track (message).
+    query = update.callback_query
+    if query is not None:
+        try:
+            await query.answer()
+        except Exception:
+            pass
+    chat_id = None
+    if query is not None and query.message:
+        chat_id = query.message.chat_id
+    elif update.effective_chat is not None:
+        chat_id = update.effective_chat.id
+    elif update.message is not None and getattr(update.message, "chat_id", None) is not None:
+        chat_id = update.message.chat_id
+    if chat_id is None:
+        return
+
+    root = _repo_root()
+    cover_path = root / FREE_TRACK_COVER
+    if cover_path.is_file():
+        try:
+            with cover_path.open("rb") as photo:
+                await context.bot.send_photo(chat_id=chat_id, photo=photo)
+        except Exception:
+            # Фото не критично: продолжаем выдачу.
+            pass
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "🎁 Your FREE gift from Mikael!\n"
+            f"✨ {FREE_TRACK_TITLE}\n\n"
+            "This divine sound supports harmony,\n"
+            "balance and positive energy flow in\n"
+            "your home and life.\n\n"
+            "Listen daily for best results. 🙏\n\n"
+            "Enjoy the other 16 healing tracks below 👇"
+        ),
+    )
+
+    file_ids = load_file_ids_dict()
+    fid = file_ids.get(FREE_TRACK_TITLE)
+    if not fid:
+        # Подсказка администратору: нужно загрузить файл через upload_songs.py.
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Sorry, the free track is not available right now. Please contact support.",
+        )
+    else:
+        await context.bot.send_document(
+            chat_id=chat_id,
+            document=fid,
+            caption="🎁 Free bonus track — enjoy! 🙏",
+        )
+
+    row = _miniapp_store_row()
+    if row:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Open the Music Store to explore the other tracks:",
+            reply_markup=InlineKeyboardMarkup([row]),
+        )
 
 async def _send_miniapp_store_opener_if_configured(
     update: Update,
@@ -48,6 +138,16 @@ async def _send_miniapp_store_opener_if_configured(
     # Ставим WebApp в меню чата: так пользователь открывает магазин без лишних сообщений-кнопок в чате.
     try:
         url = config.resolved_miniapp_url()
+        # Добавляем bot_username в URL, чтобы Mini App смог открыть чат и выдать бесплатный подарок.
+        try:
+            me = await context.bot.get_me()
+            uname = (me.username or "").strip().lstrip("@")
+        except Exception:
+            uname = ""
+        if uname:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}bot_username={uname}"
+        row = _miniapp_store_row(url_override=url) or row
         if url.startswith("https://"):
             await context.bot.set_chat_menu_button(
                 chat_id=update.message.chat_id,
@@ -73,7 +173,20 @@ async def _send_miniapp_store_opener_if_configured(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
-    # Новый UX: на /start показываем только вход в Mini App.
+    # Deep-link: если открыли бота из Mini App для подарка, выдаём сразу.
+    txt = update.message.text
+    if isinstance(txt, str) and txt.strip().startswith(f"/start {FREE_TRACK_START_PAYLOAD}"):
+        await send_free_track(update, context)
+        return
+    # Приветствие + бесплатный подарок.
+    await update.message.reply_text(
+        "🎁 Special gift from Mikael!\n\n"
+        "Receive a FREE healing track:\n"
+        f"✨ {FREE_TRACK_TITLE}\n\n"
+        "This is our gift to you — no payment needed!\n"
+        "Experience the power of Music Acupuncture.",
+        reply_markup=_free_track_markup(),
+    )
     await _send_miniapp_store_opener_if_configured(update, context)
     user = update.effective_user
     if user is not None:

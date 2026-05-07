@@ -9,6 +9,7 @@ from typing import Any, Dict
 from music_sales import config
 
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".ogg", ".flac"}
+_FREE_BONUS_STEM = "Divine sound Super Feng Shui from God"
 
 
 def project_root() -> Path:
@@ -117,6 +118,9 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         if p.is_file() and p.suffix.lower() in AUDIO_EXTENSIONS and p.name != "catalog.json"
     ]
     for path in sorted(paths, key=lambda p: p.name.lower()):
+        # Бесплатный бонус-трек не продаём и не добавляем в платный каталог (он выдаётся отдельной кнопкой 🎁).
+        if path.stem == _FREE_BONUS_STEM:
+            continue
         ov = overrides.get(path.name, {})
         name = ov.get("name") if isinstance(ov.get("name"), str) else None
         if not name:

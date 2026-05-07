@@ -23,6 +23,9 @@ from telegram.request import HTTPXRequest
 
 from tracks import TRACKS
 
+# Бесплатный бонус: грузим тоже, чтобы file_id оказался в file_ids.json / FILE_IDS_JSON.
+_FREE_BONUS_AUDIO = "songs/Divine sound Super Feng Shui from God.mp3"
+
 load_dotenv()
 
 ROOT = Path(__file__).resolve().parent
@@ -109,6 +112,35 @@ async def _run() -> None:
                 encoding="utf-8",
             )
             print(f"Done! file_id: {fid}")
+
+        # Отдельно грузим бесплатный бонус, который не входит в tracks.py.
+        bonus_path = ROOT / _FREE_BONUS_AUDIO
+        bonus_key = Path(_FREE_BONUS_AUDIO).stem
+        if bonus_path.is_file() and bonus_key not in results:
+            print(f"Uploading bonus: {bonus_path.name}...", end=" ", flush=True)
+            try:
+                with bonus_path.open("rb") as fh:
+                    msg = await bot.send_document(
+                        chat_id=chat_id,
+                        document=fh,
+                        filename=bonus_path.name,
+                    )
+            except TelegramError as e:
+                print(f"Error: {e}")
+            except OSError as e:
+                print(f"Error reading file: {e}")
+            else:
+                doc = msg.document
+                if doc is None:
+                    print("Error: no document in Telegram response.")
+                else:
+                    fid = doc.file_id
+                    results[bonus_key] = fid
+                    OUTPUT.write_text(
+                        json.dumps(results, ensure_ascii=False, indent=4) + "\n",
+                        encoding="utf-8",
+                    )
+                    print(f"Done! file_id: {fid}")
 
 
 def main() -> None:
