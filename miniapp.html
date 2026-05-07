@@ -323,6 +323,16 @@
       position: relative;
       z-index: 2;
     }
+    .currency-choice-title {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0;
+    }
+    .currency-choice-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
     .btn-buy {
       font-family: inherit;
       font-size: 1rem;
@@ -359,19 +369,8 @@
   <div id="test-mode-banner" class="test-mode-banner" role="status" aria-live="polite">
     🧪 TEST MODE — prices are reduced
   </div>
-  <!-- Экран 1: выбор валюты (до показа сетки) -->
-  <div id="currency-screen" class="">
-    <h1 class="hero-title">🎵 Music Acupuncture</h1>
-    <p class="hero-sub">Divine Healing Sounds</p>
-    <p class="prompt">Select your currency</p>
-    <div class="currency-btn-col">
-      <button type="button" class="currency-btn" id="btn-curr-sek" aria-label="Swedish Krona">🇸🇪 SEK — Swedish Krona</button>
-      <button type="button" class="currency-btn" id="btn-curr-usd" aria-label="US Dollar">🇺🇸 USD — US Dollar</button>
-    </div>
-  </div>
-
-  <div id="app-shell" class="hidden">
-    <button type="button" id="currency-badge" title="Change currency">USD</button>
+  <!-- Минималистичный режим: валюта выбирается на карточке трека (2 кнопки USD/SEK). -->
+  <div id="app-shell" class="">
     <div class="screens">
       <div id="grid-screen" class="wrap">
         <header class="hero">
@@ -391,7 +390,11 @@
           <p id="detail-desc" class="detail-desc"></p>
           <div id="detail-price" class="detail-price"></div>
           <div class="btn-row">
-            <button type="button" class="btn-buy" id="btn-buy">💳 Buy Now</button>
+            <p class="currency-choice-title">Choose currency to pay</p>
+            <div class="currency-choice-row">
+              <button type="button" class="btn-buy" id="btn-buy-usd">💳 Pay in USD</button>
+              <button type="button" class="btn-buy" id="btn-buy-sek">💳 Pay in SEK</button>
+            </div>
             <button type="button" class="btn-preview" id="btn-preview">🎧 Preview</button>
             <button type="button" class="btn-preview" id="btn-close-app">Close mini app</button>
           </div>
@@ -401,10 +404,7 @@
   </div>
 
   <script>
-    /**
-     * Ключ localStorage для сохранённой валюты (USD / SEK).
-     * После выбора показываем цены и Stripe-ссылку под эту валюту.
-     */
+    /** Ключ localStorage для сохранённой валюты (USD / SEK). */
     const LS_CURRENCY_KEY = "musicacupuncture_currency";
     const LS_CHECKOUT_API = "musicacupuncture_checkout_api";
     const LS_CHECKOUT_SECRET = "musicacupuncture_checkout_secret";
@@ -474,8 +474,8 @@
     /** Ответ GET /miniapp-pricing с Railway: цены и флаг теста (или null при ошибке сети). */
     let serverPricing = null;
 
-    /** Текущая валюта из localStorage или null, пока пользователь не выбрал. */
-    let currentCurrency = null;
+    /** Текущая валюта из localStorage (по умолчанию USD). */
+    let currentCurrency = CURRENCY_USD;
     let selected = null;
     /** Чтобы не отправить два checkout подряд (MainButton + HTML). */
     let checkoutInFlight = false;
@@ -541,6 +541,7 @@
 
     function updateBadge() {
       const el = document.getElementById("currency-badge");
+      if (!el) return;
       if (!currentCurrency) return;
       if (serverPricing) {
         el.textContent = currentCurrency === CURRENCY_SEK ? serverPricing.badge_sek : serverPricing.badge_usd;
@@ -577,28 +578,12 @@
       document.body.classList.toggle("has-test-banner-padding", on);
     }
 
-    function showCurrencyScreen() {
-      document.getElementById("currency-screen").classList.remove("hidden");
-      document.getElementById("app-shell").classList.add("hidden");
-      syncTestModeBanner();
-      closeDetail();
-    }
-
     function showAppShell() {
-      document.getElementById("currency-screen").classList.add("hidden");
-      document.getElementById("app-shell").classList.remove("hidden");
       syncTestModeBanner();
-      updateBadge();
       renderGrid();
     }
 
-    function pickCurrency(code) {
-      saveCurrency(code);
-      showAppShell();
-    }
-
     function renderGrid() {
-      if (!currentCurrency) return;
       const root = document.getElementById("track-grid");
       const priceStr = formatPrice(currentCurrency);
       root.innerHTML = tracks
@@ -660,13 +645,6 @@
       syncMainButtonForDetail(false);
     }
 
-    document.getElementById("btn-curr-sek").addEventListener("click", () => pickCurrency(CURRENCY_SEK));
-    document.getElementById("btn-curr-usd").addEventListener("click", () => pickCurrency(CURRENCY_USD));
-
-    document.getElementById("currency-badge").addEventListener("click", () => {
-      showCurrencyScreen();
-    });
-
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
     /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
@@ -713,10 +691,10 @@
       }
     }
 
-    async function startCheckout() {
+    async function startCheckout(forcedCurrency) {
       if (checkoutInFlight) return;
-      if (!selected || !currentCurrency) {
-        if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy Now.");
+      if (!selected) {
+        if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy.");
         return;
       }
       const apiBase = getCheckoutApiBase();
@@ -741,7 +719,13 @@
       if (mb && typeof mb.showProgress === "function") mb.showProgress();
 
       try {
-        const currency = currentCurrency === CURRENCY_SEK ? "sek" : "usd";
+        const chosenCurrency =
+          forcedCurrency === CURRENCY_SEK || forcedCurrency === CURRENCY_USD
+            ? forcedCurrency
+            : (currentCurrency || CURRENCY_USD);
+        saveCurrency(chosenCurrency);
+        updateBadge();
+        const currency = chosenCurrency === CURRENCY_SEK ? "sek" : "usd";
         const headers = { "Content-Type": "application/json" };
         const sec = getMiniappCheckoutSecretForHeader();
         if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
@@ -866,8 +850,11 @@
       }
     }
 
-    document.getElementById("btn-buy").addEventListener("click", () => {
-      startCheckout();
+    document.getElementById("btn-buy-usd").addEventListener("click", () => {
+      startCheckout(CURRENCY_USD);
+    });
+    document.getElementById("btn-buy-sek").addEventListener("click", () => {
+      startCheckout(CURRENCY_SEK);
     });
 
     document.getElementById("btn-preview").addEventListener("click", () => {
@@ -891,13 +878,8 @@
       syncCheckoutParamsFromUrl();
       await loadServerPricing();
       syncTestModeBanner();
-      const stored = readStoredCurrency();
-      if (stored) {
-        currentCurrency = stored;
-        showAppShell();
-      } else {
-        showCurrencyScreen();
-      }
+      currentCurrency = readStoredCurrency() || CURRENCY_USD;
+      showAppShell();
     })();
   </script>
 </body>

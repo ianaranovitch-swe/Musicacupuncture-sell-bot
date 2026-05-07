@@ -230,6 +230,18 @@ def create_app(
                 return 16900
         return unit_amount_for_song(song)
 
+    def _checkout_success_url() -> str:
+        """
+        URL возврата после успешной оплаты.
+
+        Если задан CHECKOUT_SUCCESS_URL (например, https://t.me/<bot_username>),
+        Stripe после оплаты вернёт пользователя сразу в Telegram.
+        """
+        custom = (config.CHECKOUT_SUCCESS_URL or "").strip()
+        if custom.startswith("https://"):
+            return custom
+        return domain + "/success"
+
     @app.route("/miniapp.html")
     def miniapp_page() -> Any:
         """Статическая страница Telegram Mini App (один HTML-файл в корне репозитория)."""
@@ -360,7 +372,7 @@ def create_app(
                     }
                 ],
                 mode="payment",
-                success_url=domain + "/success",
+                success_url=_checkout_success_url(),
                 cancel_url=domain + "/cancel",
                 # Дублируем telegram_id в client_reference_id как запасной канал,
                 # если в будущем metadata потеряется в промежуточном потоке.
@@ -563,7 +575,48 @@ def create_app(
 
     @app.route("/success")
     def success() -> str:
-        return "Payment successful! You can return to Telegram."
+        """
+        Страница успеха после Stripe Checkout.
+
+        Авто-возврат в Telegram после оплаты зависит от браузера/ОС, поэтому показываем
+        понятную кнопку «Back to Telegram» и текст, где искать MP3.
+        """
+        back = (config.CHECKOUT_SUCCESS_URL or "").strip()
+        if not back.startswith("https://"):
+            back = "https://t.me"
+        return f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Payment successful</title>
+    <style>
+      body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; line-height: 1.4; }}
+      .box {{ max-width: 520px; margin: 0 auto; }}
+      h1 {{ margin: 0 0 10px; }}
+      p {{ margin: 8px 0; }}
+      a.btn {{
+        display: inline-block;
+        margin-top: 14px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        background: #ffd700;
+        color: #1a0533;
+        font-weight: 700;
+        text-decoration: none;
+      }}
+      .muted {{ color: #555; font-size: 0.95rem; }}
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Payment successful</h1>
+      <p>Your MP3 is sent in Telegram by the bot.</p>
+      <p class="muted">If you don't see it yet, open the Telegram chat with the bot and wait a few seconds.</p>
+      <a class="btn" href="{back}">Back to Telegram</a>
+    </div>
+  </body>
+</html>"""
 
     @app.route("/cancel")
     def cancel() -> str:

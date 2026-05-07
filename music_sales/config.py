@@ -32,6 +32,9 @@ MINIAPP_CORS_ORIGINS = _env("MINIAPP_CORS_ORIGINS")
 MINIAPP_CHECKOUT_SECRET = _env("MINIAPP_CHECKOUT_SECRET")
 # Stripe Checkout: сумма в öre для валюты sek (169 kr = 16900).
 CHECKOUT_SEK_UNIT_AMOUNT = _env("CHECKOUT_SEK_UNIT_AMOUNT", "16900")
+# Куда редиректить после успешной оплаты Stripe (обычно deep-link в Telegram бота).
+# Пример: https://t.me/musicacupuncture_bot
+CHECKOUT_SUCCESS_URL = _env("CHECKOUT_SUCCESS_URL")
 
 # Telegram Payments (Stripe): provider token из BotFather (нужен для sendInvoice)
 PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")

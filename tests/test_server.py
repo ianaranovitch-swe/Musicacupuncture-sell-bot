@@ -62,6 +62,28 @@ def test_create_checkout_accepts_selected_currency(mocker):
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 16900
 
 
+def test_create_checkout_uses_custom_success_url_when_configured(mocker):
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    mocker.patch("music_sales.config.CHECKOUT_SUCCESS_URL", "https://t.me/musicacupuncture_bot")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        domain="https://web.example",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 42})
+
+    assert resp.status_code == 200
+    kwargs = create.call_args.kwargs
+    assert kwargs["success_url"] == "https://t.me/musicacupuncture_bot"
+
+
 def test_create_checkout_accepts_track_id_when_resolved(mocker):
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"
