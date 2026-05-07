@@ -38,6 +38,7 @@ async def test_start_sends_store_opener_only_when_miniapp_url_set(mocker):
     rt_kwargs = update.message.reply_text.call_args.kwargs
     assert "Music Store" in rt_kwargs["reply_markup"].inline_keyboard[0][0].text
     assert rt_kwargs["reply_markup"].inline_keyboard[0][0].web_app is not None
+    assert "menu button" in (update.message.reply_text.call_args.args[0] or "").lower()
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, User, WebAppInfo
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    MenuButtonWebApp,
+    Update,
+    User,
+    WebAppInfo,
+)
 from telegram.ext import ContextTypes
 
 from music_sales import config
@@ -38,11 +45,27 @@ async def _send_miniapp_store_opener_if_configured(
     row = _miniapp_store_row()
     if not row:
         return
-    welcome = "Welcome! Tap the button below to open the Music Store."
+    # Ставим WebApp в меню чата: так пользователь открывает магазин без лишних сообщений-кнопок в чате.
+    try:
+        url = config.resolved_miniapp_url()
+        if url.startswith("https://"):
+            await context.bot.set_chat_menu_button(
+                chat_id=update.message.chat_id,
+                menu_button=MenuButtonWebApp(
+                    text="Music Store",
+                    web_app=WebAppInfo(url=url),
+                ),
+            )
+    except Exception:
+        # Меню-кнопка не критична: если не получилось — покажем обычную inline-кнопку.
+        pass
+
+    welcome = "Welcome! Open the Music Store from the menu button."
     if config.test_mode_active():
         welcome = "[TEST] " + welcome
     await update.message.reply_text(
         welcome,
+        # Inline-кнопку оставляем как fallback (на случай, если MenuButton не поддержан в клиенте/ошибка API).
         reply_markup=InlineKeyboardMarkup([row]),
     )
 
