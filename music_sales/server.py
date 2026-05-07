@@ -12,6 +12,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from music_sales import config
 from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
+from music_sales.file_id_delivery import PURCHASE_DELIVERY_CAPTION, file_id_for_song, load_file_ids_dict
 
 logger = logging.getLogger(__name__)
 SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
@@ -31,31 +32,32 @@ def deliver_purchase(
     songs_catalog: Dict[str, Dict[str, Any]],
     root: Path,
 ) -> None:
+    """
+    Отправка покупки в Telegram по file_id из FILE_IDS_JSON (без локальных MP3).
+
+    upload_songs.py загружает файлы через send_document — тот же тип file_id
+    нужно отправлять через sendDocument (sendAudio с document file_id часто даёт 400).
+    Параметр root оставлен для совместимости вызовов; диск для доставки не читаем.
+    """
+    _ = root  # явно не используем — см. докстринг
     song = songs_catalog[song_id]
-    path = root / song["file"]
-    # Защита от битых/неполных файлов на сервере (частый случай: Git LFS pointer ~130 B).
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        raise OSError(f"Audio file is not readable: {path}") from exc
-    if size < 2048:
-        raise OSError(f"Audio file is too small ({size} bytes): {path}")
-    try:
-        head = path.read_bytes()[:256]
-        if b"version https://git-lfs.github.com/spec/v1" in head:
-            raise OSError(f"Audio file looks like Git LFS pointer, not real MP3: {path}")
-    except OSError:
-        raise
-    except Exception as exc:
-        raise OSError(f"Audio file validation failed: {path}") from exc
-    with open(path, "rb") as audio:
-        resp = requests.post(
-            _tg_api_url("sendAudio"),
-            data={"chat_id": telegram_id, "title": song["name"]},
-            files={"audio": audio},
-            timeout=60,
+    file_ids = load_file_ids_dict()
+    fid = file_id_for_song(song, file_ids)
+    if not fid:
+        raise OSError(
+            "No Telegram file_id for this track (check FILE_IDS_JSON keys vs upload_songs.py stems)."
         )
-        resp.raise_for_status()
+    title = str(song.get("name") or song_id)
+    resp = requests.post(
+        _tg_api_url("sendDocument"),
+        data={
+            "chat_id": telegram_id,
+            "document": fid,
+            "caption": PURCHASE_DELIVERY_CAPTION,
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
 
 
 def _parse_webhook_event(

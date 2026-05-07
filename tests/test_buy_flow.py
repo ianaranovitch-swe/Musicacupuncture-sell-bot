@@ -1,3 +1,5 @@
+import json
+import os
 from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
@@ -136,18 +138,11 @@ async def test_pre_checkout_rejects_bad_payload():
 @pytest.mark.asyncio
 async def test_successful_payment_sends_audio(mocker):
     mocker.patch("music_sales.buy_payments.discover_songs", return_value=_SAMPLE_SONGS)
-
-    fake_path = MagicMock()
-    fake_path.is_file.return_value = True
-    fake_path.name = "s1.mp3"
-
-    fh = MagicMock()
-    cm = MagicMock()
-    cm.__enter__.return_value = fh
-    cm.__exit__.return_value = False
-    fake_path.open.return_value = cm
-
-    mocker.patch("music_sales.buy_payments.song_path", return_value=fake_path)
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"s1": "telegram_document_file_id"})},
+        clear=False,
+    )
 
     update = MagicMock()
     msg = MagicMock()
@@ -157,9 +152,11 @@ async def test_successful_payment_sends_audio(mocker):
     sp.invoice_payload = "ms|s1|999"
     msg.successful_payment = sp
     msg.reply_text = AsyncMock()
-    msg.reply_audio = AsyncMock()
+    msg.reply_document = AsyncMock()
     update.message = msg
 
     await successful_payment(update, MagicMock())
 
-    msg.reply_audio.assert_awaited_once()
+    msg.reply_document.assert_awaited_once()
+    kwargs = msg.reply_document.call_args[1]
+    assert kwargs["document"] == "telegram_document_file_id"

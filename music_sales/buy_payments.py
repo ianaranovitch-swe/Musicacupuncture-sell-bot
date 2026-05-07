@@ -9,7 +9,8 @@ from telegram.ext import ContextTypes
 
 from music_sales import config
 from music_sales.buy_constants import parse_invoice_payload
-from music_sales.catalog import discover_songs, song_path
+from music_sales.catalog import discover_songs
+from music_sales.file_id_delivery import PURCHASE_DELIVERY_CAPTION, file_id_for_song, load_file_ids_dict
 from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
@@ -101,17 +102,18 @@ async def pre_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         return
 
-    path = song_path(song_id)
-    if not path.is_file():
-        await query.answer(ok=False, error_message="Track file is missing on the server.")
-        logger.error("pre_checkout missing file: %s", path)
+    # Доставка только по FILE_IDS_JSON (без MP3 на диске Railway).
+    fid = file_id_for_song(song, load_file_ids_dict())
+    if not fid:
+        await query.answer(ok=False, error_message="Track is not available for delivery right now.")
+        logger.error("pre_checkout missing FILE_IDS_JSON entry for song_id=%s", song_id)
         await notify_owner_async(
             context,
             actor=query.from_user,
             event="Payment attempt",
             song_name=song_id,
             payment_ok=False,
-            reason="Missing audio file",
+            reason="Missing Telegram file_id (FILE_IDS_JSON)",
         )
         return
 
@@ -166,38 +168,43 @@ async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-    path = song_path(song_id)
-    if not path.is_file():
-        await msg.reply_text("Payment succeeded, but the track file is missing on the server. Please contact support.")
-        logger.error("successful_payment missing file: %s", path)
+    song_meta = songs[song_id]
+    fid = file_id_for_song(song_meta, load_file_ids_dict())
+    if not fid:
+        await msg.reply_text(
+            "Sorry, there was an error delivering your file. Please contact support."
+        )
+        logger.error("successful_payment missing FILE_IDS_JSON for song_id=%s", song_id)
         await notify_owner_async(
             context,
             actor=msg.from_user,
             event="Payment result",
             song_name=song_id,
             payment_ok=False,
-            reason="Missing audio after payment",
+            reason="Missing Telegram file_id after payment",
         )
         return
 
-    title = str(songs[song_id]["name"])
+    title = str(song_meta["name"])
+    # Тот же file_id, что после upload_songs.py (send_document) — шлём документом.
     try:
-        with path.open("rb") as f:
-            await msg.reply_audio(audio=f, title=title, filename=path.name)
-    except OSError:
-        logger.exception("successful_payment failed to read/send audio: %s", path)
-        await msg.reply_text("Payment succeeded, but I couldn't send the file. Please contact support.")
+        await msg.reply_document(document=fid, caption=PURCHASE_DELIVERY_CAPTION)
+    except Exception:
+        logger.exception("successful_payment failed to send document by file_id song_id=%s", song_id)
+        await msg.reply_text(
+            "Sorry, there was an error delivering your file. Please contact support."
+        )
         await notify_owner_async(
             context,
             actor=msg.from_user,
             event="Payment result",
             song_name=title,
             payment_ok=False,
-            reason="Audio send failed",
+            reason="Document send by file_id failed",
         )
         return
 
-    logger.info("successful_payment delivered: user_id=%s song_id=%s file=%s", user_id, song_id, path.name)
+    logger.info("successful_payment delivered: user_id=%s song_id=%s (file_id)", user_id, song_id)
     await notify_owner_async(
         context,
         actor=msg.from_user,

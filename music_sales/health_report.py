@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import html
+import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from urllib.parse import urlparse
@@ -73,6 +75,20 @@ def _cors_configured() -> Tuple[bool, str]:
     return True, f"CORS origins configured ({len(raw.split(','))} entries)"
 
 
+def _file_ids_json_ok() -> Tuple[bool, str]:
+    """После оплаты треки шлются по Telegram file_id из FILE_IDS_JSON (см. upload_songs.py)."""
+    raw = (os.environ.get("FILE_IDS_JSON") or "").strip()
+    if not raw:
+        return False, "FILE_IDS_JSON not set (post-checkout delivery will fail)"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return False, f"FILE_IDS_JSON invalid JSON: {e!s}"[:200]
+    if not isinstance(data, dict) or len(data) < 1:
+        return False, "FILE_IDS_JSON must be a non-empty JSON object"
+    return True, f"FILE_IDS_JSON OK ({len(data)} keys)"
+
+
 def build_health_report() -> Dict[str, Any]:
     """Собрать данные для /health (JSON). Без секретов в ответе."""
     root = project_root()
@@ -101,10 +117,12 @@ def build_health_report() -> Dict[str, Any]:
     backend_ok, backend_msg = _backend_options_ok()
     mini_ok, mini_msg = _miniapp_env_ok()
     cors_ok, cors_msg = _cors_configured()
+    file_ids_ok, file_ids_msg = _file_ids_json_ok()
 
     webhook_secret_set = bool((config.STRIPE_WEBHOOK_SECRET or "").strip())
     mini_secret_set = bool((config.MINIAPP_CHECKOUT_SECRET or "").strip())
     pay_token_set = bool((config.PAYMENTS_PROVIDER_TOKEN or "").strip())
+    file_ids_set = bool((os.environ.get("FILE_IDS_JSON") or "").strip())
 
     return {
         "test_mode": config.test_mode_active(),
@@ -125,6 +143,7 @@ def build_health_report() -> Dict[str, Any]:
             "STRIPE_WEBHOOK_SECRET_set": webhook_secret_set,
             "MINIAPP_CHECKOUT_SECRET_set": mini_secret_set,
             "PAYMENTS_PROVIDER_TOKEN_set": pay_token_set,
+            "FILE_IDS_JSON_set": file_ids_set,
             "BACKEND_URL_host": urlparse((config.BACKEND_URL or "http://localhost").strip() or "http://localhost").netloc
             or "(empty)",
             "DOMAIN_host": urlparse((config.DOMAIN or "http://localhost").strip() or "http://localhost").netloc
@@ -135,6 +154,7 @@ def build_health_report() -> Dict[str, Any]:
             "backend_options": {"ok": backend_ok, "detail": backend_msg},
             "miniapp_url": {"ok": mini_ok, "detail": mini_msg},
             "miniapp_cors": {"ok": cors_ok, "detail": cors_msg},
+            "file_ids_json": {"ok": file_ids_ok, "detail": file_ids_msg},
         },
         "ready": bool(
             len(missing_audio) == 0
@@ -145,6 +165,7 @@ def build_health_report() -> Dict[str, Any]:
             and backend_ok
             and mini_ok
             and cors_ok
+            and file_ids_ok
             and songs_folder_exists
         ),
     }

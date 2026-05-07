@@ -112,6 +112,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     mocker.patch("music_sales.health_report._backend_options_ok", return_value=(True, "ok"))
     mocker.patch("music_sales.health_report._miniapp_env_ok", return_value=(True, "ok"))
     mocker.patch("music_sales.health_report._cors_configured", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._file_ids_json_ok", return_value=(True, "ok"))
 
     (tmp_path / "songs").mkdir()
     (tmp_path / "covers").mkdir()
