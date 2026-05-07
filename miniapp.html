@@ -670,7 +670,8 @@
     document.getElementById("btn-back").addEventListener("click", closeDetail);
 
     /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
-    const CHECKOUT_FETCH_TIMEOUT_MS = 22000;
+    const CHECKOUT_FETCH_TIMEOUT_MS = 45000;
+    const WARMUP_FETCH_TIMEOUT_MS = 30000;
 
     /** Kort text om betal-URL (för felsökning utan att spamma hela querysträngar). */
     function checkoutHostHint(apiBase) {
@@ -680,6 +681,36 @@
         } catch (e) {
           return String(apiBase || "").slice(0, 80);
         }
+    }
+
+    /**
+     * Один fetch с таймаутом через AbortController.
+     * Нужен для повторного использования в checkout и прогреве backend.
+     */
+    async function fetchWithTimeout(url, options, timeoutMs) {
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...(options || {}), signal: controller.signal });
+      } finally {
+        clearTimeout(timerId);
+      }
+    }
+
+    /**
+     * Прогрев web-сервиса на Railway перед checkout.
+     * Если backend спал, первый запрос может падать; после /miniapp-pricing сервис обычно «просыпается».
+     */
+    async function warmupPaymentApi(apiBase) {
+      try {
+        await fetchWithTimeout(
+          `${apiBase}/miniapp-pricing`,
+          { method: "GET", mode: "cors" },
+          WARMUP_FETCH_TIMEOUT_MS
+        );
+      } catch (e) {
+        /* Прогрев best-effort: молча продолжаем, чтобы не блокировать checkout. */
+      }
     }
 
     async function startCheckout() {
@@ -723,24 +754,32 @@
           return;
         }
 
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), CHECKOUT_FETCH_TIMEOUT_MS);
+        const requestOptions = {
+          method: "POST",
+          mode: "cors",
+          headers,
+          body: JSON.stringify({
+            track_id: selected.id,
+            telegram_id,
+            telegram_name,
+            currency,
+          }),
+        };
         let res;
         try {
-          res = await fetch(`${apiBase}${PAYMENT_CREATE_PATH}`, {
-            method: "POST",
-            mode: "cors",
-            signal: controller.signal,
-            headers,
-            body: JSON.stringify({
-              track_id: selected.id,
-              telegram_id,
-              telegram_name,
-              currency,
-            }),
-          });
-        } finally {
-          clearTimeout(tId);
+          res = await fetchWithTimeout(
+            `${apiBase}${PAYMENT_CREATE_PATH}`,
+            requestOptions,
+            CHECKOUT_FETCH_TIMEOUT_MS
+          );
+        } catch (e) {
+          // Если web «просыпается», делаем прогрев и один повтор запроса.
+          await warmupPaymentApi(apiBase);
+          res = await fetchWithTimeout(
+            `${apiBase}${PAYMENT_CREATE_PATH}`,
+            requestOptions,
+            CHECKOUT_FETCH_TIMEOUT_MS
+          );
         }
 
         if (!res.ok) {
