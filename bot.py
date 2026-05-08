@@ -89,14 +89,29 @@ def _buy_keyboard(track: dict) -> InlineKeyboardButton:
     )
 
 
+def _duration_line(track: dict) -> str | None:
+    """Длительность MP3 в коротком виде (например 50m 8s), если файл есть и mutagen доступен."""
+    try:
+        from music_sales.catalog import project_root
+        from music_sales.mp3_duration import format_duration_short, mp3_duration_seconds
+    except ImportError:
+        return None
+    ap = project_root() / str(track.get("audio", "") or "")
+    sec = mp3_duration_seconds(ap)
+    return format_duration_short(sec)
+
+
 def _detail_text(track: dict) -> str:
     """Текст карточки трека в детальном просмотре."""
     esc = html.escape
     prefix = esc(_test_banner_prefix())
+    dur = _duration_line(track)
+    dur_block = f"\n\n⏱ {esc(dur)}" if dur else ""
     return (
         f"{prefix}✨ {esc(track['title'])}\n\n"
         f"{esc(track['description'])}\n\n"
         f"{esc(_detail_price_line(track))}"
+        f"{dur_block}"
     )
 
 

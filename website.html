@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Therapeutic healing music for body, soul and chakras. Divine healing sounds by Mikael — Music Acupuncture." />
+  <meta name="theme-color" content="#1a0533" />
+  <meta property="og:title" content="Music Acupuncture - Divine Healing Sounds" />
+  <meta property="og:description" content="Therapeutic healing music for body, soul and chakras." />
+  <meta property="og:type" content="website" />
+  <title>Music Acupuncture - Divine Healing Sounds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ========== Design tokens (match miniapp.html) ========== */
+    :root {
+      --bg: #1a0533;
+      --gold: #ffd700;
+      --text: #ffffff;
+      --muted: #c9b8e8;
+      --card-border: rgba(255, 215, 0, 0.35);
+      --site-base: ""; /* set by JS from pathname */
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Poppins", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ========== Particles canvas (hero background) ========== */
+    #stars-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    .page-wrap {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+    }
+
+    /* ========== Sticky navbar ========== */
+    .nav-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 12px 18px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      background: rgba(26, 5, 51, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .nav-brand {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--gold);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-links a:hover {
+      color: var(--gold);
+      background: rgba(255, 215, 0, 0.08);
+    }
+    .currency-switch {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .currency-switch button {
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.25);
+      color: var(--muted);
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.2s, color 0.2s;
+    }
+    .currency-switch button.active {
+      color: var(--gold);
+      border-color: var(--gold);
+      background: rgba(255, 215, 0, 0.12);
+    }
+    .nav-toggle {
+      display: none;
+      font-family: inherit;
+      font-size: 1.5rem;
+      background: transparent;
+      border: none;
+      color: var(--gold);
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    @media (max-width: 768px) {
+      .nav-toggle { display: block; }
+      .nav-links.collapsible {
+        display: none;
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .nav-links.collapsible.open { display: flex; }
+      .currency-switch { margin-left: auto; }
+    }
+
+    /* ========== Sections ========== */
+    section {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 18px 64px;
+      padding-bottom: max(64px, env(safe-area-inset-bottom));
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold);
+      text-align: center;
+      margin: 0 0 8px;
+    }
+    .section-sub {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin: 0 0 32px;
+    }
+
+    /* ========== Hero ========== */
+    #home.hero {
+      min-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding-top: max(24px, env(safe-area-inset-top));
+    }
+    .hero h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 24px rgba(0, 0, 0, 0.5);
+    }
+    .hero .tagline {
+      font-size: clamp(1rem, 3vw, 1.25rem);
+      color: var(--muted);
+      margin: 0 0 28px;
+      max-width: 520px;
+      line-height: 1.5;
+    }
+    .hero .lead {
+      max-width: 560px;
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--text);
+      margin: 0 0 36px;
+      opacity: 0.95;
+    }
+    .hero-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .btn-gold {
+      font-family: inherit;
+      font-size: 1.05rem;
+      font-weight: 700;
+      padding: 16px 24px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      background: var(--gold);
+      color: #1a0533;
+      box-shadow: 0 4px 24px rgba(255, 215, 0, 0.35);
+      animation: pulseBuy 2.2s ease-in-out infinite;
+      transition: transform 0.2s;
+    }
+    .btn-gold:hover { transform: translateY(-2px); }
+    .btn-outline {
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 14px 22px;
+      border-radius: 14px;
+      border: 2px solid var(--gold);
+      background: transparent;
+      color: var(--gold);
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .btn-outline:hover {
+      background: rgba(255, 215, 0, 0.1);
+      transform: translateY(-2px);
+    }
+    @keyframes pulseBuy {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.45); }
+      50% { box-shadow: 0 0 0 12px rgba(255, 215, 0, 0); }
+    }
+
+    /* ========== Free track highlight ========== */
+    .free-box {
+      border: 2px solid var(--gold);
+      border-radius: 20px;
+      padding: 28px 20px;
+      background: rgba(255, 215, 0, 0.06);
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35);
+      max-width: 560px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .free-box img.cover-main {
+      width: min(280px, 80vw);
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 2px solid var(--card-border);
+      margin-bottom: 16px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+    }
+    .free-box p.desc {
+      text-align: left;
+      white-space: pre-wrap;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      color: var(--text);
+      margin: 0 0 20px;
+    }
+
+    /* ========== Catalog grid ========== */
+    .catalog-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+    @media (min-width: 640px) {
+      .catalog-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    }
+    @media (min-width: 900px) {
+      .catalog-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    .card {
+      border-radius: 14px;
+      border: 1px solid var(--card-border);
+      background: rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s;
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    .card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 28px rgba(255, 215, 0, 0.15);
+      border-color: rgba(255, 215, 0, 0.55);
+    }
+    .card-img-wrap {
+      aspect-ratio: 1;
+      background: #2a0f4a;
+      position: relative;
+      border-radius: 50%;
+      overflow: hidden;
+      margin: 10px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 22px rgba(0, 0, 0, 0.55);
+    }
+    .card-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-emoji {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 1.2rem;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    }
+    .badge-free {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 215, 0, 0.95);
+      color: #1a0533;
+    }
+    .card-body { padding: 6px 10px 12px; }
+    .card-short {
+      font-size: 0.72rem;
+      font-weight: 600;
+      line-height: 1.25;
+      word-break: break-word;
+      color: var(--text);
+    }
+    .card-price-row {
+      margin-top: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .card-dur {
+      margin-top: 4px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* ========== Modal ========== */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(12, 4, 24, 0.92);
+      padding: 16px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-panel {
+      width: 100%;
+      max-width: 440px;
+      margin: auto;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 20px;
+      margin-top: max(24px, env(safe-area-inset-top));
+      margin-bottom: max(24px, env(safe-area-inset-bottom));
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .modal-cover {
+      width: 100%;
+      max-width: 280px;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
+      display: block;
+      margin: 0 auto 14px;
+      border: 1px solid var(--card-border);
+    }
+    .modal-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--gold);
+      text-align: center;
+      margin: 0 0 8px;
+      line-height: 1.35;
+    }
+    .modal-duration {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .modal-desc {
+      font-size: 0.88rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      margin: 0 0 16px;
+    }
+    .modal-price {
+      text-align: center;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 18px;
+    }
+    .modal-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .modal-actions .btn-gold { animation: none; }
+    .btn-klarna {
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 14px 20px;
+      border-radius: 12px;
+      border: 2px solid #ffb3c7;
+      background: linear-gradient(135deg, #ffb3c7 0%, #ff6b9d 100%);
+      color: #1a0520;
+      cursor: pointer;
+    }
+    .btn-back-modal {
+      font-family: inherit;
+      background: transparent;
+      border: 2px solid var(--gold);
+      color: var(--gold);
+      padding: 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* ========== Success banner / section ========== */
+    #success-section {
+      display: none;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 32px 18px;
+      text-align: center;
+    }
+    #success-section.active { display: block; }
+    .success-card {
+      border: 2px solid var(--gold);
+      border-radius: 16px;
+      padding: 28px;
+      background: rgba(255, 215, 0, 0.08);
+    }
+
+    /* ========== About ========== */
+    .about-block {
+      max-width: 640px;
+      margin: 0 auto;
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    .about-block h3 {
+      color: var(--gold);
+      font-size: 1.1rem;
+      margin: 24px 0 8px;
+    }
+
+    /* ========== Footer ========== */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 28px 18px;
+      padding-bottom: max(28px, env(safe-area-inset-bottom));
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    footer a {
+      color: var(--gold);
+      text-decoration: none;
+      margin: 0 8px;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* ========== Loading overlay ========== */
+    #global-loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(26, 5, 51, 0.85);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #global-loading.active { display: flex; }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(255, 215, 0, 0.2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .fade-in-up {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .fade-in-up.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <!-- Animated starfield -->
+  <canvas id="stars-canvas" aria-hidden="true"></canvas>
+
+  <div id="global-loading" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <span style="color: var(--muted); font-size: 0.9rem;">Loading…</span>
+  </div>
+
+  <div class="page-wrap">
+    <!-- ========== Sticky navigation ========== -->
+    <header class="nav-bar">
+      <a href="#home" class="nav-brand" id="nav-logo">🎵 Music Acupuncture</a>
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu">☰</button>
+      <nav class="nav-links collapsible" id="nav-links">
+        <a href="#home">Home</a>
+        <a href="#free">Free Track</a>
+        <a href="#shop">Shop</a>
+        <a href="#about">About</a>
+      </nav>
+      <div class="currency-switch" aria-label="Currency">
+        <button type="button" id="btn-curr-sek" class="active" data-curr="SEK">🇸🇪 SEK</button>
+        <button type="button" id="btn-curr-usd" data-curr="USD">🇺🇸 USD</button>
+      </div>
+    </header>
+
+    <!-- ========== Payment success (URL query) ========== -->
+    <div id="success-section">
+      <div class="success-card fade-in-up">
+        <h2 style="color: var(--gold); margin-top: 0;">✅ Payment Successful!</h2>
+        <p id="success-msg">Your track is being prepared…</p>
+        <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0;">
+          Thank you for supporting Music Acupuncture. 🙏<br />— Mikael
+        </p>
+      </div>
+    </div>
+
+    <!-- ========== PAGE 1: Hero ========== -->
+    <section id="home" class="hero">
+      <h1>🎵 Music Acupuncture</h1>
+      <p class="tagline">Divine Healing Sounds by Mikael</p>
+      <p class="lead">
+        <strong>Divine Healing Music for Body and Soul.</strong><br />
+        Music Acupuncture uses carefully crafted sound frequencies to support balance, calm, and inner harmony — a gentle daily practice for your energy and well-being.
+      </p>
+      <div class="hero-buttons">
+        <button type="button" class="btn-gold" id="hero-btn-free">🎁 Get Free Track</button>
+        <button type="button" class="btn-outline" id="hero-btn-shop">🎵 Browse All Tracks</button>
+      </div>
+    </section>
+
+    <!-- ========== PAGE 2: Free track ========== -->
+    <section id="free" class="fade-in-up">
+      <h2 class="section-title">🎁 FREE GIFT from Mikael</h2>
+      <p class="section-sub">A special divine sound for harmony and positive energy in your home and life.</p>
+      <div class="free-box" id="free-box">
+        <img class="cover-main" id="free-cover-img" alt="" />
+        <h3 style="color: var(--gold); margin: 0 0 12px;">Divine sound Super Feng Shui from God</h3>
+        <p class="desc" id="free-desc"></p>
+        <button type="button" class="btn-gold" id="btn-download-free">🎁 Download Free Track</button>
+        <p id="free-status" style="font-size: 0.8rem; color: var(--muted); margin-top: 14px; margin-bottom: 0;"></p>
+      </div>
+    </section>
+
+    <!-- ========== PAGE 3: Catalog ========== -->
+    <section id="shop">
+      <h2 class="section-title">Music Catalog</h2>
+      <p class="section-sub">Tap a card for details and secure checkout.</p>
+      <div class="catalog-grid" id="catalog-grid"></div>
+    </section>
+
+    <!-- ========== PAGE 6: About ========== -->
+    <section id="about" class="fade-in-up">
+      <h2 class="section-title">About</h2>
+      <div class="about-block">
+        <p>
+          <strong>Music Acupuncture</strong> is a healing music concept that combines therapeutic sound with intention —
+          supporting body, emotions, and subtle energy. Each track is created as a focused listening experience for daily use.
+        </p>
+        <h3>Mikael</h3>
+        <p>
+          Composer and creator of the Divine Healing Sounds series. This placeholder text can be replaced with your biography,
+          mission, and credentials.
+        </p>
+        <h3>Contact</h3>
+        <p>
+          Email: <em style="color: var(--muted);">(add your email)</em><br />
+          Telegram: <em style="color: var(--muted);">(optional)</em>
+        </p>
+      </div>
+    </section>
+
+    <!-- ========== Footer ========== -->
+    <footer>
+      <p>© 2026 Music Acupuncture by Mikael</p>
+      <p>
+        <a href="#shop">Shop</a>
+        <a href="#free">Free Track</a>
+        <a href="#about">Contact</a>
+      </p>
+      <p style="margin-top: 12px; font-size: 0.75rem;">
+        <span style="opacity: 0.7;">Instagram · Facebook · YouTube</span> <span style="opacity: 0.5;">(links coming soon)</span>
+      </p>
+    </footer>
+  </div>
+
+  <!-- ========== Track detail modal ========== -->
+  <div class="modal-backdrop" id="track-modal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <img class="modal-cover" id="modal-cover" alt="" />
+      <h2 class="modal-title" id="modal-title"></h2>
+      <p class="modal-duration" id="modal-duration" style="display: none;"></p>
+      <p class="modal-desc" id="modal-desc"></p>
+      <p class="modal-price" id="modal-price"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-gold" id="modal-buy-stripe">💳 Buy with Stripe</button>
+        <button type="button" class="btn-klarna" id="modal-buy-klarna">💳 Pay with Klarna</button>
+        <button type="button" class="btn-back-modal" id="modal-close">← Back to Catalog</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+(function () {
+  "use strict";
+
+  /* ---------- GitHub Pages base path: /RepoName/website.html → /RepoName ---------- */
+  const SITE_BASE = (function () {
+    var p = window.location.pathname || "";
+    p = p.replace(/\/[^/]+\.html$/i, "");
+    return p.replace(/\/+$/, "") || "";
+  })();
+
+  function assetUrl(rel) {
+    if (!rel) return "";
+    const r = rel.replace(/^\/+/, "");
+    return SITE_BASE ? SITE_BASE + "/" + r : "/" + r;
+  }
+
+  /* ---------- Backend (Railway) ---------- */
+  const API_BASE = "https://web-production-ed267.up.railway.app".replace(/\/+$/, "");
+  /** Success page after Stripe: configure the same URL in Stripe Dashboard for Payment Links. */
+  const SUCCESS_PAGE_URL =
+    "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html?success=true&track_id={track_id}";
+
+  /**
+   * Track catalog: same content as miniapp.html + Stripe URLs from tracks.py (buy_url = USD, buy_url_sek = SEK).
+   * id 0 = free Super Feng Shui; 1–16 = paid (Vitamins uses distinct SEK link in tracks.py).
+   */
+  const TRACKS = [
+    {
+      id: 0,
+      emoji: "🎁",
+      shortName: "FREE Gift",
+      fullTitle: "Divine sound Super Feng Shui from God",
+      description:
+        "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏",
+      cover: "covers/Divine sound Super Feng Shui from God.png",
+      isFree: true,
+      buyUrl: null,
+      buyUrlUsd: null,
+      buyUrlSek: null,
+    },
+    {
+      id: 1,
+      emoji: "👁️",
+      shortName: "Crown & Throat Chakra",
+      fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God",
+      description:
+        "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.",
+      cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.png",
+      buyUrlUsd: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
+      buyUrlSek: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
+    },
+    {
+      id: 2,
+      emoji: "🌸",
+      shortName: "Estrogen",
+      fullTitle: "Divine sound Estrogen from God",
+      description:
+        "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.",
+      cover: "covers/Divine sound Estrogen from God.png",
+      buyUrlUsd: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
+      buyUrlSek: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
+    },
+    {
+      id: 3,
+      emoji: "❤️",
+      shortName: "Heart",
+      fullTitle: "Divine sound Heart from God",
+      description:
+        "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.",
+      cover: "covers/Divine sound Heart from God.png",
+      buyUrlUsd: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
+      buyUrlSek: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
+    },
+    {
+      id: 4,
+      emoji: "💗",
+      shortName: "Heart & Diaphragm Chakra",
+      fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God",
+      description:
+        "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.",
+      cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.png",
+      buyUrlUsd: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
+      buyUrlSek: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
+    },
+    {
+      id: 5,
+      emoji: "🛡️",
+      shortName: "Immune Defence",
+      fullTitle: "Divine sound Immunedefence from God",
+      description:
+        "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.",
+      cover: "covers/Divine sound Immunedefence from God.png",
+      buyUrlUsd: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
+      buyUrlSek: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
+    },
+    {
+      id: 6,
+      emoji: "💧",
+      shortName: "Kidney",
+      fullTitle: "Divine sound Kidney from God",
+      description:
+        "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.",
+      cover: "covers/Divine sound Kidney from God.png",
+      buyUrlUsd: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
+      buyUrlSek: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
+    },
+    {
+      id: 7,
+      emoji: "🌿",
+      shortName: "Liver",
+      fullTitle: "Divine sound Liver from God",
+      description:
+        "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.",
+      cover: "covers/Divine sound Liver from God.png",
+      buyUrlUsd: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
+      buyUrlSek: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
+    },
+    {
+      id: 8,
+      emoji: "🫁",
+      shortName: "Lungs",
+      fullTitle: "Divine sound Lungs from God",
+      description:
+        "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.",
+      cover: "covers/Divine sound Lungs from God.png",
+      buyUrlUsd: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
+      buyUrlSek: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
+    },
+    {
+      id: 9,
+      emoji: "💎",
+      shortName: "Minerals",
+      fullTitle: "Divine sound Minerals from God",
+      description:
+        "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.",
+      cover: "covers/Divine sound Minerals from God.png",
+      buyUrlUsd: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
+      buyUrlSek: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
+    },
+    {
+      id: 10,
+      emoji: "🚫",
+      shortName: "NO Alcohol",
+      fullTitle: "Divine sound NO Alcohol from God",
+      description:
+        "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.",
+      cover: "covers/Divine sound NO Alcohol from God.png",
+      buyUrlUsd: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
+      buyUrlSek: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
+    },
+    {
+      id: 11,
+      emoji: "🚭",
+      shortName: "NO Smoking",
+      fullTitle: "Divine sound NO Smoking from God",
+      description:
+        "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.",
+      cover: "covers/Divine sound NO Smoking from God.png",
+      buyUrlUsd: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
+      buyUrlSek: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
+    },
+    {
+      id: 12,
+      emoji: "🌱",
+      shortName: "Root Chakra",
+      fullTitle: "Divine sound Rootchakra from God",
+      description:
+        "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.",
+      cover: "covers/Divine sound Rootchakra from God.png",
+      buyUrlUsd: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
+      buyUrlSek: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
+    },
+    {
+      id: 13,
+      emoji: "🌊",
+      shortName: "Sacral & Navel Chakra",
+      fullTitle: "Divine sound Sacralchakra and Navelchakra from God",
+      description:
+        "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.",
+      cover: "covers/Divine sound Sacralchakra and Navelchakra from God.png",
+      buyUrlUsd: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
+      buyUrlSek: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
+    },
+    {
+      id: 14,
+      emoji: "☀️",
+      shortName: "Solar Plexus & Spleen",
+      fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God",
+      description:
+        "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.",
+      cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.png",
+      buyUrlUsd: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
+      buyUrlSek: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
+    },
+    {
+      id: 15,
+      emoji: "💪",
+      shortName: "Testosterone",
+      fullTitle: "Divine sound Testosteron from God",
+      description:
+        "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.",
+      cover: "covers/Divine sound Testosteron from God.png",
+      buyUrlUsd: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
+      buyUrlSek: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
+    },
+    {
+      id: 16,
+      emoji: "✨",
+      shortName: "Vitamins",
+      fullTitle: "Divine sound Vitamins from God",
+      description:
+        "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.",
+      cover: "covers/Divine sound Vitamins from God.png",
+      buyUrlUsd: "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
+      buyUrlSek: "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g",
+    },
+  ];
+
+  const LS_CURRENCY = "musicacupuncture_site_currency";
+  let currentCurrency = "SEK";
+  let serverPricing = null;
+  let selectedTrack = null;
+
+  function escapeHtml(s) {
+    const d = document.createElement("div");
+    d.textContent = s == null ? "" : String(s);
+    return d.innerHTML;
+  }
+
+  function formatPriceDisplay() {
+    if (serverPricing) {
+      return currentCurrency === "SEK" ? serverPricing.sek_display : serverPricing.usd_display;
+    }
+    return currentCurrency === "SEK" ? "169 kr" : "$16";
+  }
+
+  function formatDualPrice() {
+    const usd = serverPricing ? serverPricing.usd_display : "$16";
+    const sek = serverPricing ? serverPricing.sek_display : "169 kr";
+    return { usd, sek };
+  }
+
+  function setLoading(on) {
+    document.getElementById("global-loading").classList.toggle("active", !!on);
+  }
+
+  async function loadPricing() {
+    try {
+      const r = await fetch(API_BASE + "/miniapp-pricing", { method: "GET", mode: "cors" });
+      if (r.ok) serverPricing = await r.json();
+    } catch (e) {
+      serverPricing = null;
+    }
+    mergeDurations();
+    renderCatalog();
+    updateCurrencyButtons();
+  }
+
+  function mergeDurations() {
+    const rows =
+      serverPricing && Array.isArray(serverPricing.track_durations) ? serverPricing.track_durations : [];
+    const byId = {};
+    rows.forEach(function (row) {
+      if (row && row.id != null && row.label) byId[row.id] = row.label;
+    });
+    TRACKS.forEach(function (t) {
+      t.durationLabel = byId[t.id] || null;
+    });
+  }
+
+  function renderCatalog() {
+    const grid = document.getElementById("catalog-grid");
+    const dual = formatDualPrice();
+    grid.innerHTML = TRACKS.map(function (t) {
+      const priceLine = t.isFree
+        ? "🎁 FREE"
+        : escapeHtml(dual.usd) + " · " + escapeHtml(dual.sek);
+      const dur = t.durationLabel ? '<div class="card-dur">⏱ ' + escapeHtml(t.durationLabel) + "</div>" : "";
+      const badge = t.isFree ? '<span class="badge-free">🎁 FREE</span>' : "";
+      return (
+        '<article class="card" data-id="' +
+        t.id +
+        '" role="button" tabindex="0">' +
+        '<div class="card-img-wrap">' +
+        '<img src="' +
+        escapeHtml(assetUrl(t.cover)) +
+        '" alt="" loading="lazy" />' +
+        '<span class="card-emoji">' +
+        t.emoji +
+        "</span>" +
+        badge +
+        "</div>" +
+        '<div class="card-body">' +
+        '<div class="card-short">' +
+        escapeHtml(t.emoji + " " + t.shortName) +
+        "</div>" +
+        dur +
+        '<div class="card-price-row">' +
+        priceLine +
+        "</div>" +
+        "</div>" +
+        "</article>"
+      );
+    }).join("");
+
+    grid.querySelectorAll(".card").forEach(function (el) {
+      var id = Number(el.getAttribute("data-id"));
+      var open = function () {
+        var tr = TRACKS.find(function (x) {
+          return x.id === id;
+        });
+        if (tr) openModal(tr);
+      };
+      el.addEventListener("click", open);
+      el.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
+      });
+    });
+
+    requestAnimationFrame(function () {
+      grid.querySelectorAll(".card").forEach(function (c, i) {
+        setTimeout(function () {
+          c.classList.add("visible");
+        }, i * 40);
+      });
+    });
+  }
+
+  function openModal(track) {
+    selectedTrack = track;
+    document.getElementById("modal-cover").src = assetUrl(track.cover);
+    document.getElementById("modal-cover").alt = track.fullTitle;
+    document.getElementById("modal-title").textContent = track.emoji + " " + track.fullTitle;
+    var durEl = document.getElementById("modal-duration");
+    if (track.durationLabel) {
+      durEl.textContent = "⏱ " + track.durationLabel;
+      durEl.style.display = "block";
+    } else {
+      durEl.textContent = "";
+      durEl.style.display = "none";
+    }
+    document.getElementById("modal-desc").textContent = track.description;
+    document.getElementById("modal-price").textContent = track.isFree ? "🎁 FREE" : formatPriceDisplay();
+
+    var stripeBtn = document.getElementById("modal-buy-stripe");
+    var klarnaBtn = document.getElementById("modal-buy-klarna");
+    if (track.isFree) {
+      stripeBtn.style.display = "none";
+      klarnaBtn.style.display = "none";
+    } else {
+      stripeBtn.style.display = "block";
+      klarnaBtn.style.display = "block";
+      stripeBtn.textContent =
+        currentCurrency === "SEK" ? "💳 Buy with Stripe (SEK)" : "💳 Buy with Stripe (USD)";
+    }
+
+    document.getElementById("track-modal").classList.add("open");
+    document.getElementById("track-modal").setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal() {
+    document.getElementById("track-modal").classList.remove("open");
+    document.getElementById("track-modal").setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    selectedTrack = null;
+  }
+
+  function openStripeForTrack(track, useSek) {
+    if (!track || track.isFree) return;
+    var url = useSek ? track.buyUrlSek : track.buyUrlUsd;
+    if (!url || !/^https?:\/\//i.test(url)) {
+      alert("Payment link is not available for this track.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  /**
+   * Optional: request signed MP3 URL from Railway after purchase.
+   * Add route on backend later, e.g. GET /website/download?session_id=&track_id=
+   */
+  async function tryFetchPurchaseDownload(trackId, sessionId) {
+    var qs = new URLSearchParams();
+    if (sessionId) qs.set("session_id", sessionId);
+    qs.set("track_id", String(trackId));
+    var url = API_BASE + "/website/download?" + qs.toString();
+    try {
+      var r = await fetch(url, { method: "GET", mode: "cors" });
+      if (!r.ok) return null;
+      var data = await r.json();
+      if (data && data.url && typeof data.url === "string") return data.url;
+    } catch (e) {}
+    return null;
+  }
+
+  function triggerDownload(url, filename) {
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "track.mp3";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handleFreeDownload() {
+    var status = document.getElementById("free-status");
+    status.textContent = "";
+    setLoading(true);
+    try {
+      var r = await fetch(API_BASE + "/free-track", { method: "GET", mode: "cors" });
+      if (r.ok) {
+        var data = await r.json().catch(function () {
+          return null;
+        });
+        if (data && data.url) {
+          triggerDownload(data.url, "Divine sound Super Feng Shui from God.mp3");
+          status.textContent = "Download started. Enjoy your gift! 🙏";
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {}
+    /* Fallback: direct file on GitHub Pages if you host the MP3 in the repo (optional). */
+    var fallback = assetUrl("songs/Divine sound Super Feng Shui from God.mp3");
+    try {
+      var head = await fetch(fallback, { method: "HEAD", mode: "cors" });
+      if (head.ok) {
+        triggerDownload(fallback, "Divine sound Super Feng Shui from God.mp3");
+        status.textContent = "Download started. If the server endpoint /free-track is added on Railway, it will be used automatically.";
+        setLoading(false);
+        return;
+      }
+    } catch (e2) {}
+    status.innerHTML =
+      "Automatic download is not available yet. Please use the <a href='#free' style='color:var(--gold);'>Telegram bot</a> for the free gift, or ask the admin to enable <code>/free-track</code> on Railway or host the MP3 on this site.";
+    setLoading(false);
+  }
+
+  function scrollToId(id) {
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function updateCurrencyButtons() {
+    var sek = document.getElementById("btn-curr-sek");
+    var usd = document.getElementById("btn-curr-usd");
+    sek.classList.toggle("active", currentCurrency === "SEK");
+    usd.classList.toggle("active", currentCurrency === "USD");
+    try {
+      localStorage.setItem(LS_CURRENCY, currentCurrency);
+    } catch (e) {}
+    if (selectedTrack) openModal(selectedTrack);
+    renderCatalog();
+  }
+
+  function initCurrency() {
+    try {
+      var s = (localStorage.getItem(LS_CURRENCY) || "").toUpperCase();
+      if (s === "USD" || s === "SEK") currentCurrency = s;
+    } catch (e) {}
+  }
+
+  function initSuccessPage() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("success") !== "true") return;
+
+    document.getElementById("success-section").classList.add("active");
+    var tid = params.get("track_id");
+    var sessionId = params.get("session_id") || "";
+
+    var msg = document.getElementById("success-msg");
+    msg.textContent = "Your track is being prepared…";
+
+    if (tid != null && tid !== "") {
+      (async function () {
+        setLoading(true);
+        var url = await tryFetchPurchaseDownload(tid, sessionId);
+        setLoading(false);
+        if (url) {
+          triggerDownload(url, "Music-Acupuncture-track.mp3");
+          msg.textContent = "Your download should start automatically. Thank you! 🙏";
+        } else {
+          msg.textContent =
+            "Thank you! If your MP3 does not download automatically, check your email or open the Music Acupuncture bot in Telegram — delivery may arrive there. (Backend hook /website/download can be enabled on Railway.)";
+        }
+      })();
+    }
+
+    scrollToId("success-section");
+  }
+
+  /* ---------- Starfield canvas ---------- */
+  function initStars() {
+    var canvas = document.getElementById("stars-canvas");
+    var ctx = canvas.getContext("2d");
+    var stars = [];
+    var w, h;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      stars = [];
+      for (var i = 0; i < Math.min(180, (w * h) / 9000); i++) {
+        stars.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.2 + 0.3,
+          a: Math.random() * 0.5 + 0.2,
+          tw: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+
+    function frame() {
+      ctx.fillStyle = "#1a0533";
+      ctx.fillRect(0, 0, w, h);
+      var t = Date.now() / 1000;
+      stars.forEach(function (s) {
+        var flicker = 0.6 + 0.4 * Math.sin(t * 2 + s.tw);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 215, 0, " + (s.a * flicker) + ")";
+        ctx.fill();
+      });
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+    frame();
+  }
+
+  /* ---------- Scroll fade-in ---------- */
+  function initScrollFade() {
+    var els = document.querySelectorAll(".fade-in-up");
+    var io = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) en.target.classList.add("visible");
+        });
+      },
+      { threshold: 0.12 }
+    );
+    els.forEach(function (el) {
+      io.observe(el);
+    });
+  }
+
+  /* ---------- Free section content ---------- */
+  function initFreeSection() {
+    var free = TRACKS[0];
+    document.getElementById("free-cover-img").src = assetUrl(free.cover);
+    document.getElementById("free-desc").textContent = free.description;
+  }
+
+  /* ---------- Nav mobile ---------- */
+  document.getElementById("nav-toggle").addEventListener("click", function () {
+    document.getElementById("nav-links").classList.toggle("open");
+  });
+  document.querySelectorAll("#nav-links a").forEach(function (a) {
+    a.addEventListener("click", function () {
+      document.getElementById("nav-links").classList.remove("open");
+    });
+  });
+
+  document.getElementById("hero-btn-free").addEventListener("click", function () {
+    scrollToId("free");
+  });
+  document.getElementById("hero-btn-shop").addEventListener("click", function () {
+    scrollToId("shop");
+  });
+
+  document.getElementById("btn-curr-sek").addEventListener("click", function () {
+    currentCurrency = "SEK";
+    updateCurrencyButtons();
+  });
+  document.getElementById("btn-curr-usd").addEventListener("click", function () {
+    currentCurrency = "USD";
+    updateCurrencyButtons();
+  });
+
+  document.getElementById("btn-download-free").addEventListener("click", handleFreeDownload);
+
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("track-modal").addEventListener("click", function (e) {
+    if (e.target.id === "track-modal") closeModal();
+  });
+
+  document.getElementById("modal-buy-stripe").addEventListener("click", function () {
+    if (!selectedTrack) return;
+    openStripeForTrack(selectedTrack, currentCurrency === "SEK");
+  });
+  document.getElementById("modal-buy-klarna").addEventListener("click", function () {
+    if (!selectedTrack) return;
+    /* Klarna is offered inside Stripe Checkout for SEK — open SEK payment link */
+    openStripeForTrack(selectedTrack, true);
+  });
+
+  initCurrency();
+  initStars();
+  initScrollFade();
+  initFreeSection();
+  initSuccessPage();
+  loadPricing();
+
+  /* Expose for debugging */
+  window.__MA_SITE__ = { TRACKS: TRACKS, API_BASE: API_BASE, SITE_BASE: SITE_BASE, SUCCESS_PAGE_URL: SUCCESS_PAGE_URL };
+})();
+  </script>
+</body>
+</html>

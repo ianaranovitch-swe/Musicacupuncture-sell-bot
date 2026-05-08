@@ -213,6 +213,8 @@
       aspect-ratio: 1;
       background: #2a0f4a;
       position: relative;
+      border-radius: 50%;
+      overflow: hidden;
       /* Тень под обложкой + лёгкая рамка, чтобы картинка «лежала» на фоне */
       box-shadow:
         inset 0 0 0 1px rgba(255, 255, 255, 0.08),
@@ -243,6 +245,13 @@
       font-weight: 600;
       /* Полное имя как у .mp3 / обложки — переносим строки, не обрезаем */
       word-break: break-word;
+    }
+    .card-duration {
+      margin-top: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.2;
     }
     .card-price {
       margin-top: 6px;
@@ -291,10 +300,64 @@
     }
     .detail-cover {
       width: 100%;
-      border-radius: 16px;
+      max-width: 360px;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
       border: 1px solid var(--card-border);
       display: block;
-      margin-bottom: 14px;
+      margin: 0 auto 14px;
+      cursor: pointer;
+    }
+    .gallery-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      background: rgba(12, 4, 24, 0.92);
+      padding: 18px 14px;
+    }
+    .gallery-modal.open {
+      display: block;
+    }
+    .gallery-modal-inner {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .gallery-close {
+      background: transparent;
+      border: none;
+      color: var(--gold);
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    /* Общее для всех картинок в модалке галереи */
+    .gallery-grid img {
+      width: 100%;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      display: block;
+    }
+    /* 1-я картинка = «диск», как в сетке и в деталях */
+    .gallery-grid img.gallery-cover-cd {
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+    /* 2–я и дальше = фото футляра (прямоугольный кадр в квадрате, без круга) */
+    .gallery-grid img.gallery-cover-case {
+      aspect-ratio: 1;
+      object-fit: contain;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
     }
     .detail-emoji-title {
       font-size: 1.05rem;
@@ -302,6 +365,13 @@
       color: var(--gold);
       margin: 0 0 12px;
       line-height: 1.35;
+    }
+    .detail-duration {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin: -6px 0 14px;
+      text-align: center;
     }
     .detail-desc {
       font-size: 0.88rem;
@@ -370,7 +440,7 @@
     🧪 TEST MODE — prices are reduced
   </div>
   <!-- Минималистичный режим: валюта выбирается на карточке трека (2 кнопки USD/SEK). -->
-  <div id="app-shell" class="">
+  <div id="app-shell" class="hidden" aria-hidden="true">
     <div class="screens">
       <div id="grid-screen" class="wrap">
         <header class="hero">
@@ -387,6 +457,7 @@
           </div>
           <img id="detail-cover" class="detail-cover" alt="" />
           <h2 id="detail-title" class="detail-emoji-title"></h2>
+          <p id="detail-duration" class="detail-duration" style="display: none" aria-live="polite"></p>
           <p id="detail-desc" class="detail-desc"></p>
           <div id="detail-price" class="detail-price"></div>
           <div class="btn-row">
@@ -400,6 +471,12 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+  <div id="gallery-modal" class="gallery-modal" aria-hidden="true">
+    <div class="gallery-modal-inner">
+      <button type="button" id="gallery-close" class="gallery-close">← Back</button>
+      <div id="gallery-grid" class="gallery-grid"></div>
     </div>
   </div>
 
@@ -424,23 +501,23 @@
      * Оплата: POST /create-payment (Stripe Checkout + webhook → MP3).
      */
     const tracks = [
-      { id: 0, emoji: "🎁", shortName: "FREE Gift", fullTitle: "Divine sound Super Feng Shui from God", description: "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏", cover: "covers/Divine sound Super Feng Shui from God.jpg", isFree: true },
-      { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg" },
-      { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.jpg" },
-      { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.jpg" },
-      { id: 4, emoji: "💗", shortName: "Heart & Diaphragm Chakra", fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God", description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.", cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg" },
-      { id: 5, emoji: "🛡️", shortName: "Immune Defence", fullTitle: "Divine sound Immunedefence from God", description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.", cover: "covers/Divine sound Immunedefence from God.jpg" },
-      { id: 6, emoji: "💧", shortName: "Kidney", fullTitle: "Divine sound Kidney from God", description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.", cover: "covers/Divine sound Kidney from God.jpg" },
-      { id: 7, emoji: "🌿", shortName: "Liver", fullTitle: "Divine sound Liver from God", description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", cover: "covers/Divine sound Liver from God.jpg" },
-      { id: 8, emoji: "🫁", shortName: "Lungs", fullTitle: "Divine sound Lungs from God", description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", cover: "covers/Divine sound Lungs from God.jpg" },
-      { id: 9, emoji: "💎", shortName: "Minerals", fullTitle: "Divine sound Minerals from God", description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", cover: "covers/Divine sound Minerals from God.jpg" },
-      { id: 10, emoji: "🚫", shortName: "NO Alcohol", fullTitle: "Divine sound NO Alcohol from God", description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", cover: "covers/Divine sound NO Alcohol from God.jpg" },
-      { id: 11, emoji: "🚭", shortName: "NO Smoking", fullTitle: "Divine sound NO Smoking from God", description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", cover: "covers/Divine sound NO Smoking from God.jpg" },
-      { id: 12, emoji: "🌱", shortName: "Root Chakra", fullTitle: "Divine sound Rootchakra from God", description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", cover: "covers/Divine sound Rootchakra from God.jpg" },
-      { id: 13, emoji: "🌊", shortName: "Sacral & Navel Chakra", fullTitle: "Divine sound Sacralchakra and Navelchakra from God", description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", cover: "covers/Divine sound Sacralchakra and Navelchakra from God.jpg" },
-      { id: 14, emoji: "☀️", shortName: "Solar Plexus & Spleen", fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God", description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg" },
-      { id: 15, emoji: "💪", shortName: "Testosterone", fullTitle: "Divine sound Testosteron from God", description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.", cover: "covers/Divine sound Testosteron from God.jpg" },
-      { id: 16, emoji: "✨", shortName: "Vitamins", fullTitle: "Divine sound Vitamins from God", description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.", cover: "covers/Divine sound Vitamins from God.jpg" }
+      { id: 0, emoji: "🎁", shortName: "FREE Gift", fullTitle: "Divine sound Super Feng Shui from God", description: "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏", cover: "covers/Divine sound Super Feng Shui from God.png", galleryCovers: ["covers/Divine sound Super Feng Shui from God.png", "covers/Divine sound Super Feng Shui from God CD cover front.png", "covers/Divine sound Super Feng Shui from God CD cover back.png"], isFree: true },
+      { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.png" },
+      { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.png" },
+      { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.png" },
+      { id: 4, emoji: "💗", shortName: "Heart & Diaphragm Chakra", fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God", description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.", cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.png" },
+      { id: 5, emoji: "🛡️", shortName: "Immune Defence", fullTitle: "Divine sound Immunedefence from God", description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.", cover: "covers/Divine sound Immunedefence from God.png" },
+      { id: 6, emoji: "💧", shortName: "Kidney", fullTitle: "Divine sound Kidney from God", description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.", cover: "covers/Divine sound Kidney from God.png" },
+      { id: 7, emoji: "🌿", shortName: "Liver", fullTitle: "Divine sound Liver from God", description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", cover: "covers/Divine sound Liver from God.png" },
+      { id: 8, emoji: "🫁", shortName: "Lungs", fullTitle: "Divine sound Lungs from God", description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", cover: "covers/Divine sound Lungs from God.png" },
+      { id: 9, emoji: "💎", shortName: "Minerals", fullTitle: "Divine sound Minerals from God", description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", cover: "covers/Divine sound Minerals from God.png" },
+      { id: 10, emoji: "🚫", shortName: "NO Alcohol", fullTitle: "Divine sound NO Alcohol from God", description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", cover: "covers/Divine sound NO Alcohol from God.png" },
+      { id: 11, emoji: "🚭", shortName: "NO Smoking", fullTitle: "Divine sound NO Smoking from God", description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", cover: "covers/Divine sound NO Smoking from God.png" },
+      { id: 12, emoji: "🌱", shortName: "Root Chakra", fullTitle: "Divine sound Rootchakra from God", description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", cover: "covers/Divine sound Rootchakra from God.png" },
+      { id: 13, emoji: "🌊", shortName: "Sacral & Navel Chakra", fullTitle: "Divine sound Sacralchakra and Navelchakra from God", description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", cover: "covers/Divine sound Sacralchakra and Navelchakra from God.png" },
+      { id: 14, emoji: "☀️", shortName: "Solar Plexus & Spleen", fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God", description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.png" },
+      { id: 15, emoji: "💪", shortName: "Testosterone", fullTitle: "Divine sound Testosteron from God", description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.", cover: "covers/Divine sound Testosteron from God.png" },
+      { id: 16, emoji: "✨", shortName: "Vitamins", fullTitle: "Divine sound Vitamins from God", description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.", cover: "covers/Divine sound Vitamins from God.png" }
     ];
 
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -486,6 +563,7 @@
     /** Текущая валюта из localStorage (по умолчанию USD). */
     let currentCurrency = CURRENCY_USD;
     let selected = null;
+    let selectedGalleryCovers = [];
     /** Чтобы не отправить два checkout подряд (MainButton + HTML). */
     let checkoutInFlight = false;
 
@@ -587,8 +665,27 @@
       document.body.classList.toggle("has-test-banner-padding", on);
     }
 
+    /** Длительности с backend (/miniapp-pricing) — совпадают с id карточек в `tracks`. */
+    function mergeTrackDurationsFromServer() {
+      const rows =
+        serverPricing && Array.isArray(serverPricing.track_durations) ? serverPricing.track_durations : [];
+      const byId = {};
+      rows.forEach((row) => {
+        if (row && row.id != null && row.label) byId[row.id] = row.label;
+      });
+      tracks.forEach((t) => {
+        t.durationLabel = byId[t.id] || null;
+      });
+    }
+
     function showAppShell() {
+      const shell = document.getElementById("app-shell");
+      if (shell) {
+        shell.classList.remove("hidden");
+        shell.setAttribute("aria-hidden", "false");
+      }
       syncTestModeBanner();
+      mergeTrackDurationsFromServer();
       renderGrid();
     }
 
@@ -605,6 +702,7 @@
           </div>
           <div class="card-body">
             <div class="card-title">${escapeHtml(t.fullTitle)}</div>
+            ${t.durationLabel ? `<div class="card-duration">⏱ ${escapeHtml(t.durationLabel)}</div>` : ""}
             <div class="card-price">${t.isFree ? "🎁 FREE" : escapeHtml(priceStr)}</div>
           </div>
         </article>`
@@ -636,10 +734,21 @@
     function openDetail(track) {
       if (!track || !currentCurrency) return;
       selected = track;
+      selectedGalleryCovers = Array.isArray(track.galleryCovers) && track.galleryCovers.length ? track.galleryCovers : [track.cover];
       const panel = document.getElementById("detail-screen");
       document.getElementById("detail-cover").src = track.cover;
       document.getElementById("detail-cover").alt = track.fullTitle;
       document.getElementById("detail-title").textContent = `${track.emoji} ${track.fullTitle}`;
+      const durEl = document.getElementById("detail-duration");
+      if (durEl) {
+        if (track.durationLabel) {
+          durEl.textContent = `⏱ ${track.durationLabel}`;
+          durEl.style.display = "block";
+        } else {
+          durEl.textContent = "";
+          durEl.style.display = "none";
+        }
+      }
       document.getElementById("detail-desc").textContent = track.description;
       document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : formatPrice(currentCurrency);
       // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
@@ -667,7 +776,41 @@
       syncMainButtonForDetail(false);
     }
 
+    function openGalleryModal() {
+      if (!selectedGalleryCovers.length) return;
+      const modal = document.getElementById("gallery-modal");
+      const grid = document.getElementById("gallery-grid");
+      if (!modal || !grid) return;
+      grid.innerHTML = selectedGalleryCovers
+        .map((src, i) => {
+          const cls = i === 0 ? "gallery-cover-cd" : "gallery-cover-case";
+          const alt = i === 0 ? "Round CD artwork" : "CD jewel case photo";
+          return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" class="${cls}" loading="lazy" />`;
+        })
+        .join("");
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeGalleryModal() {
+      const modal = document.getElementById("gallery-modal");
+      if (!modal) return;
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
     document.getElementById("btn-back").addEventListener("click", closeDetail);
+    document.getElementById("detail-cover").addEventListener("click", () => {
+      if (selected && selected.isFree && selectedGalleryCovers.length > 1) {
+        openGalleryModal();
+      }
+    });
+    document.getElementById("gallery-close").addEventListener("click", closeGalleryModal);
+    document.getElementById("gallery-modal").addEventListener("click", (e) => {
+      if (e.target && e.target.id === "gallery-modal") {
+        closeGalleryModal();
+      }
+    });
 
     /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
     const CHECKOUT_FETCH_TIMEOUT_MS = 45000;

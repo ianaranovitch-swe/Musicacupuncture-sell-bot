@@ -31,10 +31,10 @@ async def test_cmd_health_owner_receives_html(mocker):
         "music_sales.health_report.build_health_report",
         return_value={
             "ready": True,
-            "expected_tracks": 16,
+            "expected_tracks": 17,
             "missing_audio_from_tracks_py": [],
             "missing_covers_from_tracks_py": [],
-            "discovered_mp3_count": 16,
+            "discovered_mp3_count": 17,
             "songs_folder_exists": True,
             "checks": {
                 "stripe": {"ok": True, "detail": "ok"},
@@ -70,10 +70,10 @@ async def test_cmd_health_developer_id_allowed(mocker):
         "music_sales.health_report.build_health_report",
         return_value={
             "ready": True,
-            "expected_tracks": 16,
+            "expected_tracks": 17,
             "missing_audio_from_tracks_py": [],
             "missing_covers_from_tracks_py": [],
-            "discovered_mp3_count": 16,
+            "discovered_mp3_count": 17,
             "songs_folder_exists": True,
             "checks": {"stripe": {"ok": True, "detail": "ok"}},
         },
@@ -98,7 +98,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
         {
             "id": 1,
             "audio": "songs/demo.mp3",
-            "cover": "covers/demo.jpg",
+            "cover": "covers/demo.png",
         }
     ]
     mocker.patch("music_sales.health_report.TRACKS", fake_tracks)
@@ -117,7 +117,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     (tmp_path / "songs").mkdir()
     (tmp_path / "covers").mkdir()
     (tmp_path / "songs" / "demo.mp3").write_bytes(b"x")
-    (tmp_path / "covers" / "demo.jpg").write_bytes(b"x")
+    (tmp_path / "covers" / "demo.png").write_bytes(b"x")
 
     from music_sales.health_report import build_health_report
 

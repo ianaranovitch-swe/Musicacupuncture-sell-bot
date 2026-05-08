@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://js.stripe.com/v3/"></script>
   <style>
     :root {
       --bg: #1a0533;
@@ -27,13 +26,130 @@
       color: var(--text);
       -webkit-tap-highlight-color: transparent;
     }
-    /* Плавное появление при загрузке */
     body {
       opacity: 0;
       animation: fadeInBody 0.45s ease forwards;
     }
     @keyframes fadeInBody {
       to { opacity: 1; }
+    }
+    /* Полноэкранный экран выбора валюты (показывается до сетки треков) */
+    #currency-screen {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 18px max(32px, env(safe-area-inset-bottom));
+      max-width: 480px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    #currency-screen.hidden {
+      display: none;
+    }
+    #currency-screen .hero-title {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+    #currency-screen .hero-sub {
+      margin: 8px 0 24px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    #currency-screen .prompt {
+      margin: 0 0 20px;
+      font-size: 1rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .currency-btn-col {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .currency-btn {
+      font-family: inherit;
+      font-size: 1.05rem;
+      font-weight: 700;
+      padding: 18px 20px;
+      border-radius: 14px;
+      border: 2px solid var(--gold);
+      background: rgba(0, 0, 0, 0.25);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .currency-btn:active {
+      transform: scale(0.98);
+    }
+    @media (hover: hover) {
+      .currency-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 22px rgba(255, 215, 0, 0.18);
+        background: rgba(255, 215, 0, 0.08);
+      }
+    }
+    /* Оболочка сетки + бейдж (скрыта до выбора валюты) */
+    #app-shell {
+      position: relative;
+      padding-top: 44px;
+    }
+    #app-shell.hidden {
+      display: none;
+    }
+    /* Баннер тестового режима (показываем, если backend вернул test_mode) */
+    .test-mode-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      padding: 6px 12px;
+      padding-top: max(6px, env(safe-area-inset-top));
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-align: center;
+      color: #ffb3b3;
+      background: #5c1515;
+      border-bottom: 1px solid rgba(255, 80, 80, 0.45);
+    }
+    .test-mode-banner.show {
+      display: block;
+    }
+    body.has-test-banner-padding #currency-screen {
+      padding-top: max(48px, calc(36px + env(safe-area-inset-top)));
+    }
+    body.has-test-banner-padding #app-shell {
+      padding-top: 76px;
+    }
+    body.has-test-banner-padding #currency-badge {
+      top: max(40px, calc(32px + env(safe-area-inset-top)));
+    }
+    /* Бейдж валюты: тап — снова экран выбора */
+    #currency-badge {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      z-index: 15;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--card-border);
+      background: rgba(26, 5, 51, 0.92);
+      color: var(--gold);
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    #currency-badge:active {
+      transform: scale(0.96);
     }
     .wrap {
       max-width: 480px;
@@ -58,7 +174,6 @@
       color: var(--muted);
       font-weight: 400;
     }
-    /* Сетка карточек: две колонки, скролл страницы */
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -98,6 +213,8 @@
       aspect-ratio: 1;
       background: #2a0f4a;
       position: relative;
+      border-radius: 50%;
+      overflow: hidden;
       /* Тень под обложкой + лёгкая рамка, чтобы картинка «лежала» на фоне */
       box-shadow:
         inset 0 0 0 1px rgba(255, 255, 255, 0.08),
@@ -129,13 +246,19 @@
       /* Полное имя как у .mp3 / обложки — переносим строки, не обрезаем */
       word-break: break-word;
     }
+    .card-duration {
+      margin-top: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--muted);
+      line-height: 1.2;
+    }
     .card-price {
       margin-top: 6px;
       font-size: 0.85rem;
       font-weight: 700;
       color: var(--gold);
     }
-    /* Экран детали: выезжает справа */
     .screens {
       position: relative;
       overflow-x: hidden;
@@ -149,14 +272,17 @@
       transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      /* Пока панель уехала вправо, не перехватываем тапы (иначе в Telegram WebView сетка может «не кликаться»). */
+      pointer-events: none;
     }
     #detail-screen.open {
       transform: translateX(0);
+      pointer-events: auto;
     }
     .detail-inner {
       max-width: 480px;
       margin: 0 auto;
-      padding: 10px 14px 32px;
+      padding: 10px 14px max(40px, calc(24px + env(safe-area-inset-bottom)));
       padding-top: max(10px, env(safe-area-inset-top));
     }
     .back-row {
@@ -174,10 +300,64 @@
     }
     .detail-cover {
       width: 100%;
-      border-radius: 16px;
+      max-width: 360px;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
       border: 1px solid var(--card-border);
       display: block;
-      margin-bottom: 14px;
+      margin: 0 auto 14px;
+      cursor: pointer;
+    }
+    .gallery-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      background: rgba(12, 4, 24, 0.92);
+      padding: 18px 14px;
+    }
+    .gallery-modal.open {
+      display: block;
+    }
+    .gallery-modal-inner {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .gallery-close {
+      background: transparent;
+      border: none;
+      color: var(--gold);
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    /* Общее для всех картинок в модалке галереи */
+    .gallery-grid img {
+      width: 100%;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      display: block;
+    }
+    /* 1-я картинка = «диск», как в сетке и в деталях */
+    .gallery-grid img.gallery-cover-cd {
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
+    }
+    /* 2–я и дальше = фото футляра (прямоугольный кадр в квадрате, без круга) */
+    .gallery-grid img.gallery-cover-case {
+      aspect-ratio: 1;
+      object-fit: contain;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
     }
     .detail-emoji-title {
       font-size: 1.05rem;
@@ -185,6 +365,13 @@
       color: var(--gold);
       margin: 0 0 12px;
       line-height: 1.35;
+    }
+    .detail-duration {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin: -6px 0 14px;
+      text-align: center;
     }
     .detail-desc {
       font-size: 0.88rem;
@@ -203,6 +390,18 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
+      position: relative;
+      z-index: 2;
+    }
+    .currency-choice-title {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0;
+    }
+    .currency-choice-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
     .btn-buy {
       font-family: inherit;
@@ -215,6 +414,9 @@
       background: var(--gold);
       color: #1a0533;
       animation: pulseBuy 2.2s ease-in-out infinite;
+      touch-action: manipulation;
+      position: relative;
+      z-index: 1;
     }
     @keyframes pulseBuy {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.45); }
@@ -234,218 +436,119 @@
   </style>
 </head>
 <body>
-  <div class="screens">
-    <div id="grid-screen" class="wrap">
-      <header class="hero">
-        <h1>🎵 Music Acupuncture</h1>
-        <p>Divine Healing Sounds</p>
-      </header>
-      <div id="track-grid" class="grid" aria-label="Track list"></div>
-    </div>
+  <div id="test-mode-banner" class="test-mode-banner" role="status" aria-live="polite">
+    🧪 TEST MODE — prices are reduced
+  </div>
+  <!-- Минималистичный режим: валюта выбирается на карточке трека (2 кнопки USD/SEK). -->
+  <div id="app-shell" class="hidden" aria-hidden="true">
+    <div class="screens">
+      <div id="grid-screen" class="wrap">
+        <header class="hero">
+          <h1>🎵 Music Acupuncture</h1>
+          <p>Divine Healing Sounds</p>
+        </header>
+        <div id="track-grid" class="grid" aria-label="Track list"></div>
+      </div>
 
-    <div id="detail-screen" aria-hidden="true">
-      <div class="detail-inner">
-        <div class="back-row">
-          <button type="button" class="btn-back" id="btn-back">← Back</button>
-        </div>
-        <img id="detail-cover" class="detail-cover" alt="" />
-        <h2 id="detail-title" class="detail-emoji-title"></h2>
-        <p id="detail-desc" class="detail-desc"></p>
-        <div id="detail-price" class="detail-price"></div>
-        <div class="btn-row">
-          <button type="button" class="btn-buy" id="btn-buy">💳 Buy Now</button>
-          <button type="button" class="btn-preview" id="btn-preview">🎧 Preview</button>
-          <button type="button" class="btn-preview" id="btn-close-app">Close mini app</button>
+      <div id="detail-screen" aria-hidden="true">
+        <div class="detail-inner">
+          <div class="back-row">
+            <button type="button" class="btn-back" id="btn-back">← Back</button>
+          </div>
+          <img id="detail-cover" class="detail-cover" alt="" />
+          <h2 id="detail-title" class="detail-emoji-title"></h2>
+          <p id="detail-duration" class="detail-duration" style="display: none" aria-live="polite"></p>
+          <p id="detail-desc" class="detail-desc"></p>
+          <div id="detail-price" class="detail-price"></div>
+          <div class="btn-row">
+            <p class="currency-choice-title">Choose currency to pay</p>
+            <div class="currency-choice-row">
+              <button type="button" class="btn-buy" id="btn-buy-usd">💳 Pay in USD</button>
+              <button type="button" class="btn-buy" id="btn-buy-sek">💳 Pay in SEK</button>
+            </div>
+            <button type="button" class="btn-buy" id="btn-free-track" style="display:none">🎁 Get Free Track</button>
+            <button type="button" class="btn-preview" id="btn-back-to-tracks">Back to tracks</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
+  <div id="gallery-modal" class="gallery-modal" aria-hidden="true">
+    <div class="gallery-modal-inner">
+      <button type="button" id="gallery-close" class="gallery-close">← Back</button>
+      <div id="gallery-grid" class="gallery-grid"></div>
+    </div>
+  </div>
 
   <script>
+    /** Ключ localStorage для сохранённой валюты (USD / SEK). */
+    const LS_CURRENCY_KEY = "musicacupuncture_currency";
+    const LS_CHECKOUT_API = "musicacupuncture_checkout_api";
+    const LS_CHECKOUT_SECRET = "musicacupuncture_checkout_secret";
+    const CURRENCY_USD = "USD";
+    const CURRENCY_SEK = "SEK";
+
     /**
-     * Каталог: пути обложек и ссылки оплаты совпадают с `tracks.py` в репозитории.
-     * Эмодзи и короткие имена — по макету Mini App.
+     * Базовый URL платёжного backend на Railway (если бот не передал ?checkout_api= — используем это).
+     * Buy Now: POST {PAYMENT_CREATE_PATH} на этом хосте.
+     */
+    const DEFAULT_PAYMENT_SERVER_URL = "https://web-production-ed267.up.railway.app";
+    const PAYMENT_CREATE_PATH = "/create-payment";
+
+    /**
+     * Каталог треков. fullTitle = база имени файла обложки/MP3 (как в tracks.py).
+     * В сетке показываем fullTitle; shortName остаётся для совместимости/будущего.
+     * Оплата: POST /create-payment (Stripe Checkout + webhook → MP3).
      */
     const tracks = [
-      {
-        id: 1,
-        emoji: "👁️",
-        shortName: "Crown & Throat Chakra",
-        fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God",
-        description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg",
-        buyUrl: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"
-      },
-      {
-        id: 2,
-        emoji: "🌸",
-        shortName: "Estrogen",
-        fullTitle: "Divine sound Estrogen from God",
-        description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Estrogen from God.jpg",
-        buyUrl: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02"
-      },
-      {
-        id: 3,
-        emoji: "❤️",
-        shortName: "Heart",
-        fullTitle: "Divine sound Heart from God",
-        description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Heart from God.jpg",
-        buyUrl: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03"
-      },
-      {
-        id: 4,
-        emoji: "💗",
-        shortName: "Heart & Diaphragm Chakra",
-        fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God",
-        description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg",
-        buyUrl: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04"
-      },
-      {
-        id: 5,
-        emoji: "🛡️",
-        shortName: "Immune Defence",
-        fullTitle: "Divine sound Immunedefence from God",
-        description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Immunedefence from God.jpg",
-        buyUrl: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05"
-      },
-      {
-        id: 6,
-        emoji: "💧",
-        shortName: "Kidney",
-        fullTitle: "Divine sound Kidney from God",
-        description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Kidney from God.jpg",
-        buyUrl: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06"
-      },
-      {
-        id: 7,
-        emoji: "🌿",
-        shortName: "Liver",
-        fullTitle: "Divine sound Liver from God",
-        description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Liver from God.jpg",
-        buyUrl: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07"
-      },
-      {
-        id: 8,
-        emoji: "🫁",
-        shortName: "Lungs",
-        fullTitle: "Divine sound Lungs from God",
-        description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Lungs from God.jpg",
-        buyUrl: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08"
-      },
-      {
-        id: 9,
-        emoji: "💎",
-        shortName: "Minerals",
-        fullTitle: "Divine sound Minerals from God",
-        description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Minerals from God.jpg",
-        buyUrl: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09"
-      },
-      {
-        id: 10,
-        emoji: "🚫",
-        shortName: "NO Alcohol",
-        fullTitle: "Divine sound NO Alcohol from God",
-        description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound NO Alcohol from God.jpg",
-        buyUrl: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"
-      },
-      {
-        id: 11,
-        emoji: "🚭",
-        shortName: "NO Smoking",
-        fullTitle: "Divine sound NO Smoking from God",
-        description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound NO Smoking from God.jpg",
-        buyUrl: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"
-      },
-      {
-        id: 12,
-        emoji: "🌱",
-        shortName: "Root Chakra",
-        fullTitle: "Divine sound Rootchakra from God",
-        description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Rootchakra from God.jpg",
-        buyUrl: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c"
-      },
-      {
-        id: 13,
-        emoji: "🌊",
-        shortName: "Sacral & Navel Chakra",
-        fullTitle: "Divine sound Sacralchakra and Navelchakra from God",
-        description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Sacralchakra and Navelchakra from God.jpg",
-        buyUrl: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d"
-      },
-      {
-        id: 14,
-        emoji: "☀️",
-        shortName: "Solar Plexus & Spleen",
-        fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God",
-        description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg",
-        buyUrl: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e"
-      },
-      {
-        id: 15,
-        emoji: "💪",
-        shortName: "Testosterone",
-        fullTitle: "Divine sound Testosteron from God",
-        description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Testosteron from God.jpg",
-        buyUrl: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f"
-      },
-      {
-        id: 16,
-        emoji: "✨",
-        shortName: "Vitamins",
-        fullTitle: "Divine sound Vitamins from God",
-        description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.",
-        price: "$16",
-        priceAmount: 1600,
-        cover: "covers/Divine sound Vitamins from God.jpg",
-        buyUrl: "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"
-      }
+      { id: 0, emoji: "🎁", shortName: "FREE Gift", fullTitle: "Divine sound Super Feng Shui from God", description: "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏", cover: "covers/Divine sound Super Feng Shui from God.png", galleryCovers: ["covers/Divine sound Super Feng Shui from God.png", "covers/Divine sound Super Feng Shui from God CD cover front.png", "covers/Divine sound Super Feng Shui from God CD cover back.png"], isFree: true },
+      { id: 1, emoji: "👁️", shortName: "Crown & Throat Chakra", fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God", description: "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.png" },
+      { id: 2, emoji: "🌸", shortName: "Estrogen", fullTitle: "Divine sound Estrogen from God", description: "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", cover: "covers/Divine sound Estrogen from God.png" },
+      { id: 3, emoji: "❤️", shortName: "Heart", fullTitle: "Divine sound Heart from God", description: "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", cover: "covers/Divine sound Heart from God.png" },
+      { id: 4, emoji: "💗", shortName: "Heart & Diaphragm Chakra", fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God", description: "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.", cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.png" },
+      { id: 5, emoji: "🛡️", shortName: "Immune Defence", fullTitle: "Divine sound Immunedefence from God", description: "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.", cover: "covers/Divine sound Immunedefence from God.png" },
+      { id: 6, emoji: "💧", shortName: "Kidney", fullTitle: "Divine sound Kidney from God", description: "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.", cover: "covers/Divine sound Kidney from God.png" },
+      { id: 7, emoji: "🌿", shortName: "Liver", fullTitle: "Divine sound Liver from God", description: "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", cover: "covers/Divine sound Liver from God.png" },
+      { id: 8, emoji: "🫁", shortName: "Lungs", fullTitle: "Divine sound Lungs from God", description: "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", cover: "covers/Divine sound Lungs from God.png" },
+      { id: 9, emoji: "💎", shortName: "Minerals", fullTitle: "Divine sound Minerals from God", description: "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", cover: "covers/Divine sound Minerals from God.png" },
+      { id: 10, emoji: "🚫", shortName: "NO Alcohol", fullTitle: "Divine sound NO Alcohol from God", description: "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", cover: "covers/Divine sound NO Alcohol from God.png" },
+      { id: 11, emoji: "🚭", shortName: "NO Smoking", fullTitle: "Divine sound NO Smoking from God", description: "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", cover: "covers/Divine sound NO Smoking from God.png" },
+      { id: 12, emoji: "🌱", shortName: "Root Chakra", fullTitle: "Divine sound Rootchakra from God", description: "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", cover: "covers/Divine sound Rootchakra from God.png" },
+      { id: 13, emoji: "🌊", shortName: "Sacral & Navel Chakra", fullTitle: "Divine sound Sacralchakra and Navelchakra from God", description: "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", cover: "covers/Divine sound Sacralchakra and Navelchakra from God.png" },
+      { id: 14, emoji: "☀️", shortName: "Solar Plexus & Spleen", fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God", description: "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.png" },
+      { id: 15, emoji: "💪", shortName: "Testosterone", fullTitle: "Divine sound Testosteron from God", description: "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.", cover: "covers/Divine sound Testosteron from God.png" },
+      { id: 16, emoji: "✨", shortName: "Vitamins", fullTitle: "Divine sound Vitamins from God", description: "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.", cover: "covers/Divine sound Vitamins from God.png" }
     ];
 
     const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    const BOT_USERNAME = (function () {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        return (q.get("bot_username") || "").trim().replace(/^@/, "");
+      } catch (e) {
+        return "";
+      }
+    })();
+
+    /**
+     * Данные пользователя из Mini App: обычно в initDataUnsafe; если пусто — парсим initData (строка query).
+     */
+    function getTelegramUserFromWebApp(webApp) {
+      if (!webApp) return null;
+      const u = webApp.initDataUnsafe && webApp.initDataUnsafe.user;
+      if (u && u.id != null) return u;
+      const raw = (webApp.initData || "").trim();
+      if (!raw) return null;
+      try {
+        const params = new URLSearchParams(raw);
+        const userJson = params.get("user");
+        if (!userJson) return null;
+        const parsed = JSON.parse(userJson);
+        return parsed && parsed.id != null ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
 
     if (tg) {
       tg.ready();
@@ -454,12 +557,15 @@
       tg.setBackgroundColor("#1a0533");
     }
 
-    // Stripe: заготовка под будущий встроенный Checkout (нужен publishable key).
-    if (window.Stripe) {
-      /* const stripe = Stripe("pk_live_..."); */
-    }
+    /** Ответ GET /miniapp-pricing с Railway: цены и флаг теста (или null при ошибке сети). */
+    let serverPricing = null;
 
+    /** Текущая валюта из localStorage (по умолчанию USD). */
+    let currentCurrency = CURRENCY_USD;
     let selected = null;
+    let selectedGalleryCovers = [];
+    /** Чтобы не отправить два checkout подряд (MainButton + HTML). */
+    let checkoutInFlight = false;
 
     function escapeHtml(s) {
       const d = document.createElement("div");
@@ -467,8 +573,125 @@
       return d.innerHTML;
     }
 
+    /** Читаем сохранённую валюту; только USD и SEK считаются валидными. */
+    function readStoredCurrency() {
+      try {
+        const v = (localStorage.getItem(LS_CURRENCY_KEY) || "").trim().toUpperCase();
+        if (v === CURRENCY_USD || v === CURRENCY_SEK) return v;
+      } catch (e) { /* приватный режим и т.п. */ }
+      return null;
+    }
+
+    /** Сохраняем выбор валюты для следующих открытий Mini App. */
+    function saveCurrency(code) {
+      try {
+        localStorage.setItem(LS_CURRENCY_KEY, code);
+      } catch (e) { /* ignore */ }
+      currentCurrency = code;
+    }
+
+    /** Текст цены на карточке и в деталях: с backend или запасной вариант. */
+    function formatPrice(currency) {
+      if (serverPricing) {
+        return currency === CURRENCY_SEK ? serverPricing.sek_display : serverPricing.usd_display;
+      }
+      if (currency === CURRENCY_SEK) return "169 kr";
+      return "$16";
+    }
+
+    /** Берём из query (бот открывает ссылку с checkout_api=) и кладём в sessionStorage. */
+    function syncCheckoutParamsFromUrl() {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        const api = (q.get("checkout_api") || "").trim();
+        const sec = (q.get("checkout_secret") || "").trim();
+        if (api) sessionStorage.setItem(LS_CHECKOUT_API, api);
+        if (sec) sessionStorage.setItem(LS_CHECKOUT_SECRET, sec);
+      } catch (e) { /* ignore */ }
+    }
+
+    function getCheckoutApiBase() {
+      try {
+        const fromStore = (sessionStorage.getItem(LS_CHECKOUT_API) || "").trim().replace(/\/$/, "");
+        if (fromStore) return fromStore;
+      } catch (e) { /* ignore */ }
+      return DEFAULT_PAYMENT_SERVER_URL.replace(/\/$/, "");
+    }
+
+    function getMiniappCheckoutSecretForHeader() {
+      try {
+        return (sessionStorage.getItem(LS_CHECKOUT_SECRET) || "").trim();
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function updateBadge() {
+      const el = document.getElementById("currency-badge");
+      if (!el) return;
+      if (!currentCurrency) return;
+      if (serverPricing) {
+        el.textContent = currentCurrency === CURRENCY_SEK ? serverPricing.badge_sek : serverPricing.badge_usd;
+      } else {
+        el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 169 kr" : "USD · $16";
+      }
+      el.title = "Change currency";
+    }
+
+    /** Подтягиваем цены с web-сервиса (TEST_MODE на Railway). */
+    async function loadServerPricing() {
+      try {
+        const base = getCheckoutApiBase();
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 8000);
+        const r = await fetch(`${base}/miniapp-pricing`, {
+          method: "GET",
+          mode: "cors",
+          signal: controller.signal,
+        });
+        clearTimeout(tId);
+        if (!r.ok) return;
+        serverPricing = await r.json();
+      } catch (e) {
+        serverPricing = null;
+      }
+    }
+
+    function syncTestModeBanner() {
+      const el = document.getElementById("test-mode-banner");
+      if (!el) return;
+      const on = Boolean(serverPricing && serverPricing.test_mode);
+      el.classList.toggle("show", on);
+      document.body.classList.toggle("has-test-banner-padding", on);
+    }
+
+    /** Длительности с backend (/miniapp-pricing) — совпадают с id карточек в `tracks`. */
+    function mergeTrackDurationsFromServer() {
+      const rows =
+        serverPricing && Array.isArray(serverPricing.track_durations) ? serverPricing.track_durations : [];
+      const byId = {};
+      rows.forEach((row) => {
+        if (row && row.id != null && row.label) byId[row.id] = row.label;
+      });
+      tracks.forEach((t) => {
+        t.durationLabel = byId[t.id] || null;
+      });
+    }
+
+    function showAppShell() {
+      const shell = document.getElementById("app-shell");
+      if (shell) {
+        shell.classList.remove("hidden");
+        shell.setAttribute("aria-hidden", "false");
+      }
+      syncTestModeBanner();
+      mergeTrackDurationsFromServer();
+      renderGrid();
+    }
+
     function renderGrid() {
       const root = document.getElementById("track-grid");
+      const priceStr = formatPrice(currentCurrency);
       root.innerHTML = tracks
         .map(
           (t) => `
@@ -479,7 +702,8 @@
           </div>
           <div class="card-body">
             <div class="card-title">${escapeHtml(t.fullTitle)}</div>
-            <div class="card-price">${escapeHtml(t.price)}</div>
+            ${t.durationLabel ? `<div class="card-duration">⏱ ${escapeHtml(t.durationLabel)}</div>` : ""}
+            <div class="card-price">${t.isFree ? "🎁 FREE" : escapeHtml(priceStr)}</div>
           </div>
         </article>`
         )
@@ -498,56 +722,335 @@
       });
     }
 
+    /**
+     * Оставляем только одну кнопку Buy (HTML внутри карточки).
+     * Telegram MainButton здесь отключаем, чтобы не было дублирования.
+     */
+    function syncMainButtonForDetail(open) {
+      if (!tg || !tg.MainButton) return;
+      tg.MainButton.hide();
+    }
+
     function openDetail(track) {
-      if (!track) return;
+      if (!track || !currentCurrency) return;
       selected = track;
+      selectedGalleryCovers = Array.isArray(track.galleryCovers) && track.galleryCovers.length ? track.galleryCovers : [track.cover];
       const panel = document.getElementById("detail-screen");
       document.getElementById("detail-cover").src = track.cover;
       document.getElementById("detail-cover").alt = track.fullTitle;
       document.getElementById("detail-title").textContent = `${track.emoji} ${track.fullTitle}`;
+      const durEl = document.getElementById("detail-duration");
+      if (durEl) {
+        if (track.durationLabel) {
+          durEl.textContent = `⏱ ${track.durationLabel}`;
+          durEl.style.display = "block";
+        } else {
+          durEl.textContent = "";
+          durEl.style.display = "none";
+        }
+      }
       document.getElementById("detail-desc").textContent = track.description;
-      document.getElementById("detail-price").textContent = track.price;
+      document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : formatPrice(currentCurrency);
+      // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
+      const freeBtn = document.getElementById("btn-free-track");
+      const currencyTitle = document.querySelector(".currency-choice-title");
+      const currencyRow = document.querySelector(".currency-choice-row");
+      if (track.isFree) {
+        if (currencyTitle) currencyTitle.style.display = "none";
+        if (currencyRow) currencyRow.style.display = "none";
+        if (freeBtn) freeBtn.style.display = "block";
+      } else {
+        if (currencyTitle) currencyTitle.style.display = "";
+        if (currencyRow) currencyRow.style.display = "";
+        if (freeBtn) freeBtn.style.display = "none";
+      }
       panel.classList.add("open");
       panel.setAttribute("aria-hidden", "false");
+      syncMainButtonForDetail(true);
     }
 
     function closeDetail() {
       const panel = document.getElementById("detail-screen");
       panel.classList.remove("open");
       panel.setAttribute("aria-hidden", "true");
+      syncMainButtonForDetail(false);
+    }
+
+    function openGalleryModal() {
+      if (!selectedGalleryCovers.length) return;
+      const modal = document.getElementById("gallery-modal");
+      const grid = document.getElementById("gallery-grid");
+      if (!modal || !grid) return;
+      grid.innerHTML = selectedGalleryCovers
+        .map((src, i) => {
+          const cls = i === 0 ? "gallery-cover-cd" : "gallery-cover-case";
+          const alt = i === 0 ? "Round CD artwork" : "CD jewel case photo";
+          return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" class="${cls}" loading="lazy" />`;
+        })
+        .join("");
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeGalleryModal() {
+      const modal = document.getElementById("gallery-modal");
+      if (!modal) return;
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
     }
 
     document.getElementById("btn-back").addEventListener("click", closeDetail);
-
-    document.getElementById("btn-buy").addEventListener("click", () => {
-      if (!selected || !selected.buyUrl) return;
-      const url = String(selected.buyUrl).trim();
-      if (!url.startsWith("http://") && !url.startsWith("https://")) return;
-      if (tg && typeof tg.openLink === "function") {
-        tg.openLink(url);
-      } else {
-        window.open(url, "_blank", "noopener,noreferrer");
+    document.getElementById("detail-cover").addEventListener("click", () => {
+      if (selected && selected.isFree && selectedGalleryCovers.length > 1) {
+        openGalleryModal();
+      }
+    });
+    document.getElementById("gallery-close").addEventListener("click", closeGalleryModal);
+    document.getElementById("gallery-modal").addEventListener("click", (e) => {
+      if (e.target && e.target.id === "gallery-modal") {
+        closeGalleryModal();
       }
     });
 
-    document.getElementById("btn-preview").addEventListener("click", () => {
-      if (tg && tg.showAlert) {
-        tg.showAlert("Preview will be available in a future update.");
-      } else {
-        alert("Preview will be available in a future update.");
+    /** Tid i ms: annars kan fetch hänga i WebView och MainButton snurrar för evigt. */
+    const CHECKOUT_FETCH_TIMEOUT_MS = 45000;
+    const WARMUP_FETCH_TIMEOUT_MS = 30000;
+
+    /** Kort text om betal-URL (för felsökning utan att spamma hela querysträngar). */
+    function checkoutHostHint(apiBase) {
+        try {
+          const u = new URL(apiBase.startsWith("http") ? apiBase : `https://${apiBase}`);
+          return u.host || apiBase;
+        } catch (e) {
+          return String(apiBase || "").slice(0, 80);
+        }
+    }
+
+    /**
+     * Один fetch с таймаутом через AbortController.
+     * Нужен для повторного использования в checkout и прогреве backend.
+     */
+    async function fetchWithTimeout(url, options, timeoutMs) {
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...(options || {}), signal: controller.signal });
+      } finally {
+        clearTimeout(timerId);
       }
+    }
+
+    /**
+     * Прогрев web-сервиса на Railway перед checkout.
+     * Если backend спал, первый запрос может падать; после /miniapp-pricing сервис обычно «просыпается».
+     */
+    async function warmupPaymentApi(apiBase) {
+      try {
+        await fetchWithTimeout(
+          `${apiBase}/miniapp-pricing`,
+          { method: "GET", mode: "cors" },
+          WARMUP_FETCH_TIMEOUT_MS
+        );
+      } catch (e) {
+        /* Прогрев best-effort: молча продолжаем, чтобы не блокировать checkout. */
+      }
+    }
+
+    async function startCheckout(forcedCurrency) {
+      if (checkoutInFlight) return;
+      if (!selected) {
+        if (tg && tg.showAlert) tg.showAlert("Pick a track first, then tap Buy.");
+        return;
+      }
+      if (selected && selected.isFree) {
+        // Бесплатный трек: открываем чат бота и просим выдать подарок.
+        if (!BOT_USERNAME) {
+          if (tg && tg.showAlert) tg.showAlert("Please open this store from the bot so it can deliver the free track.");
+          return;
+        }
+        const deep = `https://t.me/${BOT_USERNAME}?start=gift_free_track`;
+        if (tg && typeof tg.openTelegramLink === "function") {
+          tg.openTelegramLink(deep);
+        } else {
+          window.location.href = deep;
+        }
+        return;
+      }
+      const apiBase = getCheckoutApiBase();
+      const u = getTelegramUserFromWebApp(tg);
+      const telegram_id = u && u.id;
+      const telegram_name =
+        [u && u.first_name, u && u.last_name].filter(Boolean).join(" ") || (u && u.username) || "Telegram user";
+      if (!telegram_id) {
+        if (tg && tg.showAlert) tg.showAlert("Open this app inside Telegram to purchase.");
+        else alert("Open this app inside Telegram to purchase.");
+        return;
+      }
+
+      const mb = tg && tg.MainButton;
+      const stopCheckoutSpinner = () => {
+        checkoutInFlight = false;
+        if (mb && typeof mb.hideProgress === "function") mb.hideProgress();
+        if (mb && typeof mb.enable === "function") mb.enable();
+      };
+
+      checkoutInFlight = true;
+      if (mb && typeof mb.showProgress === "function") mb.showProgress();
+
+      try {
+        const chosenCurrency =
+          forcedCurrency === CURRENCY_SEK || forcedCurrency === CURRENCY_USD
+            ? forcedCurrency
+            : (currentCurrency || CURRENCY_USD);
+        saveCurrency(chosenCurrency);
+        updateBadge();
+        const currency = chosenCurrency === CURRENCY_SEK ? "sek" : "usd";
+        const headers = { "Content-Type": "application/json" };
+        const sec = getMiniappCheckoutSecretForHeader();
+        if (sec) headers["X-Miniapp-Checkout-Secret"] = sec;
+        if (typeof window !== "undefined" && window.location && window.location.protocol === "https:" && apiBase.startsWith("http://")) {
+          if (tg && tg.showAlert) {
+            tg.showAlert(
+              "The store is on HTTPS but the payment API URL is HTTP — the browser blocks that. Set BACKEND_URL to https://… on Railway (bot + Web) and open the store again from the bot so checkout_api updates."
+            );
+          }
+          return;
+        }
+
+        const requestOptions = {
+          method: "POST",
+          mode: "cors",
+          headers,
+          body: JSON.stringify({
+            track_id: selected.id,
+            telegram_id,
+            telegram_name,
+            currency,
+          }),
+        };
+        let res;
+        try {
+          res = await fetchWithTimeout(
+            `${apiBase}${PAYMENT_CREATE_PATH}`,
+            requestOptions,
+            CHECKOUT_FETCH_TIMEOUT_MS
+          );
+        } catch (e) {
+          // Если web «просыпается», делаем прогрев и один повтор запроса.
+          await warmupPaymentApi(apiBase);
+          res = await fetchWithTimeout(
+            `${apiBase}${PAYMENT_CREATE_PATH}`,
+            requestOptions,
+            CHECKOUT_FETCH_TIMEOUT_MS
+          );
+        }
+
+        if (!res.ok) {
+          let bodyHint = "";
+          try {
+            const t = (await res.text()).trim();
+            if (t) bodyHint = t.length > 220 ? `${t.slice(0, 220)}…` : t;
+          } catch (e2) {
+            bodyHint = "";
+          }
+          const host = checkoutHostHint(apiBase);
+          const tip401 =
+            res.status === 401
+              ? "\n\nHTTP 401: MINIAPP_CHECKOUT_SECRET on Railway Web must match the secret in the bot WebApp URL (?checkout_secret=…). Open the store again from the bot after changing env."
+              : "";
+          const tip502 =
+            res.status === 502 || res.status === 503
+              ? "\n\nServer error: check Railway Web logs, STRIPE_SECRET_KEY, and that Stripe is reachable."
+              : "";
+          const msg = `Could not start checkout (HTTP ${res.status} from ${host}).${tip401}${tip502}${
+            bodyHint ? `\n\nServer said:\n${bodyHint}` : "\n\nTip: open Railway → Web → Logs while you tap Buy."
+          }`;
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
+          return;
+        }
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          const msg =
+            "The payment server answered but the response was not valid JSON. Check Railway Web logs for /create-payment errors.";
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
+          return;
+        }
+
+        const payUrl = data && data.url;
+        if (!payUrl || typeof payUrl !== "string") {
+          const msg =
+            "Payment server did not return a checkout URL. Check Railway Web: Stripe keys, DOMAIN, and logs for /create-payment.";
+          if (tg && tg.showAlert) tg.showAlert(msg);
+          else alert(msg);
+          return;
+        }
+
+        /* Stripe: öppna i extern webbläsare (snurran stoppas i finally). */
+        if (tg && typeof tg.openLink === "function") {
+          try {
+            tg.openLink(payUrl, { try_instant_view: false });
+          } catch (e) {
+            try {
+              tg.openLink(payUrl);
+            } catch (e2) {
+              const msg =
+                "Telegram could not open the payment link. Try: Settings → disable data saver / VPN; update Telegram; or open the Mini App from Wi‑Fi.";
+              if (tg && tg.showAlert) tg.showAlert(msg);
+              else alert(msg);
+            }
+          }
+          /* Не показываем отложенный alert после openLink: в WebView Stripe часто открывается поверх Mini App — старый setTimeout давал ложное «не открылось». */
+        } else {
+          window.open(payUrl, "_blank", "noopener,noreferrer");
+        }
+        return;
+      } catch (e) {
+        const origin = typeof window !== "undefined" && window.location ? String(window.location.origin || "") : "";
+        const host = checkoutHostHint(apiBase);
+        const errMsg =
+          e && e.name === "AbortError"
+            ? `timeout after ${CHECKOUT_FETCH_TIMEOUT_MS / 1000}s — no answer from ${host}`
+            : e && e.message
+              ? String(e.message)
+              : "unknown error";
+        const corsHint = origin
+          ? `Request failed: ${errMsg}\n\nStore origin: ${origin}\nPayment API: ${host}\n\nIf this is CORS: Railway → Web → Variables → MINIAPP_CORS_ORIGINS = exactly:\n${origin}\n\nIf timeout: Web service may be sleeping/crashed — open Railway Web logs and redeploy Web.`
+          : `Request failed: ${errMsg}. Check payment API host and CORS.`;
+        if (tg && tg.showAlert) tg.showAlert(corsHint);
+        else alert(corsHint);
+      } finally {
+        /* Alltid stoppa snurran (även om openLink kastar eller vi returnerade tidigare). */
+        stopCheckoutSpinner();
+      }
+    }
+
+    document.getElementById("btn-buy-usd").addEventListener("click", () => {
+      startCheckout(CURRENCY_USD);
+    });
+    document.getElementById("btn-buy-sek").addEventListener("click", () => {
+      startCheckout(CURRENCY_SEK);
+    });
+    document.getElementById("btn-free-track").addEventListener("click", () => {
+      startCheckout(CURRENCY_USD);
     });
 
-    // После оплаты во внешнем браузере пользователь возвращается в Telegram — можно закрыть витрину.
-    document.getElementById("btn-close-app").addEventListener("click", () => {
-      if (tg && typeof tg.close === "function") {
-        tg.close();
-      } else {
-        closeDetail();
-      }
+    document.getElementById("btn-back-to-tracks").addEventListener("click", () => {
+      closeDetail();
     });
 
-    renderGrid();
+    /** Старт: параметры checkout из URL; цены с backend; валюта из localStorage. */
+    (async function init() {
+      syncCheckoutParamsFromUrl();
+      await loadServerPricing();
+      syncTestModeBanner();
+      currentCurrency = readStoredCurrency() || CURRENCY_USD;
+      showAppShell();
+    })();
   </script>
 </body>
 </html>

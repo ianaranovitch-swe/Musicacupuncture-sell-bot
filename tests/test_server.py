@@ -193,6 +193,10 @@ def test_create_checkout_cors_accepts_full_page_url_in_env(mocker):
 def test_miniapp_pricing_get_and_cors(mocker):
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://pages.example")
     mocker.patch("music_sales.config.test_mode_active", return_value=False)
+    mocker.patch(
+        "music_sales.server._miniapp_track_durations_payload",
+        return_value=[{"id": 2, "seconds": 3008, "label": "50m 8s"}],
+    )
     from music_sales.server import create_app
 
     app = create_app(
@@ -210,11 +214,13 @@ def test_miniapp_pricing_get_and_cors(mocker):
     body = got.get_json()
     assert body.get("test_mode") is False
     assert "$" in (body.get("usd_display") or "")
+    assert body.get("track_durations") == [{"id": 2, "seconds": 3008, "label": "50m 8s"}]
 
 
 def test_miniapp_pricing_test_mode_response(mocker):
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://t.example")
     mocker.patch("music_sales.config.test_mode_active", return_value=True)
+    mocker.patch("music_sales.server._miniapp_track_durations_payload", return_value=[])
     from music_sales.server import create_app
 
     app = create_app(
@@ -229,6 +235,7 @@ def test_miniapp_pricing_test_mode_response(mocker):
     assert body.get("test_mode") is True
     assert body.get("usd_display") == "$1"
     assert "kr" in (body.get("sek_display") or "").lower()
+    assert body.get("track_durations") == []
 
 
 def test_create_payment_post_same_as_checkout(mocker):

@@ -13,6 +13,8 @@ dependencies = [
     "flask",
     "stripe",
     "requests",
+    "Pillow>=10.0",
+    "mutagen>=1.47",
 ]
 
 [project.optional-dependencies]

@@ -1,4 +1,4 @@
-"""Catalog of 16 tracks: cover and audio share the same base filename (.jpg / .mp3).
+"""Catalog of 17 tracks: cover and audio share the same base filename (.png / .mp3).
 
 Поле buy_url_sek — ссылка Stripe в шведских кронах для Mini App; пока дублирует buy_url, замените на реальные SEK-ссылки.
 """
@@ -18,10 +18,26 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.jpg",
+        "cover": "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.png",
         "audio": "songs/Divine sound Crownchakra-Browchakra-Throatchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
         "buy_url_sek": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"
+    },
+    {
+        "id": 17,
+        "short_title": "🎁 Free Gift",
+        "title": "Divine sound Super Feng Shui from God",
+        "description": (
+            "Your free divine gift for home harmony and positive energy flow.\n"
+            "A special bonus track designed to support calmness, balance, and uplifting atmosphere. "
+            "Listen daily for best results."
+        ),
+        "price": "FREE",
+        "price_amount": 0,
+        "cover": "covers/Divine sound Super Feng Shui from God.png",
+        "audio": "songs/Divine sound Super Feng Shui from God.mp3",
+        "buy_url": "",
+        "buy_url_sek": ""
     },
     {
         "id": 2,
@@ -35,7 +51,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Estrogen from God.jpg",
+        "cover": "covers/Divine sound Estrogen from God.png",
         "audio": "songs/Divine sound Estrogen from God.mp3",
         "buy_url": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
         "buy_url_sek": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02"
@@ -53,7 +69,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Heart from God.jpg",
+        "cover": "covers/Divine sound Heart from God.png",
         "audio": "songs/Divine sound Heart from God.mp3",
         "buy_url": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
         "buy_url_sek": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03"
@@ -70,7 +86,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Heartchakra and Diaphragmchakra from God.jpg",
+        "cover": "covers/Divine sound Heartchakra and Diaphragmchakra from God.png",
         "audio": "songs/Divine sound Heartchakra and Diaphragmchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
         "buy_url_sek": "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04"
@@ -88,7 +104,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Immunedefence from God.jpg",
+        "cover": "covers/Divine sound Immunedefence from God.png",
         "audio": "songs/Divine sound Immunedefence from God.mp3",
         "buy_url": "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
         "buy_url_sek": "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05"
@@ -105,7 +121,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Kidney from God.jpg",
+        "cover": "covers/Divine sound Kidney from God.png",
         "audio": "songs/Divine sound Kidney from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
         "buy_url_sek": "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06"
@@ -122,7 +138,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Liver from God.jpg",
+        "cover": "covers/Divine sound Liver from God.png",
         "audio": "songs/Divine sound Liver from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
         "buy_url_sek": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07"
@@ -139,7 +155,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Lungs from God.jpg",
+        "cover": "covers/Divine sound Lungs from God.png",
         "audio": "songs/Divine sound Lungs from God.mp3",
         "buy_url": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
         "buy_url_sek": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08"
@@ -157,7 +173,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Minerals from God.jpg",
+        "cover": "covers/Divine sound Minerals from God.png",
         "audio": "songs/Divine sound Minerals from God.mp3",
         "buy_url": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
         "buy_url_sek": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09"
@@ -174,7 +190,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound NO Alcohol from God.jpg",
+        "cover": "covers/Divine sound NO Alcohol from God.png",
         "audio": "songs/Divine sound NO Alcohol from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
         "buy_url_sek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"
@@ -192,7 +208,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound NO Smoking from God.jpg",
+        "cover": "covers/Divine sound NO Smoking from God.png",
         "audio": "songs/Divine sound NO Smoking from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
         "buy_url_sek": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"
@@ -209,7 +225,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Rootchakra from God.jpg",
+        "cover": "covers/Divine sound Rootchakra from God.png",
         "audio": "songs/Divine sound Rootchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
         "buy_url_sek": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c"
@@ -226,7 +242,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Sacralchakra and Navelchakra from God.jpg",
+        "cover": "covers/Divine sound Sacralchakra and Navelchakra from God.png",
         "audio": "songs/Divine sound Sacralchakra and Navelchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
         "buy_url_sek": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d"
@@ -243,7 +259,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Solarplexuschakra and Spleenchakra from God.jpg",
+        "cover": "covers/Divine sound Solarplexuschakra and Spleenchakra from God.png",
         "audio": "songs/Divine sound Solarplexuschakra and Spleenchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
         "buy_url_sek": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e"
@@ -260,7 +276,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 1600,
-        "cover": "covers/Divine sound Testosteron from God.jpg",
+        "cover": "covers/Divine sound Testosteron from God.png",
         "audio": "songs/Divine sound Testosteron from God.mp3",
         "buy_url": "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
         "buy_url_sek": "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f"
@@ -278,7 +294,7 @@ TRACKS: list[dict] = [
         ),
         "price": "$16",
         "price_amount": 100,
-        "cover": "covers/Divine sound Vitamins from God.jpg",
+        "cover": "covers/Divine sound Vitamins from God.png",
         "audio": "songs/Divine sound Vitamins from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
         "buy_url_sek": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"

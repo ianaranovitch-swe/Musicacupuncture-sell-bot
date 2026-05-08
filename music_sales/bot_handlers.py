@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 from pathlib import Path
 
 from telegram import (
@@ -10,18 +11,23 @@ from telegram import (
     Update,
     User,
     WebAppInfo,
+    InputFile,
 )
 from telegram.ext import ContextTypes
 
 from music_sales import config
+from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.owner_notify import notify_owner_async
 
 logger = logging.getLogger(__name__)
 
 FREE_TRACK_TITLE = "Divine sound Super Feng Shui from God"
-FREE_TRACK_COVER = "covers/Divine sound Super Feng Shui from God.jpg"
-FREE_TRACK_AUDIO = "songs/Divine sound Super Feng Shui from God.mp3"
+FREE_TRACK_GALLERY_COVERS = [
+    "covers/Divine sound Super Feng Shui from God.png",
+    "covers/Divine sound Super Feng Shui from God CD cover front.png",
+    "covers/Divine sound Super Feng Shui from God CD cover back.png",
+]
 FREE_TRACK_CB = "gift:free_track"
 FREE_TRACK_START_PAYLOAD = "gift_free_track"
 
@@ -80,11 +86,26 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     root = _repo_root()
-    cover_path = root / FREE_TRACK_COVER
-    if cover_path.is_file():
+    # 1-я обложка — уже круглый PNG с альфой из Photoshop, шлём как есть (без повторного «вырезания» круга).
+    # 2–3 — фото футляра: при желании вписываем в квадрат с фоном как в Mini App (см. render…case_square).
+    for index, rel_path in enumerate(FREE_TRACK_GALLERY_COVERS):
+        cover_path = root / rel_path
+        if not cover_path.is_file():
+            continue
         try:
-            with cover_path.open("rb") as photo:
-                await context.bot.send_photo(chat_id=chat_id, photo=photo)
+            if index == 0:
+                with cover_path.open("rb") as photo:
+                    await context.bot.send_photo(chat_id=chat_id, photo=photo)
+                continue
+            png_bytes = render_free_track_cover_for_telegram(cover_path, "case_square")
+            if png_bytes:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=InputFile(BytesIO(png_bytes), filename=f"free_track_cover_{index}.png"),
+                )
+            else:
+                with cover_path.open("rb") as photo:
+                    await context.bot.send_photo(chat_id=chat_id, photo=photo)
         except Exception:
             # Фото не критично: продолжаем выдачу.
             pass

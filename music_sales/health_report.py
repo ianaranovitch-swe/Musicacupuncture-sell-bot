@@ -1,5 +1,5 @@
 """
-Сводка «здоровья» деплоя: 16 MP3, обложки, ключевые env и проверки API.
+Сводка «здоровья» деплоя: 17 MP3, обложки, ключевые env и проверки API.
 Используется командой /health (только владелец) и GET /health на Flask.
 """
 
@@ -23,7 +23,7 @@ from tracks import TRACKS
 
 logger = logging.getLogger(__name__)
 
-EXPECTED_TRACKS = 16
+EXPECTED_TRACKS = 17
 
 
 def _stripe_balance_ok() -> Tuple[bool, str]:
@@ -104,6 +104,7 @@ def build_health_report() -> Dict[str, Any]:
 
     songs = discover_songs()
     mp3_in_catalog = sum(1 for _, v in songs.items() if str(v.get("file", "")).lower().endswith(".mp3"))
+    present_cover_count = len(TRACKS) - len(missing_cover)
     folder = songs_dir()
     songs_folder_exists = folder.is_dir()
     expected_mp3_names = {Path(str(t.get("audio", ""))).name for t in TRACKS}
@@ -136,6 +137,8 @@ def build_health_report() -> Dict[str, Any]:
         "audio_files_ok": len(missing_audio) == 0,
         "cover_files_ok": len(missing_cover) == 0,
         "mp3_count_matches_expected": mp3_in_catalog == EXPECTED_TRACKS,
+        "cover_count_matches_expected": present_cover_count == EXPECTED_TRACKS,
+        "present_cover_count": present_cover_count,
         "extra_mp3_files_not_in_tracks_py": extra_mp3,
         "env": {
             "BOT_TOKEN_set": bool((config.BOT_TOKEN or "").strip()),
@@ -161,6 +164,7 @@ def build_health_report() -> Dict[str, Any]:
             and len(missing_cover) == 0
             and len(extra_mp3) == 0
             and mp3_in_catalog == EXPECTED_TRACKS
+            and present_cover_count == EXPECTED_TRACKS
             and stripe_ok
             and backend_ok
             and mini_ok
@@ -181,6 +185,7 @@ def format_health_html(report: Dict[str, Any], telegram_bot_line: str | None = N
         f"Expected MP3: {report.get('expected_tracks')}",
         f"Missing audio: {len(report.get('missing_audio_from_tracks_py') or [])}",
         f"Missing covers: {len(report.get('missing_covers_from_tracks_py') or [])}",
+        f"Present covers: {report.get('present_cover_count')}",
         f"discover_songs() MP3 count: {report.get('discovered_mp3_count')}",
         f"Songs folder exists: {report.get('songs_folder_exists')}",
         "",

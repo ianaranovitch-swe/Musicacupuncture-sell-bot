@@ -13,8 +13,18 @@ from flask import Flask, jsonify, request, send_from_directory
 from music_sales import config
 from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
 from music_sales.file_id_delivery import PURCHASE_DELIVERY_CAPTION, file_id_for_song, load_file_ids_dict
+from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
 logger = logging.getLogger(__name__)
+
+
+def _miniapp_track_durations_payload() -> list:
+    """Не ломаем /miniapp-pricing, если разбор MP3 или каталога упал."""
+    try:
+        return miniapp_track_durations_for_pricing()
+    except Exception:
+        logger.exception("miniapp track_durations")
+        return []
 SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
 
 # Не даём Stripe SDK засорять логи на уровне DEBUG (там могут быть чувствительные поля).
@@ -289,6 +299,7 @@ def create_app(
                     "sek_display": f"{sek_n} kr",
                     "badge_usd": f"USD · ${usd_n}",
                     "badge_sek": f"SEK · {sek_n} kr",
+                    "track_durations": _miniapp_track_durations_payload(),
                 }
             )
         try:
@@ -307,6 +318,7 @@ def create_app(
                 "sek_display": f"{kr} kr",
                 "badge_usd": f"USD · ${usd_n}",
                 "badge_sek": f"SEK · {kr} kr",
+                "track_durations": _miniapp_track_durations_payload(),
             }
         )
 
