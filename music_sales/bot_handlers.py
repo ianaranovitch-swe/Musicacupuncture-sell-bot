@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 FREE_TRACK_TITLE = "Divine sound Super Feng Shui from God"
 FREE_TRACK_GALLERY_COVERS = [
-    "covers/Divine sound Super Feng Shui from God.png",
+    "covers/Divine-sound-Super-Feng-Shui-from-God.png",
     "covers/Divine sound Super Feng Shui from God CD cover front.png",
     "covers/Divine sound Super Feng Shui from God CD cover back.png",
 ]
