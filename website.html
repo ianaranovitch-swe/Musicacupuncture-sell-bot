@@ -456,7 +456,10 @@
     .success-actions {
       margin-top: 14px;
       display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
       justify-content: center;
+      align-items: center;
     }
 
     /* ========== About ========== */
@@ -556,6 +559,14 @@
         <p id="success-msg">Your track is being prepared…</p>
         <div id="success-actions" class="success-actions" style="display: none;">
           <button type="button" id="success-download-again" class="btn-outline">⬇️ Download again</button>
+          <a
+            id="success-direct-link"
+            class="btn-gold"
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            style="display: none; text-decoration: none; line-height: 1.2;"
+            >⬇️ Open MP3 in new tab</a>
         </div>
         <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0;">
           Thank you for supporting Music Acupuncture. 🙏<br />— Mikael
@@ -1102,20 +1113,89 @@
     document.body.removeChild(a);
   }
 
-  async function retrySuccessDownload() {
+  function showSuccessDirectLink(url) {
+    var a = document.getElementById("success-direct-link");
+    var actions = document.getElementById("success-actions");
+    if (!a || !url) return;
+    a.href = url;
+    a.style.display = "inline-block";
+    if (actions) actions.style.display = "flex";
+  }
+
+  function retrySuccessDownload() {
     var msg = document.getElementById("success-msg");
     if (!successTrackId) return;
-    setLoading(true);
-    var url = successDownloadUrl || (await tryFetchPurchaseDownload(successTrackId, successSessionId));
-    setLoading(false);
-    if (url) {
-      successDownloadUrl = url;
-      triggerDownload(url, "Music-Acupuncture-track.mp3");
+    /* Важно: window.open сразу в обработчике клика — иначе браузер блокирует вкладку после await/fetch. */
+    var tab = null;
+    try {
+      tab = window.open("about:blank", "_blank");
+    } catch (e) {}
+    if (successDownloadUrl) {
+      showSuccessDirectLink(successDownloadUrl);
+      if (tab) {
+        try {
+          tab.location = successDownloadUrl;
+        } catch (e2) {
+          try {
+            tab.close();
+          } catch (e3) {}
+          triggerDownload(successDownloadUrl, "Music-Acupuncture-track.mp3");
+        }
+      } else {
+        triggerDownload(successDownloadUrl, "Music-Acupuncture-track.mp3");
+      }
       msg.textContent = "Download started. Thank you! 🙏";
       return;
     }
-    msg.textContent =
-      "Still could not start the MP3 download. Please contact support and include your Stripe session ID.";
+    setLoading(true);
+    var qs = new URLSearchParams();
+    if (successSessionId) qs.set("session_id", successSessionId);
+    qs.set("track_id", String(successTrackId));
+    fetch(API_BASE + "/website/download?" + qs.toString(), { method: "GET", mode: "cors" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("bad status");
+        return r.json();
+      })
+      .then(function (data) {
+        var url = data && data.url && typeof data.url === "string" ? data.url : null;
+        if (url) {
+          successDownloadUrl = url;
+          showSuccessDirectLink(url);
+          if (tab) {
+            try {
+              tab.location = url;
+            } catch (e4) {
+              try {
+                tab.close();
+              } catch (e5) {}
+              triggerDownload(url, "Music-Acupuncture-track.mp3");
+            }
+          } else {
+            triggerDownload(url, "Music-Acupuncture-track.mp3");
+          }
+          msg.textContent = "Download started. Thank you! 🙏";
+        } else {
+          if (tab) {
+            try {
+              tab.close();
+            } catch (e6) {}
+          }
+          msg.textContent =
+            "Still could not start the MP3 download. Please contact support and include your Stripe session ID.";
+        }
+      })
+      .catch(function () {
+        if (tab) {
+          try {
+            tab.close();
+          } catch (e7) {}
+        }
+        msg.textContent =
+          "Download failed (network, CORS, or pop-up blocker). Allow pop-ups for this site, then tap Download again.";
+      })
+      .finally(function () {
+        setLoading(false);
+      });
   }
 
   async function handleFreeDownload() {
@@ -1199,8 +1279,11 @@
         setLoading(false);
         if (url) {
           successDownloadUrl = url;
+          showSuccessDirectLink(url);
+          actions.style.display = "flex";
           triggerDownload(url, "Music-Acupuncture-track.mp3");
-          msg.textContent = "Your download should start automatically. Thank you! 🙏";
+          msg.textContent =
+            "Your download should start automatically. If nothing happens, tap “Open MP3 in new tab” or “Download again”. Thank you! 🙏";
         } else {
           actions.style.display = "flex";
           msg.textContent =

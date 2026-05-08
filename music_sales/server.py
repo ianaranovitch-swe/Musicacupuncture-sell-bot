@@ -22,6 +22,32 @@ from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 logger = logging.getLogger(__name__)
 
 
+def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
+    """
+    Webhook Stripe часто отдаёт metadata не как dict, а как StripeObject.
+    Раньше мы возвращали {} → теряли source=website и слали MP3 в chat_id=0.
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    to_dict = getattr(raw, "to_dict", None)
+    if callable(to_dict):
+        try:
+            d = to_dict()
+            if isinstance(d, dict):
+                return dict(d)
+        except Exception:
+            pass
+    try:
+        keys = getattr(raw, "keys", None)
+        if callable(keys):
+            return {str(k): raw[k] for k in keys()}  # type: ignore[index]
+    except Exception:
+        pass
+    return {}
+
+
 def _miniapp_track_durations_payload() -> list:
     """Не ломаем /miniapp-pricing, если разбор MP3 или каталога упал."""
     try:
@@ -29,6 +55,8 @@ def _miniapp_track_durations_payload() -> list:
     except Exception:
         logger.exception("miniapp track_durations")
         return []
+
+
 SUPPORTED_CHECKOUT_CURRENCIES = {"usd", "eur", "sek"}
 
 # Не даём Stripe SDK засорять логи на уровне DEBUG (там могут быть чувствительные поля).
@@ -205,16 +233,26 @@ def create_app(
         # «*» для Allow-Headers: без credentials браузеры (в т.ч. Telegram WebView) чаще проходят preflight.
         return {
             "Access-Control-Allow-Origin": origin_raw,
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            # GET — для /website/download и выдачи MP3 после оплаты с GitHub Pages
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "*",
             "Access-Control-Max-Age": "86400",
         }
 
     def _path_is_checkout_cors() -> bool:
-        """Пути Mini App → backend: checkout, preflight и JSON цен (нужен тот же CORS)."""
+        """Пути Mini App / website → backend: checkout, цены и скачивание после Stripe (CORS)."""
         p = (request.path or "").rstrip("/") or ""
         tails = ("/create-checkout", "/create-payment", "/website-create-payment", "/miniapp-pricing")
-        return p in ("/create-checkout", "/create-payment", "/website-create-payment", "/miniapp-pricing") or p.endswith(tails)
+        if p in (
+            "/create-checkout",
+            "/create-payment",
+            "/website-create-payment",
+            "/miniapp-pricing",
+            "/website/download",
+            "/website/download-file",
+        ):
+            return True
+        return p.endswith(tails)
 
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
@@ -485,9 +523,11 @@ def create_app(
             return jsonify({"error": "Payment provider error"}), 502
         return jsonify({"url": session.url})
 
-    @app.route("/website/download", methods=["GET"])
+    @app.route("/website/download", methods=["GET", "OPTIONS"])
     def website_download() -> Any:
         """Проверяем Stripe session и выдаём одноразовый URL скачивания MP3 для website."""
+        if request.method == "OPTIONS":
+            return "", 204
         session_id = (request.args.get("session_id") or "").strip()
         track_id = (request.args.get("track_id") or "").strip()
         if not session_id or not track_id:
@@ -522,9 +562,11 @@ def create_app(
         base = (request.url_root or "").rstrip("/") or domain
         return jsonify({"url": f"{base}/website/download-file?{qs}"})
 
-    @app.route("/website/download-file", methods=["GET"])
+    @app.route("/website/download-file", methods=["GET", "OPTIONS"])
     def website_download_file() -> Any:
         """Отдаём MP3-файл как attachment по короткоживущей подписи."""
+        if request.method == "OPTIONS":
+            return "", 204
         song_id = (request.args.get("song_id") or "").strip()
         exp_raw = (request.args.get("exp") or "").strip()
         sig = (request.args.get("sig") or "").strip()
@@ -604,7 +646,7 @@ def create_app(
                     raw_meta = session_obj["metadata"]
             except Exception:
                 return {}
-            return raw_meta if isinstance(raw_meta, dict) else {}
+            return _stripe_metadata_as_plain_dict(raw_meta)
 
         def _recover_song_id_from_line_items(session_obj: Any, catalog: Dict[str, Dict[str, Any]]) -> str:
             """
@@ -683,13 +725,18 @@ def create_app(
                 )
                 return "", 200
             song_name = str(catalog.get(song_id, {}).get("name") or song_id)
-            if source == "website":
+            try:
+                tid_int = int(str(telegram_id).strip())
+            except ValueError:
+                tid_int = -1
+            # Website: не шлём документ в Telegram. Запасной путь: chat_id=0 невалиден в Telegram.
+            if source == "website" or tid_int == 0:
                 _notify_owner_via_api(
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
                     payment_ok=True,
-                    reason="Website checkout completed",
+                    reason="Website sale — MP3 via site download (not Telegram).",
                 )
                 return "", 200
             try:
