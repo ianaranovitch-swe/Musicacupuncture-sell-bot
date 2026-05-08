@@ -51,24 +51,27 @@ def format_duration_short(seconds: int | None) -> str | None:
 
 def miniapp_track_durations_for_pricing(root: Path | None = None) -> list[dict[str, Any]]:
     """
-    Список для JSON Mini App: id как в miniapp.html (0 = free, 1..16 = платные по номеру).
+    Список для JSON Mini App: id как на фронте после sync (0 = бесплатный, остальные = реальные id в tracks).
 
-    Совпадение с create-payment: track_id из Mini App = id карточки; free = id 0 → tracks.id 17.
+    create-payment: track_id = id карточки; для бесплатного UI id 0 читаем файл бесплатного трека из каталога.
     """
     from music_sales.catalog import project_root
-    from tracks import get_track
+    from music_sales.frontend_catalog_sync import ordered_frontend_pairs
+    from tracks import TRACKS, get_track
 
     base = root if root is not None else project_root()
-    pairs: list[tuple[int, int]] = [(0, 17)] + [(i, i) for i in range(1, 17)]
+
     out: list[dict[str, Any]] = []
-    for mini_id, tid in pairs:
-        t = get_track(tid)
-        if not t:
-            out.append({"id": mini_id, "seconds": None, "label": None})
+    for display_id, t in ordered_frontend_pairs(TRACKS):
+        tid = int(t["id"])
+        # Длительность всегда по реальному id и файлу audio в каталоге.
+        t_lookup = get_track(tid)
+        if not t_lookup:
+            out.append({"id": display_id, "seconds": None, "label": None})
             continue
-        rel = str(t.get("audio", "") or "").strip()
+        rel = str(t_lookup.get("audio", "") or "").strip()
         ap = base / rel if rel else None
         sec = mp3_duration_seconds(ap) if ap else None
         label = format_duration_short(sec)
-        out.append({"id": mini_id, "seconds": sec, "label": label})
+        out.append({"id": display_id, "seconds": sec, "label": label})
     return out

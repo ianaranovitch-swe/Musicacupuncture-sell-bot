@@ -777,6 +777,23 @@ def create_app(
                 tid_int = int(str(telegram_id).strip())
             except ValueError:
                 tid_int = -1
+            try:
+                from music_sales.sales_log import append_sale_event
+
+                try:
+                    sess_id = str(session["id"] or "")
+                except Exception:
+                    sess_id = ""
+                append_sale_event(
+                    song_id=song_id,
+                    track_title=song_name,
+                    source=(source or "telegram")[:32],
+                    session_id=sess_id,
+                    telegram_id=tid_int if tid_int > 0 else None,
+                )
+            except Exception:
+                logger.exception("sales_log append failed")
+
             # Website: не шлём документ в Telegram. Запасной путь: chat_id=0 невалиден в Telegram.
             if source == "website" or tid_int == 0:
                 _notify_owner_via_api(

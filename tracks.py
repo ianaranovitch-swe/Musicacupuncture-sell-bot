@@ -5,7 +5,12 @@
 
 from __future__ import annotations
 
-TRACKS: list[dict] = [
+import json
+from copy import deepcopy
+from pathlib import Path
+
+# Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
+_BUILTIN_TRACKS: list[dict] = [
     {
         "id": 1,
         "short_title": "🎵 Crown Chakra",
@@ -300,6 +305,65 @@ TRACKS: list[dict] = [
         "buy_url_sek": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"
     },
 ]
+
+
+def _tracks_data_dir() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _read_json(path: Path, default: object) -> object:
+    if not path.is_file():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return default
+
+
+def _build_merged_catalog() -> list[dict]:
+    """
+    Собираем итоговый список: встроенные треки минус удалённые, + правки полей, + треки из tracks_extra.json.
+    Вызывается при старте и после админских изменений (reload_track_catalog).
+    """
+    deleted_raw = _read_json(_tracks_data_dir() / "tracks_deleted.json", [])
+    deleted: set[int] = set()
+    if isinstance(deleted_raw, list):
+        for x in deleted_raw:
+            try:
+                deleted.add(int(x))
+            except (TypeError, ValueError):
+                continue
+    overrides = _read_json(_tracks_data_dir() / "track_overrides.json", {})
+    if not isinstance(overrides, dict):
+        overrides = {}
+    extras = _read_json(_tracks_data_dir() / "tracks_extra.json", [])
+    if not isinstance(extras, list):
+        extras = []
+
+    out: list[dict] = []
+    for t in _BUILTIN_TRACKS:
+        tid = int(t["id"])
+        if tid in deleted:
+            continue
+        merged = deepcopy(t)
+        ov = overrides.get(str(tid))
+        if isinstance(ov, dict):
+            merged.update(ov)
+        out.append(merged)
+    for raw in extras:
+        if isinstance(raw, dict) and "id" in raw:
+            out.append(deepcopy(raw))
+    return out
+
+
+# Единый список для бота и get_track; перезагрузка — reload_track_catalog().
+TRACKS: list[dict] = _build_merged_catalog()
+
+
+def reload_track_catalog() -> None:
+    """Перечитать JSON-слои и обновить TRACKS на месте (те же ссылки на список для импортировавших модуль)."""
+    TRACKS.clear()
+    TRACKS.extend(_build_merged_catalog())
 
 
 def get_track(track_id: int) -> dict | None:

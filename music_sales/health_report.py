@@ -23,7 +23,9 @@ from tracks import TRACKS
 
 logger = logging.getLogger(__name__)
 
-EXPECTED_TRACKS = 17
+def _paid_tracks_count() -> int:
+    """Треки с ценой (не FREE) — должны совпасть с discover_songs() без бонусного файла."""
+    return sum(1 for t in TRACKS if str(t.get("price", "")).strip().upper() != "FREE")
 
 
 def _stripe_balance_ok() -> Tuple[bool, str]:
@@ -105,6 +107,8 @@ def build_health_report() -> Dict[str, Any]:
     songs = discover_songs()
     mp3_in_catalog = sum(1 for _, v in songs.items() if str(v.get("file", "")).lower().endswith(".mp3"))
     present_cover_count = len(TRACKS) - len(missing_cover)
+    paid_expected = _paid_tracks_count()
+    n_tracks = len(TRACKS)
     folder = songs_dir()
     songs_folder_exists = folder.is_dir()
     expected_mp3_names = {Path(str(t.get("audio", ""))).name for t in TRACKS}
@@ -127,7 +131,8 @@ def build_health_report() -> Dict[str, Any]:
 
     return {
         "test_mode": config.test_mode_active(),
-        "expected_tracks": EXPECTED_TRACKS,
+        "expected_tracks": n_tracks,
+        "expected_paid_tracks": paid_expected,
         "tracks_py_entries": len(TRACKS),
         "songs_folder_exists": songs_folder_exists,
         "songs_folder": str(songs_dir()),
@@ -136,8 +141,8 @@ def build_health_report() -> Dict[str, Any]:
         "missing_covers_from_tracks_py": missing_cover,
         "audio_files_ok": len(missing_audio) == 0,
         "cover_files_ok": len(missing_cover) == 0,
-        "mp3_count_matches_expected": mp3_in_catalog == EXPECTED_TRACKS,
-        "cover_count_matches_expected": present_cover_count == EXPECTED_TRACKS,
+        "mp3_count_matches_expected": mp3_in_catalog == paid_expected,
+        "cover_count_matches_expected": present_cover_count == n_tracks,
         "present_cover_count": present_cover_count,
         "extra_mp3_files_not_in_tracks_py": extra_mp3,
         "env": {
@@ -163,8 +168,8 @@ def build_health_report() -> Dict[str, Any]:
             len(missing_audio) == 0
             and len(missing_cover) == 0
             and len(extra_mp3) == 0
-            and mp3_in_catalog == EXPECTED_TRACKS
-            and present_cover_count == EXPECTED_TRACKS
+            and mp3_in_catalog == paid_expected
+            and present_cover_count == n_tracks
             and stripe_ok
             and backend_ok
             and mini_ok

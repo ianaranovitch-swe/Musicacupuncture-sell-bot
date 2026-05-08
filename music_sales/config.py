@@ -104,6 +104,27 @@ def developer_telegram_id_int() -> int | None:
         return None
 
 
+def admin_telegram_ids() -> set[int]:
+    """
+    Список Telegram user id, которым разрешён /admin (через запятую в .env).
+
+    Пример: ADMIN_IDS=123456789,987654321
+    """
+    raw = _env("ADMIN_IDS", "")
+    if not raw:
+        return set()
+    out: set[int] = set()
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.add(int(part))
+        except ValueError:
+            continue
+    return out
+
+
 def health_command_allowed_user_ids() -> set[int]:
     """Кто может вызывать /health: владелец и (если задан) разработчик."""
     out: set[int] = set()

@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
+from music_sales.admin_panel import build_admin_conversation_handler
+
 from tracks import TRACKS, get_track
 
 load_dotenv()
@@ -116,8 +118,15 @@ def _detail_text(track: dict) -> str:
 
 
 def _next_track_id(track_id: int) -> int:
-    """Следующий трек по кругу (после 16 снова 1)."""
-    return 1 if track_id >= len(TRACKS) else track_id + 1
+    """Следующий трек по кругу по списку TRACKS (учитывает extras из tracks_extra.json)."""
+    ids = [int(t["id"]) for t in TRACKS]
+    if not ids:
+        return track_id
+    try:
+        i = ids.index(int(track_id))
+    except ValueError:
+        return ids[0]
+    return ids[(i + 1) % len(ids)]
 
 
 def _track_card_keyboard(track: dict) -> InlineKeyboardMarkup:
@@ -256,6 +265,7 @@ def main() -> None:
         logger.warning("TEST_MODE is ON — reduced prices and TEST_PAYMENT_LINK_USD if set.")
 
     app = Application.builder().token(token).build()
+    app.add_handler(build_admin_conversation_handler())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(on_track_button, pattern=r"^(buy_unavailable|\d+|next:\d+)$"))
     app.add_error_handler(error_handler)

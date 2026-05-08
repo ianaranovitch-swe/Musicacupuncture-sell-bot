@@ -97,6 +97,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     fake_tracks = [
         {
             "id": 1,
+            "price": "$16",
             "audio": "songs/demo.mp3",
             "cover": "covers/demo.png",
         }
@@ -127,3 +128,5 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     assert r["missing_covers_from_tracks_py"] == []
     assert r["extra_mp3_files_not_in_tracks_py"] == []
     assert r["discovered_mp3_count"] == 1
+    assert r["mp3_count_matches_expected"] is True
+    assert r["cover_count_matches_expected"] is True
