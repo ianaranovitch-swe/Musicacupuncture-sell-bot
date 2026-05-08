@@ -659,6 +659,14 @@
 
   /* ---------- Backend (Railway) ---------- */
   const API_BASE = "https://web-production-ed267.up.railway.app".replace(/\/+$/, "");
+  const CHECKOUT_SECRET = (function () {
+    try {
+      var q = new URLSearchParams(window.location.search);
+      return (q.get("checkout_secret") || "").trim();
+    } catch (e) {
+      return "";
+    }
+  })();
   /** Success page after Stripe: configure the same URL in Stripe Dashboard for Payment Links. */
   const SUCCESS_PAGE_URL =
     "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html?success=true&track_id={track_id}";
@@ -675,7 +683,7 @@
       fullTitle: "Divine sound Super Feng Shui from God",
       description:
         "🎁 Your FREE gift from Mikael!\nThis divine sound supports harmony, balance and positive energy flow in your home and life.\n\nListen daily for best results. 🙏",
-      cover: "covers/Divine sound Super Feng Shui from God.png",
+      cover: "covers/Divine-sound-Super-Feng-Shui-from-God.png",
       isFree: true,
       buyUrl: null,
       buyUrlUsd: null,
@@ -688,7 +696,7 @@
       fullTitle: "Divine sound Crownchakra-Browchakra-Throatchakra from God",
       description:
         "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.",
-      cover: "covers/Divine sound Crownchakra-Browchakra-Throatchakra from God.png",
+      cover: "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
       buyUrlSek: "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
     },
@@ -699,7 +707,7 @@
       fullTitle: "Divine sound Estrogen from God",
       description:
         "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.",
-      cover: "covers/Divine sound Estrogen from God.png",
+      cover: "covers/Divine-sound-Estrogen-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
       buyUrlSek: "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
     },
@@ -710,7 +718,7 @@
       fullTitle: "Divine sound Heart from God",
       description:
         "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.",
-      cover: "covers/Divine sound Heart from God.png",
+      cover: "covers/Divine-sound-Heart-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
       buyUrlSek: "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
     },
@@ -721,7 +729,7 @@
       fullTitle: "Divine sound Heartchakra and Diaphragmchakra from God",
       description:
         "Expand love, compassion, and connection in your life.\nLoving vibrations to open compassion, forgiveness, and connection. Supports emotional healing and deeper relationships. A gentle expansion of love within and around you. Listen daily for best results.",
-      cover: "covers/Divine sound Heartchakra and Diaphragmchakra from God.png",
+      cover: "covers/Divine-sound-Heartchakra-and-Diaphragmchakra-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
       buyUrlSek: "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
     },
@@ -732,7 +740,7 @@
       fullTitle: "Divine sound Immunedefence from God",
       description:
         "Strengthen your body's natural protection and inner power.\nPowerful sound frequencies created to strengthen your immune system and natural protection. Supports balance, resilience, and inner strength. Ideal for daily listening to help your body stay centered, protected, and energized. Listen daily for best results.",
-      cover: "covers/Divine sound Immunedefence from God.png",
+      cover: "covers/Divine-sound-Immunedefence-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
       buyUrlSek: "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
     },
@@ -743,7 +751,7 @@
       fullTitle: "Divine sound Kidney from God",
       description:
         "Restore balance, flow, and deep inner stability.\nBalancing frequencies supporting kidney energy, cleansing, and inner stability. Encourages deep relaxation and energetic detox. A soothing sound journey that helps restore flow, grounding, and harmony in your whole body. Listen daily for best results.",
-      cover: "covers/Divine sound Kidney from God.png",
+      cover: "covers/Divine-sound-Kidney-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
       buyUrlSek: "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
     },
@@ -754,7 +762,7 @@
       fullTitle: "Divine sound Liver from God",
       description:
         "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.",
-      cover: "covers/Divine sound Liver from God.png",
+      cover: "covers/Divine-sound-Liver-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
       buyUrlSek: "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
     },
@@ -765,7 +773,7 @@
       fullTitle: "Divine sound Lungs from God",
       description:
         "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.",
-      cover: "covers/Divine sound Lungs from God.png",
+      cover: "covers/Divine-sound-Lungs-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
       buyUrlSek: "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
     },
@@ -776,7 +784,7 @@
       fullTitle: "Divine sound Minerals from God",
       description:
         "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.",
-      cover: "covers/Divine sound Minerals from God.png",
+      cover: "covers/Divine-sound-Minerals-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
       buyUrlSek: "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
     },
@@ -787,7 +795,7 @@
       fullTitle: "Divine sound NO Alcohol from God",
       description:
         "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.",
-      cover: "covers/Divine sound NO Alcohol from God.png",
+      cover: "covers/Divine-sound-NO-Alcohol-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
       buyUrlSek: "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
     },
@@ -798,7 +806,7 @@
       fullTitle: "Divine sound NO Smoking from God",
       description:
         "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.",
-      cover: "covers/Divine sound NO Smoking from God.png",
+      cover: "covers/Divine-sound-NO-Smoking-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
       buyUrlSek: "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
     },
@@ -809,7 +817,7 @@
       fullTitle: "Divine sound Rootchakra from God",
       description:
         "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.",
-      cover: "covers/Divine sound Rootchakra from God.png",
+      cover: "covers/Divine-sound-Rootchakra-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
       buyUrlSek: "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
     },
@@ -820,7 +828,7 @@
       fullTitle: "Divine sound Sacralchakra and Navelchakra from God",
       description:
         "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.",
-      cover: "covers/Divine sound Sacralchakra and Navelchakra from God.png",
+      cover: "covers/Divine-sound-Sacralchakra-and-Navelchakra-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
       buyUrlSek: "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
     },
@@ -831,7 +839,7 @@
       fullTitle: "Divine sound Solarplexuschakra and Spleenchakra from God",
       description:
         "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.",
-      cover: "covers/Divine sound Solarplexuschakra and Spleenchakra from God.png",
+      cover: "covers/Divine-sound-Solarplexuschakra-and-Spleenchakra-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
       buyUrlSek: "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
     },
@@ -842,7 +850,7 @@
       fullTitle: "Divine sound Testosteron from God",
       description:
         "Build strength, focus, and powerful inner energy.\nStrong, stabilizing vibrations to support masculine energy, strength, and vitality. Helps balance hormones, increase focus, and build inner power and confidence. Listen daily for best results.",
-      cover: "covers/Divine sound Testosteron from God.png",
+      cover: "covers/Divine-sound-Testosteron-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
       buyUrlSek: "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
     },
@@ -853,7 +861,7 @@
       fullTitle: "Divine sound Vitamins from God",
       description:
         "Nourish your body with essential energy and divine vitality.\nEnergizing sound frequencies designed to support your body with essential nourishment and vitality. Helps restore balance, strengthen overall well-being, and awaken natural energy from within. A daily sound ritual to feel refreshed, supported, and aligned. Listen daily for best results.",
-      cover: "covers/Divine sound Vitamins from God.png",
+      cover: "covers/Divine-sound-Vitamins-from-God.png",
       buyUrlUsd: "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
       buyUrlSek: "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g",
     },
@@ -1012,12 +1020,46 @@
     selectedTrack = null;
   }
 
-  function openStripeForTrack(track, useSek) {
+  async function createBackendCheckout(track, useSek) {
+    if (!track || track.isFree) return null;
+    var headers = { "Content-Type": "application/json" };
+    if (CHECKOUT_SECRET) headers["X-Miniapp-Checkout-Secret"] = CHECKOUT_SECRET;
+    try {
+      var r = await fetch(API_BASE + "/create-payment", {
+        method: "POST",
+        mode: "cors",
+        headers: headers,
+        body: JSON.stringify({
+          track_id: track.id,
+          telegram_id: 0,
+          telegram_name: "Website customer",
+          currency: useSek ? "sek" : "usd",
+        }),
+      });
+      if (!r.ok) return null;
+      var data = await r.json();
+      if (data && data.url && typeof data.url === "string") return data.url;
+    } catch (e) {}
+    return null;
+  }
+
+  async function openStripeForTrack(track, useSek) {
     if (!track || track.isFree) return;
-    var url = useSek ? track.buyUrlSek : track.buyUrlUsd;
+    setLoading(true);
+    var url = await createBackendCheckout(track, useSek);
+    setLoading(false);
+    if (url && /^https?:\/\//i.test(url)) {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    /* Fallback to static links if backend checkout is unavailable. */
+    url = useSek ? track.buyUrlSek : track.buyUrlUsd;
     if (!url || !/^https?:\/\//i.test(url)) {
       alert("Payment link is not available for this track.");
       return;
+    }
+    if (serverPricing && serverPricing.test_mode) {
+      alert("TEST mode is enabled, but backend checkout endpoint did not return a URL. Fallback link may use live mode.");
     }
     window.open(url, "_blank", "noopener,noreferrer");
   }
@@ -1234,14 +1276,14 @@
     if (e.target.id === "track-modal") closeModal();
   });
 
-  document.getElementById("modal-buy-stripe").addEventListener("click", function () {
+  document.getElementById("modal-buy-stripe").addEventListener("click", async function () {
     if (!selectedTrack) return;
-    openStripeForTrack(selectedTrack, currentCurrency === "SEK");
+    await openStripeForTrack(selectedTrack, currentCurrency === "SEK");
   });
-  document.getElementById("modal-buy-klarna").addEventListener("click", function () {
+  document.getElementById("modal-buy-klarna").addEventListener("click", async function () {
     if (!selectedTrack) return;
     /* Klarna is offered inside Stripe Checkout for SEK — open SEK payment link */
-    openStripeForTrack(selectedTrack, true);
+    await openStripeForTrack(selectedTrack, true);
   });
 
   initCurrency();
