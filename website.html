@@ -453,6 +453,11 @@
       padding: 28px;
       background: rgba(255, 215, 0, 0.08);
     }
+    .success-actions {
+      margin-top: 14px;
+      display: flex;
+      justify-content: center;
+    }
 
     /* ========== About ========== */
     .about-block {
@@ -549,6 +554,9 @@
       <div class="success-card fade-in-up">
         <h2 style="color: var(--gold); margin-top: 0;">✅ Payment Successful!</h2>
         <p id="success-msg">Your track is being prepared…</p>
+        <div id="success-actions" class="success-actions" style="display: none;">
+          <button type="button" id="success-download-again" class="btn-outline">⬇️ Download again</button>
+        </div>
         <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0;">
           Thank you for supporting Music Acupuncture. 🙏<br />— Mikael
         </p>
@@ -871,6 +879,9 @@
   let currentCurrency = "SEK";
   let serverPricing = null;
   let selectedTrack = null;
+  let successTrackId = "";
+  let successSessionId = "";
+  let successDownloadUrl = "";
 
   function escapeHtml(s) {
     const d = document.createElement("div");
@@ -1065,8 +1076,7 @@
   }
 
   /**
-   * Optional: request signed MP3 URL from Railway after purchase.
-   * Add route on backend later, e.g. GET /website/download?session_id=&track_id=
+   * Request signed MP3 URL from Railway after successful Stripe checkout.
    */
   async function tryFetchPurchaseDownload(trackId, sessionId) {
     var qs = new URLSearchParams();
@@ -1090,6 +1100,22 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  }
+
+  async function retrySuccessDownload() {
+    var msg = document.getElementById("success-msg");
+    if (!successTrackId) return;
+    setLoading(true);
+    var url = successDownloadUrl || (await tryFetchPurchaseDownload(successTrackId, successSessionId));
+    setLoading(false);
+    if (url) {
+      successDownloadUrl = url;
+      triggerDownload(url, "Music-Acupuncture-track.mp3");
+      msg.textContent = "Download started. Thank you! 🙏";
+      return;
+    }
+    msg.textContent =
+      "Still could not start the MP3 download. Please contact support and include your Stripe session ID.";
   }
 
   async function handleFreeDownload() {
@@ -1157,8 +1183,13 @@
     document.getElementById("success-section").classList.add("active");
     var tid = params.get("track_id");
     var sessionId = params.get("session_id") || "";
+    successTrackId = tid || "";
+    successSessionId = sessionId;
 
     var msg = document.getElementById("success-msg");
+    var actions = document.getElementById("success-actions");
+    var btnRetry = document.getElementById("success-download-again");
+    actions.style.display = "none";
     msg.textContent = "Your track is being prepared…";
 
     if (tid != null && tid !== "") {
@@ -1167,14 +1198,17 @@
         var url = await tryFetchPurchaseDownload(tid, sessionId);
         setLoading(false);
         if (url) {
+          successDownloadUrl = url;
           triggerDownload(url, "Music-Acupuncture-track.mp3");
           msg.textContent = "Your download should start automatically. Thank you! 🙏";
         } else {
+          actions.style.display = "flex";
           msg.textContent =
-            "Thank you! If your MP3 does not download automatically, check your email or open the Music Acupuncture bot in Telegram — delivery may arrive there. (Backend hook /website/download can be enabled on Railway.)";
+            "Thank you! We could not validate this payment session for automatic MP3 download. Please contact support and include your Stripe session ID.";
         }
       })();
     }
+    btnRetry.addEventListener("click", retrySuccessDownload);
 
     scrollToId("success-section");
   }

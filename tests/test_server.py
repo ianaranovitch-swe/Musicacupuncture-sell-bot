@@ -370,6 +370,66 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
     assert send_doc_call.kwargs["data"]["document"] == "telegram_doc_file_id_test"
 
 
+def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_path):
+    event = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "metadata": {
+                    "telegram_id": "0",
+                    "telegram_name": "Website customer",
+                    "song_id": "song1",
+                    "source": "website",
+                }
+            }
+        },
+    }
+    mocker.patch("stripe.Event.construct_from", return_value=event)
+    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post.return_value.raise_for_status = MagicMock()
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        project_root_override=tmp_path,
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/webhook", json=event)
+
+    assert resp.status_code == 200
+    urls = [c.args[0] for c in mock_post.call_args_list if c.args]
+    assert all("sendDocument" not in u for u in urls)
+
+
+def test_website_download_returns_signed_url(mocker):
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mocker.patch(
+        "stripe.checkout.Session.retrieve",
+        return_value={
+            "payment_status": "paid",
+            "metadata": {"source": "website", "song_id": "song1"},
+        },
+    )
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.get("/website/download?session_id=cs_test_123&track_id=2")
+
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "/website/download-file?" in (body.get("url") or "")
+
+
 def test_webhook_completed_recovers_song_id_from_stripe_line_items(mocker, tmp_path):
     mocker.patch.dict(
         os.environ,

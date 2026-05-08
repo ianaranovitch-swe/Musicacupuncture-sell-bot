@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import logging
 import os
+import hmac
+import hashlib
+import time
+from urllib.parse import urlencode
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -252,6 +256,31 @@ def create_app(
             return custom
         return domain + "/success"
 
+    def _song_id_from_track_id(track_id_raw: Any) -> str | None:
+        try:
+            from pathlib import Path as _Path
+            from tracks import get_track as _get_track
+
+            t = _get_track(int(track_id_raw))
+        except (ImportError, ValueError, TypeError, AttributeError):
+            t = None
+        if not t:
+            return None
+        stem = _Path(str(t.get("audio", ""))).stem
+        return resolve_song_id_by_audio_stem(stem) if stem else None
+
+    def _website_success_url(track_id_raw: Any) -> str:
+        base = (os.environ.get("WEBSITE_SUCCESS_URL") or "").strip()
+        if not base:
+            base = "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html"
+        sep = "&" if "?" in base else "?"
+        return f"{base}{sep}success=true&track_id={track_id_raw}&session_id={{CHECKOUT_SESSION_ID}}"
+
+    def _website_download_sign(song_id: str, exp: int) -> str:
+        secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+        payload = f"{song_id}:{exp}".encode("utf-8")
+        return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
     @app.route("/miniapp.html")
     def miniapp_page() -> Any:
         """Статическая страница Telegram Mini App (один HTML-файл в корне репозитория)."""
@@ -416,20 +445,9 @@ def create_app(
         if currency not in SUPPORTED_CHECKOUT_CURRENCIES:
             return jsonify({"error": "Unsupported currency"}), 400
 
-        try:
-            from pathlib import Path as _Path
-            from tracks import get_track as _get_track
-
-            t = _get_track(int(track_id))
-        except (ImportError, ValueError, TypeError, AttributeError):
-            t = None
-        if not t:
-            return jsonify({"error": "Unknown track_id"}), 400
-
-        stem = _Path(str(t.get("audio", ""))).stem
-        song_id = resolve_song_id_by_audio_stem(stem) if stem else None
+        song_id = _song_id_from_track_id(track_id)
         if not song_id:
-            return jsonify({"error": "Unknown song_id"}), 400
+            return jsonify({"error": "Unknown track_id"}), 400
 
         catalog = get_catalog()
         try:
@@ -452,7 +470,7 @@ def create_app(
                     }
                 ],
                 mode="payment",
-                success_url=_checkout_success_url(),
+                success_url=_website_success_url(track_id),
                 cancel_url=domain + "/cancel",
                 client_reference_id="0",
                 metadata={
@@ -466,6 +484,78 @@ def create_app(
             logger.exception("Website Stripe checkout failed: %s", e)
             return jsonify({"error": "Payment provider error"}), 502
         return jsonify({"url": session.url})
+
+    @app.route("/website/download", methods=["GET"])
+    def website_download() -> Any:
+        """Проверяем Stripe session и выдаём одноразовый URL скачивания MP3 для website."""
+        session_id = (request.args.get("session_id") or "").strip()
+        track_id = (request.args.get("track_id") or "").strip()
+        if not session_id or not track_id:
+            return jsonify({"error": "session_id and track_id are required"}), 400
+
+        song_id = _song_id_from_track_id(track_id)
+        if not song_id:
+            return jsonify({"error": "Unknown track_id"}), 400
+
+        try:
+            sess = stripe.checkout.Session.retrieve(session_id)
+        except Exception as e:
+            logger.warning("website/download: Stripe session retrieve failed: %s", e)
+            return jsonify({"error": "Invalid session"}), 400
+
+        try:
+            payment_status = str(sess.get("payment_status") if isinstance(sess, dict) else sess["payment_status"])
+        except Exception:
+            payment_status = ""
+        if payment_status not in ("paid", "no_payment_required"):
+            return jsonify({"error": "Payment is not completed"}), 403
+
+        meta = sess.get("metadata", {}) if isinstance(sess, dict) else (sess["metadata"] or {})
+        source = str(meta.get("source") or "")
+        sess_song_id = str(meta.get("song_id") or "")
+        if source != "website" or sess_song_id != song_id:
+            return jsonify({"error": "Session metadata mismatch"}), 403
+
+        exp = int(time.time()) + 300
+        sig = _website_download_sign(song_id, exp)
+        qs = urlencode({"song_id": song_id, "exp": exp, "sig": sig})
+        base = (request.url_root or "").rstrip("/") or domain
+        return jsonify({"url": f"{base}/website/download-file?{qs}"})
+
+    @app.route("/website/download-file", methods=["GET"])
+    def website_download_file() -> Any:
+        """Отдаём MP3-файл как attachment по короткоживущей подписи."""
+        song_id = (request.args.get("song_id") or "").strip()
+        exp_raw = (request.args.get("exp") or "").strip()
+        sig = (request.args.get("sig") or "").strip()
+        if not song_id or not exp_raw or not sig:
+            return jsonify({"error": "Invalid token"}), 400
+        try:
+            exp = int(exp_raw)
+        except ValueError:
+            return jsonify({"error": "Invalid token"}), 400
+        if exp < int(time.time()):
+            return jsonify({"error": "Token expired"}), 403
+        expected = _website_download_sign(song_id, exp)
+        if not hmac.compare_digest(sig, expected):
+            return jsonify({"error": "Invalid token"}), 403
+
+        catalog = get_catalog()
+        song = catalog.get(song_id)
+        if not song:
+            return jsonify({"error": "Unknown song"}), 404
+        rel = str(song.get("file") or "").strip()
+        if not rel:
+            return jsonify({"error": "Missing file path"}), 404
+        p = (root_path() / rel).resolve()
+        songs_root = (root_path() / "songs").resolve()
+        try:
+            p.relative_to(songs_root)
+        except ValueError:
+            return jsonify({"error": "Invalid path"}), 400
+        if not p.is_file():
+            return jsonify({"error": "File not found"}), 404
+        return send_from_directory(str(p.parent), p.name, as_attachment=True, download_name=p.name)
 
     def _notify_owner_via_api(
         *,
@@ -569,6 +659,7 @@ def create_app(
             telegram_id = str(meta.get("telegram_id") or "")
             song_id = str(meta.get("song_id") or "")
             telegram_name = str(meta.get("telegram_name") or "Unknown user")
+            source = str(meta.get("source") or "")
             catalog = get_catalog()
             if not telegram_id:
                 # Fallback: иногда client_reference_id есть, а metadata пустая.
@@ -592,6 +683,15 @@ def create_app(
                 )
                 return "", 200
             song_name = str(catalog.get(song_id, {}).get("name") or song_id)
+            if source == "website":
+                _notify_owner_via_api(
+                    actor_name=telegram_name,
+                    event="Payment result",
+                    song_name=song_name,
+                    payment_ok=True,
+                    reason="Website checkout completed",
+                )
+                return "", 200
             try:
                 deliver_purchase(
                     int(telegram_id),
