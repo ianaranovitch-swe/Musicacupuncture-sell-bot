@@ -209,8 +209,8 @@ def create_app(
     def _path_is_checkout_cors() -> bool:
         """Пути Mini App → backend: checkout, preflight и JSON цен (нужен тот же CORS)."""
         p = (request.path or "").rstrip("/") or ""
-        tails = ("/create-checkout", "/create-payment", "/miniapp-pricing")
-        return p in ("/create-checkout", "/create-payment", "/miniapp-pricing") or p.endswith(tails)
+        tails = ("/create-checkout", "/create-payment", "/website-create-payment", "/miniapp-pricing")
+        return p in ("/create-checkout", "/create-payment", "/website-create-payment", "/miniapp-pricing") or p.endswith(tails)
 
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
@@ -324,6 +324,7 @@ def create_app(
 
     @app.route("/create-checkout", methods=["OPTIONS"])
     @app.route("/create-payment", methods=["OPTIONS"])
+    @app.route("/website-create-payment", methods=["OPTIONS"])
     def create_checkout_options() -> Any:
         """Preflight для браузера (Mini App на другом домене)."""
         return "", 204
@@ -399,6 +400,71 @@ def create_app(
             logger.exception("Stripe checkout failed: %s", e)
             return jsonify({"error": "Payment provider error"}), 502
 
+        return jsonify({"url": session.url})
+
+    @app.route("/website-create-payment", methods=["POST"])
+    def website_create_payment() -> Any:
+        """
+        Checkout для публичного website.html без Telegram initData и без MINIAPP_CHECKOUT_SECRET.
+        Используем track_id -> song_id через tracks.py и каталог discover_songs().
+        """
+        data = request.get_json(silent=True) or {}
+        track_id = data.get("track_id")
+        currency = str(data.get("currency") or "usd").strip().lower()
+        if track_id is None:
+            return jsonify({"error": "track_id is required"}), 400
+        if currency not in SUPPORTED_CHECKOUT_CURRENCIES:
+            return jsonify({"error": "Unsupported currency"}), 400
+
+        try:
+            from pathlib import Path as _Path
+            from tracks import get_track as _get_track
+
+            t = _get_track(int(track_id))
+        except (ImportError, ValueError, TypeError, AttributeError):
+            t = None
+        if not t:
+            return jsonify({"error": "Unknown track_id"}), 400
+
+        stem = _Path(str(t.get("audio", ""))).stem
+        song_id = resolve_song_id_by_audio_stem(stem) if stem else None
+        if not song_id:
+            return jsonify({"error": "Unknown song_id"}), 400
+
+        catalog = get_catalog()
+        try:
+            song = catalog[song_id]
+        except KeyError:
+            return jsonify({"error": "Unknown song_id"}), 400
+
+        try:
+            unit_amount = _checkout_unit_amount(song, currency)
+            display_name = f"[TEST] {song['name']}" if config.test_mode_active() else song["name"]
+            session = stripe.checkout.Session.create(
+                line_items=[
+                    {
+                        "price_data": {
+                            "currency": currency,
+                            "product_data": {"name": display_name},
+                            "unit_amount": unit_amount,
+                        },
+                        "quantity": 1,
+                    }
+                ],
+                mode="payment",
+                success_url=_checkout_success_url(),
+                cancel_url=domain + "/cancel",
+                client_reference_id="0",
+                metadata={
+                    "telegram_id": "0",
+                    "telegram_name": "Website customer",
+                    "song_id": song_id,
+                    "source": "website",
+                },
+            )
+        except stripe.error.StripeError as e:
+            logger.exception("Website Stripe checkout failed: %s", e)
+            return jsonify({"error": "Payment provider error"}), 502
         return jsonify({"url": session.url})
 
     def _notify_owner_via_api(

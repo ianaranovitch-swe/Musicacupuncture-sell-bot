@@ -262,6 +262,31 @@ def test_create_payment_post_same_as_checkout(mocker):
     create.assert_called_once()
 
 
+def test_website_create_payment_without_secret(mocker):
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mocker.patch("music_sales.config.MINIAPP_CHECKOUT_SECRET", "super-secret")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/website-create-payment", json={"track_id": 2, "currency": "sek"})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["url"] == "https://stripe.test/session"
+    create.assert_called_once()
+    kwargs = create.call_args.kwargs
+    assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
+
+
 def test_create_checkout_400_when_missing_fields(mocker):
     from music_sales.server import create_app
 

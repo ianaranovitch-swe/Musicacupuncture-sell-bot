@@ -1025,7 +1025,7 @@
     var headers = { "Content-Type": "application/json" };
     if (CHECKOUT_SECRET) headers["X-Miniapp-Checkout-Secret"] = CHECKOUT_SECRET;
     try {
-      var r = await fetch(API_BASE + "/create-payment", {
+      var r = await fetch(API_BASE + "/website-create-payment", {
         method: "POST",
         mode: "cors",
         headers: headers,
