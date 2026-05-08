@@ -1087,7 +1087,17 @@
   }
 
   /**
-   * Request signed MP3 URL from Railway after successful Stripe checkout.
+   * Прямая ссылка на Railway: редирект 302 → подписанный MP3. Не использует fetch — обходит CORS.
+   */
+  function buildWebsiteDownloadRedirectUrl(trackId, sessionId) {
+    var qs = new URLSearchParams();
+    if (sessionId) qs.set("session_id", sessionId);
+    qs.set("track_id", String(trackId));
+    return API_BASE + "/website/download-redirect?" + qs.toString();
+  }
+
+  /**
+   * Запасной путь: JSON с URL (нужен CORS на Railway для Origin GitHub Pages).
    */
   async function tryFetchPurchaseDownload(trackId, sessionId) {
     var qs = new URLSearchParams();
@@ -1124,78 +1134,22 @@
 
   function retrySuccessDownload() {
     var msg = document.getElementById("success-msg");
-    if (!successTrackId) return;
-    /* Важно: window.open сразу в обработчике клика — иначе браузер блокирует вкладку после await/fetch. */
-    var tab = null;
-    try {
-      tab = window.open("about:blank", "_blank");
-    } catch (e) {}
-    if (successDownloadUrl) {
-      showSuccessDirectLink(successDownloadUrl);
-      if (tab) {
-        try {
-          tab.location = successDownloadUrl;
-        } catch (e2) {
-          try {
-            tab.close();
-          } catch (e3) {}
-          triggerDownload(successDownloadUrl, "Music-Acupuncture-track.mp3");
-        }
-      } else {
-        triggerDownload(successDownloadUrl, "Music-Acupuncture-track.mp3");
-      }
-      msg.textContent = "Download started. Thank you! 🙏";
+    if (!successTrackId || !successSessionId) {
+      msg.textContent = "Missing payment session in the page URL. Open the link from Stripe again or contact support.";
       return;
     }
-    setLoading(true);
-    var qs = new URLSearchParams();
-    if (successSessionId) qs.set("session_id", successSessionId);
-    qs.set("track_id", String(successTrackId));
-    fetch(API_BASE + "/website/download?" + qs.toString(), { method: "GET", mode: "cors" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("bad status");
-        return r.json();
-      })
-      .then(function (data) {
-        var url = data && data.url && typeof data.url === "string" ? data.url : null;
-        if (url) {
-          successDownloadUrl = url;
-          showSuccessDirectLink(url);
-          if (tab) {
-            try {
-              tab.location = url;
-            } catch (e4) {
-              try {
-                tab.close();
-              } catch (e5) {}
-              triggerDownload(url, "Music-Acupuncture-track.mp3");
-            }
-          } else {
-            triggerDownload(url, "Music-Acupuncture-track.mp3");
-          }
-          msg.textContent = "Download started. Thank you! 🙏";
-        } else {
-          if (tab) {
-            try {
-              tab.close();
-            } catch (e6) {}
-          }
-          msg.textContent =
-            "Still could not start the MP3 download. Please contact support and include your Stripe session ID.";
-        }
-      })
-      .catch(function () {
-        if (tab) {
-          try {
-            tab.close();
-          } catch (e7) {}
-        }
-        msg.textContent =
-          "Download failed (network, CORS, or pop-up blocker). Allow pop-ups for this site, then tap Download again.";
-      })
-      .finally(function () {
-        setLoading(false);
-      });
+    var redirectUrl = buildWebsiteDownloadRedirectUrl(successTrackId, successSessionId);
+    /* Синхронно в клике: новая вкладка → Railway 302 → MP3 (без fetch/CORS). */
+    try {
+      var w = window.open(redirectUrl, "_blank", "noopener,noreferrer");
+      if (w) {
+        msg.textContent = "If a new tab opened, the download should start there. Thank you! 🙏";
+      } else {
+        window.location.href = redirectUrl;
+      }
+    } catch (e) {
+      window.location.href = redirectUrl;
+    }
   }
 
   async function handleFreeDownload() {
@@ -1273,25 +1227,29 @@
     msg.textContent = "Your track is being prepared…";
 
     if (tid != null && tid !== "") {
-      (async function () {
-        setLoading(true);
-        var url = await tryFetchPurchaseDownload(tid, sessionId);
-        setLoading(false);
-        if (url) {
-          successDownloadUrl = url;
-          showSuccessDirectLink(url);
-          actions.style.display = "flex";
-          triggerDownload(url, "Music-Acupuncture-track.mp3");
-          msg.textContent =
-            "Your download should start automatically. If nothing happens, tap “Open MP3 in new tab” or “Download again”. Thank you! 🙏";
-        } else {
-          actions.style.display = "flex";
-          msg.textContent =
-            "Thank you! We could not validate this payment session for automatic MP3 download. Please contact support and include your Stripe session ID.";
-        }
-      })();
+      if (sessionId) {
+        var redirectUrl = buildWebsiteDownloadRedirectUrl(tid, sessionId);
+        successDownloadUrl = redirectUrl;
+        showSuccessDirectLink(redirectUrl);
+        actions.style.display = "flex";
+        msg.textContent =
+          "Tap “Open MP3 in new tab” or “Download again” — your browser will open Railway and start the MP3 (no extra login). Thank you! 🙏";
+        /* Опционально: второй путь через fetch+скачивание, если CORS на Railway настроен. */
+        (async function () {
+          var jsonUrl = await tryFetchPurchaseDownload(tid, sessionId);
+          if (jsonUrl) {
+            successDownloadUrl = jsonUrl;
+            showSuccessDirectLink(jsonUrl);
+            triggerDownload(jsonUrl, "Music-Acupuncture-track.mp3");
+          }
+        })();
+      } else {
+        actions.style.display = "flex";
+        msg.textContent =
+          "Payment OK, but the page URL has no session_id. Open the return link from Stripe again, or contact support.";
+      }
     }
-    btnRetry.addEventListener("click", retrySuccessDownload);
+    btnRetry.addEventListener("click", retrySuccessDownload, { passive: true });
 
     scrollToId("success-section");
   }

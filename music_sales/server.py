@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import requests
 import stripe
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from music_sales import config
 from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
@@ -46,6 +46,32 @@ def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
     except Exception:
         pass
     return {}
+
+
+def _checkout_session_payment_status(sess: Any) -> str:
+    """payment_status из ответа Session.retrieve (dict или StripeObject)."""
+    try:
+        if isinstance(sess, dict):
+            return str(sess.get("payment_status") or "")
+        if hasattr(sess, "get"):
+            return str(sess.get("payment_status") or "")
+        return str(sess["payment_status"] or "")
+    except Exception:
+        return ""
+
+
+def _checkout_session_metadata_plain(sess: Any) -> dict[str, Any]:
+    """metadata из Session.retrieve — всегда приводим к dict (как в webhook)."""
+    try:
+        if isinstance(sess, dict):
+            raw = sess.get("metadata")
+        elif hasattr(sess, "get"):
+            raw = sess.get("metadata")
+        else:
+            raw = sess["metadata"]
+    except Exception:
+        raw = {}
+    return _stripe_metadata_as_plain_dict(raw)
 
 
 def _miniapp_track_durations_payload() -> list:
@@ -249,6 +275,7 @@ def create_app(
             "/website-create-payment",
             "/miniapp-pricing",
             "/website/download",
+            "/website/download-redirect",
             "/website/download-file",
         ):
             return True
@@ -523,44 +550,65 @@ def create_app(
             return jsonify({"error": "Payment provider error"}), 502
         return jsonify({"url": session.url})
 
-    @app.route("/website/download", methods=["GET", "OPTIONS"])
-    def website_download() -> Any:
-        """Проверяем Stripe session и выдаём одноразовый URL скачивания MP3 для website."""
-        if request.method == "OPTIONS":
-            return "", 204
-        session_id = (request.args.get("session_id") or "").strip()
-        track_id = (request.args.get("track_id") or "").strip()
+    def _website_signed_mp3_abs_url_or_error(session_id: str, track_id: str) -> Union[str, Tuple[dict[str, Any], int]]:
+        """
+        Проверка Stripe Checkout + подпись ссылки на MP3.
+        Успех: абсолютный URL …/website/download-file?…
+        Ошибка: (dict для jsonify, http_code).
+        """
         if not session_id or not track_id:
-            return jsonify({"error": "session_id and track_id are required"}), 400
+            return ({"error": "session_id and track_id are required"}, 400)
 
         song_id = _song_id_from_track_id(track_id)
         if not song_id:
-            return jsonify({"error": "Unknown track_id"}), 400
+            return ({"error": "Unknown track_id"}, 400)
 
         try:
             sess = stripe.checkout.Session.retrieve(session_id)
         except Exception as e:
-            logger.warning("website/download: Stripe session retrieve failed: %s", e)
-            return jsonify({"error": "Invalid session"}), 400
+            logger.warning("website download: Stripe session retrieve failed: %s", e)
+            return ({"error": "Invalid session"}, 400)
 
-        try:
-            payment_status = str(sess.get("payment_status") if isinstance(sess, dict) else sess["payment_status"])
-        except Exception:
-            payment_status = ""
+        payment_status = _checkout_session_payment_status(sess)
         if payment_status not in ("paid", "no_payment_required"):
-            return jsonify({"error": "Payment is not completed"}), 403
+            return ({"error": "Payment is not completed"}, 403)
 
-        meta = sess.get("metadata", {}) if isinstance(sess, dict) else (sess["metadata"] or {})
-        source = str(meta.get("source") or "")
-        sess_song_id = str(meta.get("song_id") or "")
-        if source != "website" or sess_song_id != song_id:
-            return jsonify({"error": "Session metadata mismatch"}), 403
+        meta = _checkout_session_metadata_plain(sess)
+        source = str(meta.get("source") or "").strip()
+        sess_song_id = str(meta.get("song_id") or "").strip()
+        if source != "website" or sess_song_id != song_id.strip():
+            return ({"error": "Session metadata mismatch"}, 403)
 
         exp = int(time.time()) + 300
         sig = _website_download_sign(song_id, exp)
         qs = urlencode({"song_id": song_id, "exp": exp, "sig": sig})
         base = (request.url_root or "").rstrip("/") or domain
-        return jsonify({"url": f"{base}/website/download-file?{qs}"})
+        return f"{base}/website/download-file?{qs}"
+
+    @app.route("/website/download-redirect", methods=["GET"])
+    def website_download_redirect() -> Any:
+        """
+        Редирект на подписанный MP3 — работает по обычной ссылке <a href> с GitHub Pages
+        без CORS (в отличие от fetch к /website/download).
+        """
+        session_id = (request.args.get("session_id") or "").strip()
+        track_id = (request.args.get("track_id") or "").strip()
+        out = _website_signed_mp3_abs_url_or_error(session_id, track_id)
+        if isinstance(out, tuple):
+            return jsonify(out[0]), out[1]
+        return redirect(out, code=302)
+
+    @app.route("/website/download", methods=["GET", "OPTIONS"])
+    def website_download() -> Any:
+        """Проверяем Stripe session и выдаём одноразовый URL скачивания MP3 для website (JSON, нужен CORS)."""
+        if request.method == "OPTIONS":
+            return "", 204
+        session_id = (request.args.get("session_id") or "").strip()
+        track_id = (request.args.get("track_id") or "").strip()
+        out = _website_signed_mp3_abs_url_or_error(session_id, track_id)
+        if isinstance(out, tuple):
+            return jsonify(out[0]), out[1]
+        return jsonify({"url": out})
 
     @app.route("/website/download-file", methods=["GET", "OPTIONS"])
     def website_download_file() -> Any:

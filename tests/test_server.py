@@ -448,6 +448,32 @@ def test_website_download_options_preflight_includes_cors(mocker):
     assert resp.headers.get("Access-Control-Allow-Origin") == "https://ianaranovitch-swe.github.io"
 
 
+def test_website_download_redirect_returns_302_to_file(mocker):
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mocker.patch(
+        "stripe.checkout.Session.retrieve",
+        return_value={
+            "payment_status": "paid",
+            "metadata": {"source": "website", "song_id": "song1"},
+        },
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.get(
+        "/website/download-redirect?session_id=cs_test_redirect&track_id=2",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "website/download-file" in (resp.headers.get("Location") or "")
+
+
 def test_website_download_get_json_includes_cors_headers(mocker):
     """GitHub Pages делает fetch к /website/download — в ответе нужен Access-Control-Allow-Origin."""
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://pages.example")
