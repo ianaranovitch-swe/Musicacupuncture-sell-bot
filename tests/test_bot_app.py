@@ -1,6 +1,9 @@
+import asyncio
+
 import pytest
 
-from music_sales.bot_app import _log_webhook_preflight
+from music_sales.bot_app import _error_handler, _log_webhook_preflight
+from telegram.error import Conflict
 
 
 def test_log_webhook_preflight_empty_token():
@@ -55,6 +58,29 @@ def test_delay_before_polling_calls_sleep_when_positive(mocker, monkeypatch):
 
     _delay_before_polling_if_configured()
     sleep.assert_called_once_with(2.5)
+
+
+def test_bootstrap_retries_default_and_invalid(monkeypatch, mocker):
+    monkeypatch.delenv("BOT_POLLING_BOOTSTRAP_RETRIES", raising=False)
+    from music_sales.bot_app import _bootstrap_retries_for_polling
+
+    assert _bootstrap_retries_for_polling() == 10
+    monkeypatch.setenv("BOT_POLLING_BOOTSTRAP_RETRIES", "3")
+    assert _bootstrap_retries_for_polling() == 3
+    monkeypatch.setenv("BOT_POLLING_BOOTSTRAP_RETRIES", "nope")
+    mocker.patch("music_sales.bot_app.logger.warning")
+    assert _bootstrap_retries_for_polling() == 10
+
+
+def test_error_handler_conflict_does_not_log_exc_info(mocker):
+    from unittest.mock import MagicMock
+
+    log_warning = mocker.patch("music_sales.bot_app.logger.warning")
+    ctx = MagicMock()
+    ctx.error = Conflict("Conflict: terminated by other getUpdates request")
+    asyncio.run(_error_handler(None, ctx))
+    log_warning.assert_called_once()
+    assert "getUpdates Conflict" in log_warning.call_args[0][0]
 
 
 def test_build_application_requires_bot_token(mocker):

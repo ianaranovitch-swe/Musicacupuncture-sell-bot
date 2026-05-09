@@ -5,6 +5,7 @@ import os
 import socket
 import time
 import requests
+from telegram.error import Conflict
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -82,6 +83,14 @@ def _log_webhook_preflight(token: str) -> None:
 
 async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     err = context.error
+    # Conflict приходит из цикла getUpdates (часто update=None): это не «падение хендлера», а второй клиент с тем же BOT_TOKEN.
+    if isinstance(err, Conflict):
+        logger.warning(
+            "Telegram getUpdates Conflict: another connection uses the same BOT_TOKEN. "
+            "Stop the other poller (second deploy/service/env) or revoke the token in BotFather. "
+            "Polling will retry; this is not caused by admin_panel code (single process has one getUpdates loop)."
+        )
+        return
     if err is not None:
         logger.error("Unhandled exception in update handler", exc_info=err)
     else:
@@ -137,6 +146,22 @@ def _resolve_polling_start_delay_seconds() -> float | None:
     return None
 
 
+def _bootstrap_retries_for_polling() -> int:
+    """
+    Повторы на фазе bootstrap (delete_webhook и т.д.) в python-telegram-bot.
+    При кратком пересечении двух деплоев иногда помогает снизить шанс Conflict на старте.
+    """
+    raw = (os.environ.get("BOT_POLLING_BOOTSTRAP_RETRIES") or "").strip()
+    if raw:
+        try:
+            n = int(raw)
+        except ValueError:
+            logger.warning("Invalid BOT_POLLING_BOOTSTRAP_RETRIES=%r, using default 10", raw)
+            return 10
+        return max(0, n)
+    return 10
+
+
 def _delay_before_polling_if_configured() -> None:
     """
     На Railway при смене деплоя кратко живут два контейнера с одним BOT_TOKEN — оба держат getUpdates → Conflict.
@@ -172,7 +197,7 @@ def main() -> None:
         application = build_application().build()
         _register_handlers(application)
         _delay_before_polling_if_configured()
-        application.run_polling()
+        application.run_polling(bootstrap_retries=_bootstrap_retries_for_polling())
     except Exception:
         logger.exception("Bot stopped due to an error (see traceback below)")
         raise
