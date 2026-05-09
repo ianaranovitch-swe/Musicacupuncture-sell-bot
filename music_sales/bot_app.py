@@ -109,24 +109,52 @@ def _register_handlers(application) -> None:
     application.add_error_handler(_error_handler)
 
 
+# Если на Railway не задана BOT_POLLING_START_DELAY_SECONDS, ждём столько секунд перед getUpdates
+# (при деплое старый и новый контейнер могут кратко существовать параллельно → Conflict).
+_RAILWAY_DEFAULT_POLLING_DELAY_SEC = 18.0
+
+
+def _resolve_polling_start_delay_seconds() -> float | None:
+    """
+    Секунды паузы перед run_polling или None = не ждать.
+
+    - Явно задано BOT_POLLING_START_DELAY_SECONDS (в т.ч. 0) — всегда оно.
+    - Иначе на Railway (есть RAILWAY_ENVIRONMENT_ID) — дефолт ~18 с.
+    - Локально без переменной — без паузы.
+    """
+    raw = (os.environ.get("BOT_POLLING_START_DELAY_SECONDS") or "").strip()
+    if raw:
+        try:
+            sec = float(raw)
+        except ValueError:
+            logger.warning("Invalid BOT_POLLING_START_DELAY_SECONDS=%r, ignoring", raw)
+            return None
+        if sec <= 0:
+            return None
+        return sec
+    if (os.environ.get("RAILWAY_ENVIRONMENT_ID") or "").strip():
+        return _RAILWAY_DEFAULT_POLLING_DELAY_SEC
+    return None
+
+
 def _delay_before_polling_if_configured() -> None:
     """
     На Railway при смене деплоя кратко живут два контейнера с одним BOT_TOKEN — оба держат getUpdates → Conflict.
-    Пауза перед run_polling даёт старому контейнеру чаще успеть завершиться (см. BOT_POLLING_START_DELAY_SECONDS).
+    Пауза перед run_polling даёт старому контейнеру чаще успеть завершиться.
+    Задаётся BOT_POLLING_START_DELAY_SECONDS; на Railway при отсутствии переменной используется встроенный дефолт.
     """
-    raw = (os.environ.get("BOT_POLLING_START_DELAY_SECONDS") or "").strip()
-    if not raw:
+    sec = _resolve_polling_start_delay_seconds()
+    if sec is None:
         return
-    try:
-        sec = float(raw)
-    except ValueError:
-        logger.warning("Invalid BOT_POLLING_START_DELAY_SECONDS=%r, ignoring", raw)
-        return
-    if sec <= 0:
-        return
+    src = (
+        "BOT_POLLING_START_DELAY_SECONDS"
+        if (os.environ.get("BOT_POLLING_START_DELAY_SECONDS") or "").strip()
+        else "Railway default (set BOT_POLLING_START_DELAY_SECONDS=0 to disable)"
+    )
     logger.info(
-        "Sleeping %.1f s before run_polling (BOT_POLLING_START_DELAY_SECONDS; mitigates deploy overlap).",
+        "Sleeping %.1f s before run_polling (%s; mitigates deploy overlap / duplicate poller race).",
         sec,
+        src,
     )
     time.sleep(sec)
 
