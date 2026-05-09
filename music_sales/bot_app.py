@@ -25,6 +25,30 @@ from music_sales.logging_setup import setup_logging
 
 logger = logging.getLogger(__name__)
 
+# Чтобы Railway-логи не забивались одним и тем же Conflict каждые ~30 с (PTB сам ретраит).
+_conflict_last_log_mono: float = -1e18
+
+
+def _conflict_log_interval_seconds() -> float:
+    raw = (os.environ.get("BOT_CONFLICT_LOG_INTERVAL_SECONDS") or "").strip()
+    if not raw:
+        return 300.0
+    try:
+        return max(30.0, float(raw))
+    except ValueError:
+        logger.warning("Invalid BOT_CONFLICT_LOG_INTERVAL_SECONDS=%r, using 300", raw)
+        return 300.0
+
+
+def _conflict_log_emit_decision(now_mono: float, last_log_mono: float, interval: float) -> tuple[bool, float]:
+    """
+    Нужно ли писать Conflict в лог сейчас и какое новое значение last_log_mono сохранить.
+    Чистая функция — удобно тестировать без подмены time.monotonic (asyncio тоже вызывает monotonic).
+    """
+    if now_mono - last_log_mono >= interval:
+        return True, now_mono
+    return False, last_log_mono
+
 
 def _log_worker_identity() -> None:
     """В Railway по одной строке видно: не крутятся ли два контейнера с одним токеном (разные PID/hostname)."""
@@ -85,11 +109,20 @@ async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
     err = context.error
     # Conflict приходит из цикла getUpdates (часто update=None): это не «падение хендлера», а второй клиент с тем же BOT_TOKEN.
     if isinstance(err, Conflict):
-        logger.warning(
-            "Telegram getUpdates Conflict: another connection uses the same BOT_TOKEN. "
-            "Stop the other poller (second deploy/service/env) or revoke the token in BotFather. "
-            "Polling will retry; this is not caused by admin_panel code (single process has one getUpdates loop)."
+        global _conflict_last_log_mono
+        now = time.monotonic()
+        interval = _conflict_log_interval_seconds()
+        emit, _conflict_last_log_mono = _conflict_log_emit_decision(
+            now, _conflict_last_log_mono, interval
         )
+        if emit:
+            logger.warning(
+                "Telegram getUpdates Conflict: another connection uses the same BOT_TOKEN. "
+                "Stop the other poller (second deploy/service/env) or revoke the token in BotFather. "
+                "Polling will retry; this is not caused by admin_panel code (single process has one getUpdates loop). "
+                "(Repeating Conflict logs are throttled to once per %.0f s; set BOT_CONFLICT_LOG_INTERVAL_SECONDS.)",
+                interval,
+            )
         return
     if err is not None:
         logger.error("Unhandled exception in update handler", exc_info=err)

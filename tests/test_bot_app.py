@@ -72,15 +72,30 @@ def test_bootstrap_retries_default_and_invalid(monkeypatch, mocker):
     assert _bootstrap_retries_for_polling() == 10
 
 
-def test_error_handler_conflict_does_not_log_exc_info(mocker):
+def test_error_handler_conflict_does_not_log_exc_info(mocker, monkeypatch):
+    import music_sales.bot_app as bot_app_mod
+
+    monkeypatch.setattr(bot_app_mod, "_conflict_last_log_mono", -1e18)
+    log_warning = mocker.patch("music_sales.bot_app.logger.warning")
     from unittest.mock import MagicMock
 
-    log_warning = mocker.patch("music_sales.bot_app.logger.warning")
     ctx = MagicMock()
     ctx.error = Conflict("Conflict: terminated by other getUpdates request")
     asyncio.run(_error_handler(None, ctx))
     log_warning.assert_called_once()
     assert "getUpdates Conflict" in log_warning.call_args[0][0]
+
+
+def test_conflict_log_emit_decision():
+    from music_sales.bot_app import _conflict_log_emit_decision
+
+    last = -1e18
+    emit, last = _conflict_log_emit_decision(100.0, last, 300.0)
+    assert emit is True and last == 100.0
+    emit, last = _conflict_log_emit_decision(200.0, last, 300.0)
+    assert emit is False and last == 100.0
+    emit, last = _conflict_log_emit_decision(500.0, last, 300.0)
+    assert emit is True and last == 500.0
 
 
 def test_build_application_requires_bot_token(mocker):
