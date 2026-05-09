@@ -30,7 +30,7 @@ from telegram.ext import (
 from music_sales import config
 from music_sales.admin_log import append_admin_log
 from music_sales.catalog import project_root
-from music_sales.file_id_delivery import _file_ids_json_path, load_file_ids_from_disk
+from music_sales.file_id_delivery import _file_ids_json_path, load_file_ids_dict, load_file_ids_from_disk
 from music_sales.sales_log import read_sales_entries
 from music_sales.stripe_track_products import create_product_and_payment_links, merge_file_id_json
 from music_sales.tracks_admin_persist import (
@@ -221,7 +221,9 @@ def _file_ids_json_env_payload() -> str:
     Точное значение для Railway Variable FILE_IDS_JSON.
     Формат — компактный JSON в одну строку, как обычно хранят env-переменные.
     """
-    data = dict(load_file_ids_from_disk())
+    # В Railway часто актуальный JSON лежит в FILE_IDS_JSON env, а не в файле.
+    # Поэтому берём объединённый словарь (disk + env), как в доставке покупки.
+    data = dict(load_file_ids_dict())
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
