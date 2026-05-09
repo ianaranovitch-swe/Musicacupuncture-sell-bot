@@ -202,5 +202,56 @@
     "source": "telegram",
     "session_id": "cs_test_456",
     "telegram_id": 555
+  },
+  {
+    "ts": "2026-05-09T13:07:19.751771+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "telegram",
+    "session_id": "",
+    "telegram_id": 555
+  },
+  {
+    "ts": "2026-05-09T13:07:19.778139+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "website",
+    "session_id": ""
+  },
+  {
+    "ts": "2026-05-09T13:07:19.853242+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "website",
+    "session_id": ""
+  },
+  {
+    "ts": "2026-05-09T13:07:19.877906+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "telegram",
+    "session_id": ""
+  },
+  {
+    "ts": "2026-05-09T13:07:19.905843+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "telegram",
+    "session_id": "cs_test_123",
+    "telegram_id": 555
+  },
+  {
+    "ts": "2026-05-09T13:07:19.935913+00:00",
+    "song_id": "song1",
+    "track_title": "Relaxing Sound",
+    "currency": "",
+    "source": "telegram",
+    "session_id": "cs_test_456",
+    "telegram_id": 555
   }
 ]
