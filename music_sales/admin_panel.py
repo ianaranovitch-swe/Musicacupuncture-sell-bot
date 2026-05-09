@@ -276,7 +276,7 @@ async def _send_track_list(msg, context: ContextTypes.DEFAULT_TYPE, uid: int) ->
 
     lines = ["📋 Tracks (id — title — price):"]
     for t in sorted(TRACKS, key=lambda x: int(x["id"])):
-        lines.append(f"`{t['id']}` — {t.get('title', '')[:40]} — {t.get('price', '')}")
+        lines.append(f"{t['id']} — {t.get('title', '')[:40]} — {t.get('price', '')}")
     text = "\n".join(lines)[:4000]
     rows = []
     row = []
@@ -290,7 +290,8 @@ async def _send_track_list(msg, context: ContextTypes.DEFAULT_TYPE, uid: int) ->
         rows.append(row)
     rows.append([InlineKeyboardButton("⬅️ Menu", callback_data="adm:menu")])
     _log(uid, "list_tracks")
-    await msg.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
+    # Без parse_mode: в названиях треков могут быть символы Markdown, из-за которых Telegram отклоняет сообщение.
+    await msg.reply_text(text, reply_markup=InlineKeyboardMarkup(rows))
     return ST_MAIN
 
 
