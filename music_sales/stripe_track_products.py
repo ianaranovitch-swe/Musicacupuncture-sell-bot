@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 def create_product_and_payment_links(
     *,
     title: str,
+    description: str = "",
+    track_id: int | None = None,
     usd_whole: int,
     sek_whole: int,
 ) -> dict[str, str]:
@@ -25,14 +27,17 @@ def create_product_and_payment_links(
 
     При ошибке Stripe — бросает stripe.error.StripeError.
     """
-    key = (config.STRIPE_SECRET_KEY or "").strip()
+    key = (config.STRIPE_API_KEY or config.STRIPE_SECRET_KEY or "").strip()
     if not key:
-        raise RuntimeError("STRIPE_SECRET_KEY is not set")
+        raise RuntimeError("STRIPE_API_KEY / STRIPE_SECRET_KEY is not set")
     stripe.api_key = key
     test = config.test_mode_active()
     display = f"[TEST] {title}" if test else title
 
-    product = stripe.Product.create(name=display[:120])
+    product = stripe.Product.create(
+        name=display[:120],
+        description=(description or "")[:5000] or None,
+    )
     pid = str(product["id"] if isinstance(product, dict) else product.id)
 
     usd_cents = max(50, int(usd_whole) * 100)
@@ -51,8 +56,15 @@ def create_product_and_payment_links(
     puid = str(price_usd["id"] if isinstance(price_usd, dict) else price_usd.id)
     psek = str(price_sek["id"] if isinstance(price_sek, dict) else price_sek.id)
 
-    link_usd = stripe.PaymentLink.create(line_items=[{"price": puid, "quantity": 1}])
-    link_sek = stripe.PaymentLink.create(line_items=[{"price": psek, "quantity": 1}])
+    meta = {"track_id": str(track_id)} if track_id is not None else {}
+    link_usd = stripe.PaymentLink.create(
+        line_items=[{"price": puid, "quantity": 1}],
+        metadata=meta,
+    )
+    link_sek = stripe.PaymentLink.create(
+        line_items=[{"price": psek, "quantity": 1}],
+        metadata=meta,
+    )
     url_usd = str(link_usd["url"] if isinstance(link_usd, dict) else link_usd.url)
     url_sek = str(link_sek["url"] if isinstance(link_sek, dict) else link_sek.url)
 

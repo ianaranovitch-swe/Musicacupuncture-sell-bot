@@ -16,9 +16,10 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from music_sales import config
-from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.file_id_delivery import load_file_ids_dict
+from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.owner_notify import notify_owner_async
+from music_sales.sales_log import append_free_download_event
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,11 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             chat_id=chat_id,
             document=fid,
             caption="🎁 Free bonus track — enjoy! 🙏",
+        )
+        # Логируем бесплатную выдачу, чтобы видеть метрику FREE DOWNLOADS в /admin.
+        append_free_download_event(
+            telegram_user_id=int(chat_id),
+            track_title=FREE_TRACK_TITLE,
         )
 
     row = _miniapp_store_row()

@@ -7,9 +7,12 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import io
+import json
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +30,7 @@ from telegram.ext import (
 from music_sales import config
 from music_sales.admin_log import append_admin_log
 from music_sales.catalog import project_root
+from music_sales.file_id_delivery import _file_ids_json_path, load_file_ids_from_disk
 from music_sales.sales_log import read_sales_entries
 from music_sales.stripe_track_products import create_product_and_payment_links, merge_file_id_json
 from music_sales.tracks_admin_persist import (
@@ -99,6 +103,105 @@ def _sync_frontend_after_catalog_change(uid: int, log_action: str) -> None:
         logger.exception("frontend catalog sync")
 
 
+def _move_file_id_alias(old_stem: str, new_stem: str) -> None:
+    """Безопасно добавляем новый ключ в file_ids.json (старый оставляем как fallback)."""
+    old_key = (old_stem or "").strip()
+    new_key = (new_stem or "").strip()
+    if not old_key or not new_key or old_key == new_key:
+        return
+    data = dict(load_file_ids_from_disk())
+    fid = data.get(old_key)
+    if not fid:
+        return
+    data[new_key] = fid
+    _file_ids_json_path().write_text(json.dumps(data, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
+
+
+def _rename_track_media_files(track_id: int, uid: int) -> tuple[bool, str]:
+    """
+    Advanced: переименовать cover/audio под текущий title.
+    Делает rollback, если какой-то rename не удался.
+    """
+    from tracks import get_track, reload_track_catalog
+
+    tr = get_track(int(track_id))
+    if tr is None:
+        return False, "Track not found."
+
+    title = str(tr.get("title") or "").strip() or "track"
+    new_stem = sanitize_filename_stem(title)
+    base = project_root()
+
+    old_audio_rel = str(tr.get("audio") or "").strip()
+    old_cover_rel = str(tr.get("cover") or "").strip()
+
+    planned: list[tuple[Path, Path, str]] = []  # (src_abs, dst_abs, field)
+    patch: dict[str, Any] = {}
+
+    if old_audio_rel:
+        src = base / old_audio_rel
+        suffix = src.suffix or ".mp3"
+        new_rel = f"songs/{new_stem}{suffix}"
+        if new_rel != old_audio_rel:
+            planned.append((src, base / new_rel, "audio"))
+            patch["audio"] = new_rel
+
+    if old_cover_rel:
+        src = base / old_cover_rel
+        suffix = src.suffix or ".jpg"
+        new_rel = f"covers/{new_stem}{suffix}"
+        if new_rel != old_cover_rel:
+            planned.append((src, base / new_rel, "cover"))
+            patch["cover"] = new_rel
+
+    if not planned:
+        return False, "Media filenames already match the current title."
+
+    for src, dst, _ in planned:
+        if not src.is_file():
+            return False, f"File not found: {src.name}"
+        if dst.exists() and dst.resolve() != src.resolve():
+            return False, f"Target file already exists: {dst.name}"
+
+    moved: list[tuple[Path, Path]] = []
+    try:
+        for src, dst, _ in planned:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+            moved.append((src, dst))
+    except OSError:
+        for src, dst in reversed(moved):
+            try:
+                if dst.exists():
+                    dst.rename(src)
+            except OSError:
+                pass
+        return False, "Could not rename media files. No changes were kept."
+
+    # Переносим alias file_id по stem MP3 (не удаляя старый ключ).
+    if old_audio_rel and "audio" in patch:
+        _move_file_id_alias(Path(old_audio_rel).stem, Path(str(patch["audio"])).stem)
+
+    if int(track_id) in _builtin_ids():
+        set_override(int(track_id), patch)
+    else:
+        items = read_extras()
+        found = False
+        for i, t in enumerate(items):
+            if int(t.get("id", -1)) == int(track_id):
+                items[i].update(patch)
+                found = True
+                break
+        if not found:
+            return False, "Extra track not found while saving updated paths."
+        write_extras(items)
+
+    reload_track_catalog()
+    _sync_frontend_after_catalog_change(uid, "rename_media_frontend_sync")
+    _log(uid, "rename_media_done", {"track_id": int(track_id), "patch": patch})
+    return True, "✅ Media filenames updated safely."
+
+
 def _main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -107,9 +210,19 @@ def _main_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("✏️ Edit Track", callback_data="adm:editm")],
             [InlineKeyboardButton("🗑️ Delete Track", callback_data="adm:delm")],
             [InlineKeyboardButton("📊 Sales Statistics", callback_data="adm:stats")],
+            [InlineKeyboardButton("🧾 Show FILE_IDS_JSON", callback_data="adm:fileids")],
             [InlineKeyboardButton("❌ Close Admin", callback_data="adm:close")],
         ]
     )
+
+
+def _file_ids_json_env_payload() -> str:
+    """
+    Точное значение для Railway Variable FILE_IDS_JSON.
+    Формат — компактный JSON в одну строку, как обычно хранят env-переменные.
+    """
+    data = dict(load_file_ids_from_disk())
+    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -157,13 +270,13 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ConversationHandler.END
 
     if data == "adm:menu":
-        await q.message.reply_text("Main menu:", reply_markup=_main_menu_kb())
+        await q.message.reply_text("Admin menu:", reply_markup=_main_menu_kb())
         return ST_MAIN
 
     if data == "adm:add":
         _log(uid or 0, "add_track_start")
         context.user_data["adm_draft"] = {}
-        await q.message.reply_text("Step 1/6: Send the **track title** (plain text).")
+        await q.message.reply_text("Step 1/6: Send the track title (plain text).")
         return ST_ADD_TITLE
 
     if data == "adm:list":
@@ -172,13 +285,51 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data == "adm:stats":
         return await _send_sales_stats(q.message, uid or 0)
 
+    if data == "adm:fileids":
+        payload = _file_ids_json_env_payload()
+        context.user_data["adm_file_ids_payload"] = payload
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("📋 Copy (show plain text)", callback_data="adm:fileids:copy")],
+                [InlineKeyboardButton("🔄 Refresh", callback_data="adm:fileids")],
+                [InlineKeyboardButton("⬅️ Menu", callback_data="adm:menu")],
+            ]
+        )
+        text = (
+            "🧾 FILE_IDS_JSON (for Railway)\n\n"
+            "Copy this value and paste it into Railway variable FILE_IDS_JSON.\n\n"
+            f"<code>{html.escape(payload)}</code>"
+        )
+        # Если JSON слишком длинный для одного сообщения — отправляем fallback без code-блока.
+        if len(text) > 3900:
+            await q.message.reply_text(
+                "FILE_IDS_JSON is too long for one formatted message.\n"
+                "Tap Copy button below to get plain text in separate messages.",
+                reply_markup=kb,
+            )
+        else:
+            await q.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        return ST_MAIN
+
+    if data == "adm:fileids:copy":
+        payload = str(context.user_data.get("adm_file_ids_payload") or _file_ids_json_env_payload())
+        # В Telegram Bot API нет прямого clipboard API, поэтому отдаём plain text для ручного Copy.
+        await q.message.reply_text(
+            "Copy mode:\n"
+            "1) Tap and hold the text below\n"
+            "2) Choose Copy\n"
+            "3) Paste into Railway FILE_IDS_JSON\n\n"
+            f"{payload}"
+        )
+        return ST_MAIN
+
     if data == "adm:editm":
-        await q.message.reply_text("Send the numeric **track id** to edit (see /admin → View All Tracks).")
+        await q.message.reply_text("Send the numeric track ID to edit (see /admin -> View All Tracks).")
         context.user_data["adm_mode"] = "edit_pick"
         return ST_EDIT_MENU
 
     if data == "adm:delm":
-        await q.message.reply_text("Send the numeric **track id** to delete.")
+        await q.message.reply_text("Send the numeric track ID to delete.")
         context.user_data["adm_mode"] = "del_pick"
         return ST_EDIT_MENU
 
@@ -198,12 +349,12 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("Stripe SEK link", callback_data=f"adm:ed:{tid}:b")],
             [InlineKeyboardButton("Replace cover", callback_data=f"adm:ed:{tid}:c")],
             [InlineKeyboardButton("Replace MP3", callback_data=f"adm:ed:{tid}:m")],
+            [InlineKeyboardButton("🔁 Rename media files (advanced)", callback_data=f"adm:ed:{tid}:r")],
             [InlineKeyboardButton("🗑️ Delete this track", callback_data=f"adm:dl:{tid}")],
             [InlineKeyboardButton("⬅️ Menu", callback_data="adm:menu")],
         ]
         await q.message.reply_text(
-            f"Track `{tid}` — {tr.get('title', '')[:60]}",
-            parse_mode="Markdown",
+            f"Track {tid} - {tr.get('title', '')}",
             reply_markup=InlineKeyboardMarkup(kb_rows),
         )
         return ST_MAIN
@@ -217,14 +368,18 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data["adm_edit_id"] = tid
             context.user_data["adm_edit_field"] = field
             _log(uid or 0, "edit_field_chosen", {"track_id": tid, "field": field})
+            if field == "r":
+                ok, text = _rename_track_media_files(tid, uid or 0)
+                await q.message.reply_text(text, reply_markup=_main_menu_kb())
+                return ST_MAIN
             prompts = {
-                "t": "Send new **title** (text).",
-                "d": "Send new **description** (text).",
-                "u": "Send **USD** price as whole dollars (e.g. 16).",
-                "a": "Send new **Stripe USD payment link** (https://...).",
-                "b": "Send new **Stripe SEK payment link** (https://...).",
-                "c": "Upload a new **cover image** (JPG or PNG).",
-                "m": "Upload a new **MP3** file.",
+                "t": "Send the new title (text).",
+                "d": "Send the new description (text).",
+                "u": "Send the USD price as whole dollars (e.g. 16).",
+                "a": "Send the new Stripe USD payment link (https://...).",
+                "b": "Send the new Stripe SEK payment link (https://...).",
+                "c": "Upload the new cover image (JPG or PNG).",
+                "m": "Upload the new MP3 file.",
             }
             await q.message.reply_text(prompts.get(field, "Send new value."))
             if field in ("c", "m"):
@@ -236,7 +391,7 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         tid = int(data.split(":")[2])
         context.user_data["adm_del_id"] = tid
         await q.message.reply_text(
-            f"Really delete track id **{tid}**?",
+            f"Delete track ID {tid}?",
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -254,7 +409,7 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return ST_MAIN
 
     if data == "adm:dn":
-        await q.message.reply_text("Delete cancelled.", reply_markup=_main_menu_kb())
+        await q.message.reply_text("Delete canceled.", reply_markup=_main_menu_kb())
         return ST_MAIN
 
     if data.startswith("adm:svy"):
@@ -265,7 +420,7 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data.startswith("adm:svn"):
         context.user_data.pop("adm_draft", None)
         _log(uid or 0, "add_track_cancelled")
-        await q.message.reply_text("Cancelled.", reply_markup=_main_menu_kb())
+        await q.message.reply_text("Canceled.", reply_markup=_main_menu_kb())
         return ST_MAIN
 
     return ST_MAIN
@@ -276,8 +431,13 @@ async def _send_track_list(msg, context: ContextTypes.DEFAULT_TYPE, uid: int) ->
 
     lines = ["📋 Tracks (id — title — price):"]
     for t in sorted(TRACKS, key=lambda x: int(x["id"])):
-        lines.append(f"{t['id']} — {t.get('title', '')[:40]} — {t.get('price', '')}")
-    text = "\n".join(lines)[:4000]
+        # Показываем полное имя, без обрезки.
+        title = str(t.get("title", ""))
+        lines.append(f"{t['id']} — {title} — {t.get('price', '')}")
+    # Телеграм ограничивает длину сообщения, поэтому режем только общий размер.
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        text = text[:3997] + "..."
     rows = []
     row = []
     for t in sorted(TRACKS, key=lambda x: int(x["id"])):
@@ -297,21 +457,116 @@ async def _send_track_list(msg, context: ContextTypes.DEFAULT_TYPE, uid: int) ->
 
 async def _send_sales_stats(msg, uid: int) -> int:
     entries = read_sales_entries()
-    total = len(entries)
+
+    # Берём только продажи (бесплатные выдачи считаются отдельно).
+    sales = [e for e in entries if str(e.get("event_type") or "sale") == "sale"]
+    free_downloads = sum(1 for e in entries if str(e.get("event_type") or "") == "free_download")
+
+    def _entry_dt(e: dict[str, Any]) -> datetime:
+        raw = str(e.get("ts") or "").strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            return datetime.now(timezone.utc)
+
+    def _entry_amount(e: dict[str, Any]) -> float:
+        try:
+            return float(e.get("amount") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _sum_by_currency(rows: list[dict[str, Any]]) -> tuple[float, float]:
+        usd = 0.0
+        sek = 0.0
+        for e in rows:
+            amount = _entry_amount(e)
+            ccy = str(e.get("currency") or "").strip().upper()
+            if ccy == "USD":
+                usd += amount
+            elif ccy == "SEK":
+                sek += amount
+        return usd, sek
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    sales_today = [e for e in sales if _entry_dt(e).date() == today]
+    sales_week = [e for e in sales if _entry_dt(e).date() >= week_start]
+    sales_month = [e for e in sales if _entry_dt(e).date() >= month_start]
+    sales_all = list(sales)
+
+    usd_today, sek_today = _sum_by_currency(sales_today)
+    usd_week, sek_week = _sum_by_currency(sales_week)
+    usd_month, sek_month = _sum_by_currency(sales_month)
+    usd_all, sek_all = _sum_by_currency(sales_all)
+
     per_track: dict[str, int] = {}
-    for e in entries:
-        key = str(e.get("track_title") or e.get("song_id") or "?")
+    for e in sales_all:
+        key = str(e.get("track_title") or e.get("song_id") or "Unknown track")
         per_track[key] = per_track.get(key, 0) + 1
-    top = sorted(per_track.items(), key=lambda x: -x[1])[:12]
-    top_lines = "\n".join(f"• {k}: {v}" for k, v in top) or "(no sales yet)"
-    tail = entries[-15:] if entries else []
-    tail_lines = "\n".join(
-        f"– {e.get('ts', '')[:19]} | {e.get('track_title', e.get('song_id', ''))} | {e.get('source', '')}"
-        for e in reversed(tail)
+    top = sorted(per_track.items(), key=lambda x: -x[1])[:3]
+    top_lines = "\n".join(f"{i}. {name} - {count} sales" for i, (name, count) in enumerate(top, start=1))
+    if not top_lines:
+        top_lines = "1. —\n2. —\n3. —"
+
+    # Последние 7 дней: считаем продажи и выручку в USD (как в ТЗ).
+    by_day_count: dict[str, int] = {}
+    by_day_usd: dict[str, float] = {}
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        key = d.strftime("%Y-%m-%d")
+        by_day_count[key] = 0
+        by_day_usd[key] = 0.0
+    for e in sales_all:
+        d = _entry_dt(e).date()
+        key = d.strftime("%Y-%m-%d")
+        if key in by_day_count:
+            by_day_count[key] += 1
+            if str(e.get("currency") or "").strip().upper() == "USD":
+                by_day_usd[key] += _entry_amount(e)
+    last7_lines = "\n".join(
+        f"{k}: {by_day_count[k]} sales - ${by_day_usd[k]:.2f}" for k in by_day_count
     )
-    text = f"📊 **Sales statistics**\n\nTotal checkouts logged: **{total}**\n\nPer track (top):\n{top_lines}\n\nLast events:\n{tail_lines or '—'}"
+
+    unique_days = { _entry_dt(e).date().isoformat() for e in sales_all } if sales_all else set()
+    avg_per_day = (len(sales_all) / max(1, len(unique_days))) if sales_all else 0.0
+
+    text = (
+        "📊 SALES STATISTICS\n"
+        "━━━━━━━━━━━━━━━━━━━\n\n"
+        "📅 TODAY:\n"
+        f"• Sales: {len(sales_today)} tracks\n"
+        f"• Revenue USD: ${usd_today:.2f}\n"
+        f"• Revenue SEK: {sek_today:.2f} kr\n\n"
+        "📅 THIS WEEK:\n"
+        f"• Sales: {len(sales_week)} tracks\n"
+        f"• Revenue USD: ${usd_week:.2f}\n"
+        f"• Revenue SEK: {sek_week:.2f} kr\n\n"
+        "📅 THIS MONTH:\n"
+        f"• Sales: {len(sales_month)} tracks\n"
+        f"• Revenue USD: ${usd_month:.2f}\n"
+        f"• Revenue SEK: {sek_month:.2f} kr\n\n"
+        "📅 ALL TIME:\n"
+        f"• Total sales: {len(sales_all)} tracks\n"
+        f"• Total USD: ${usd_all:.2f}\n"
+        f"• Total SEK: {sek_all:.2f} kr\n"
+        f"• Average per day: {avg_per_day:.2f} sales\n\n"
+        "🏆 TOP TRACKS:\n"
+        f"{top_lines}\n\n"
+        "📈 LAST 7 DAYS:\n"
+        f"{last7_lines}\n\n"
+        "🎁 FREE DOWNLOADS:\n"
+        f"Total free tracks sent: {free_downloads}"
+    )
     _log(uid, "view_stats")
-    await msg.reply_text(text[:4000], parse_mode="Markdown", reply_markup=_main_menu_kb())
+    await msg.reply_text(text[:4000], reply_markup=_main_menu_kb())
     return ST_MAIN
 
 
@@ -369,7 +624,7 @@ async def add_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Please send a non-empty title.")
         return ST_ADD_TITLE
     context.user_data.setdefault("adm_draft", {})["title"] = text
-    await update.message.reply_text("Step 2/6: Send **description** (long text is OK).")
+    await update.message.reply_text("Step 2/6: Send the description (long text is OK).")
     return ST_ADD_DESC
 
 
@@ -381,7 +636,7 @@ async def add_desc(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Please send a non-empty description.")
         return ST_ADD_DESC
     context.user_data["adm_draft"]["description"] = text
-    await update.message.reply_text("Step 3/6: Send **USD** price as whole dollars (default 16 — just send 16).")
+    await update.message.reply_text("Step 3/6: Send the USD price as whole dollars (default 16; just send 16).")
     return ST_ADD_USD
 
 
@@ -395,7 +650,7 @@ async def add_usd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Send a number, e.g. 16")
         return ST_ADD_USD
     context.user_data["adm_draft"]["usd"] = usd
-    await update.message.reply_text("Step 4/6: Send **SEK** price as whole kronor (default 169).")
+    await update.message.reply_text("Step 4/6: Send the SEK price as whole kronor (default 169).")
     return ST_ADD_SEK
 
 
@@ -409,7 +664,7 @@ async def add_sek(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("Send a number, e.g. 169")
         return ST_ADD_SEK
     context.user_data["adm_draft"]["sek"] = sek
-    await update.message.reply_text("Step 5/6: Upload **cover image** (JPG or PNG).")
+    await update.message.reply_text("Step 5/6: Upload the cover image (JPG or PNG).")
     return ST_ADD_COVER
 
 
@@ -421,7 +676,7 @@ async def add_cover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         fn = (update.message.document.file_name or "").lower()
         mime = (update.message.document.mime_type or "").lower()
         if fn.endswith(".mp3") or mime.startswith("audio/"):
-            await update.message.reply_text("That looks like an audio file. Please send an **image** for the cover.")
+            await update.message.reply_text("That looks like an audio file. Please upload an image for the cover.")
             return ST_ADD_COVER
     draft = context.user_data.setdefault("adm_draft", {})
     title = str(draft.get("title") or "track")
@@ -459,7 +714,7 @@ async def add_cover(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ST_ADD_COVER
     draft["cover_rel"] = f"covers/{dest.name}"
     _log(uid, "add_cover_saved", {"path": str(draft["cover_rel"])})
-    await update.message.reply_text("Step 6/6: Upload the **MP3** file as a document.")
+    await update.message.reply_text("Step 6/6: Upload the MP3 file as a document.")
     return ST_ADD_MP3
 
 
@@ -469,7 +724,7 @@ async def add_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
     doc = update.message.document if update.message else None
     if doc is None or not (doc.file_name or "").lower().endswith(".mp3"):
-        await update.message.reply_text("Please send an **MP3** file as a document.")
+        await update.message.reply_text("Please upload an MP3 file as a document.")
         return ST_ADD_MP3
     draft = context.user_data.setdefault("adm_draft", {})
     title = str(draft.get("title") or "track")
@@ -484,12 +739,18 @@ async def add_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     # file_id для доставки покупки
     merge_file_id_json(stem, doc.file_id)
     _log(uid, "add_mp3_saved", {"path": draft["audio_rel"]})
+    from tracks import TRACKS
+
+    # Новый id нужен заранее, чтобы записать его в metadata Stripe Payment Link.
+    new_id = max(int(t["id"]) for t in TRACKS) + 1 if TRACKS else 1
     await update.message.reply_text("Creating Stripe product and payment links…")
     try:
 
         def _stripe_job() -> dict[str, str]:
             return create_product_and_payment_links(
                 title=str(draft["title"]),
+                description=str(draft.get("description") or ""),
+                track_id=new_id,
                 usd_whole=int(draft["usd"]),
                 sek_whole=int(draft["sek"]),
             )
@@ -503,9 +764,6 @@ async def add_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ST_MAIN
     draft["stripe"] = links
-    from tracks import TRACKS
-
-    new_id = max(int(t["id"]) for t in TRACKS) + 1 if TRACKS else 1
     usd = int(draft["usd"])
     sek = int(draft["sek"])
     track = {
@@ -549,7 +807,7 @@ async def edit_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     mode = context.user_data.get("adm_mode")
     raw = (update.message.text or "").strip()
     if not raw.isdigit():
-        await update.message.reply_text("Send a numeric track id.")
+        await update.message.reply_text("Send a numeric track ID.")
         return ST_EDIT_MENU
     tid = int(raw)
     from tracks import get_track
@@ -561,7 +819,7 @@ async def edit_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if mode == "del_pick":
         context.user_data["adm_del_id"] = tid
         await update.message.reply_text(
-            f"Really delete track id **{tid}** — {tr.get('title', '')[:50]}?",
+            f"Delete track ID {tid} - {tr.get('title', '')[:50]}?",
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
@@ -581,11 +839,11 @@ async def edit_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         [InlineKeyboardButton("Stripe SEK link", callback_data=f"adm:ed:{tid}:b")],
         [InlineKeyboardButton("Replace cover", callback_data=f"adm:ed:{tid}:c")],
         [InlineKeyboardButton("Replace MP3", callback_data=f"adm:ed:{tid}:m")],
+        [InlineKeyboardButton("🔁 Rename media files (advanced)", callback_data=f"adm:ed:{tid}:r")],
         [InlineKeyboardButton("⬅️ Menu", callback_data="adm:menu")],
     ]
     await update.message.reply_text(
-        f"Editing track `{tid}` — choose field:",
-        parse_mode="Markdown",
+        f"Editing track {tid} - choose a field:",
         reply_markup=InlineKeyboardMarkup(kb_rows),
     )
     return ST_MAIN
@@ -601,7 +859,7 @@ async def edit_value_text(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     field = str(context.user_data.get("adm_edit_field", ""))
     text = (update.message.text or "").strip()
     if not text:
-        await update.message.reply_text("Empty value, cancelled.")
+        await update.message.reply_text("Empty value. Canceled.")
         return ST_MAIN
     patch: dict[str, Any] = {}
     if field == "t":
@@ -613,18 +871,18 @@ async def edit_value_text(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         try:
             n = int(text)
         except ValueError:
-            await update.message.reply_text("Send whole dollars as number.")
+            await update.message.reply_text("Send whole dollars as a number.")
             return ST_EDIT_VALUE
         patch["price"] = f"${n}"
         patch["price_amount"] = n * 100
     elif field == "a":
         if not text.startswith("https://"):
-            await update.message.reply_text("Must be https:// payment link")
+            await update.message.reply_text("The payment link must start with https://")
             return ST_EDIT_VALUE
         patch["buy_url"] = text
     elif field == "b":
         if not text.startswith("https://"):
-            await update.message.reply_text("Must be https:// payment link")
+            await update.message.reply_text("The payment link must start with https://")
             return ST_EDIT_VALUE
         patch["buy_url_sek"] = text
     else:
@@ -648,7 +906,10 @@ async def edit_value_text(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     reload_track_catalog()
     _sync_frontend_after_catalog_change(uid, "edit_track_frontend_sync")
     _log(uid, "edit_saved", {"track_id": tid, "field": field})
-    await update.message.reply_text("✅ Saved.", reply_markup=_main_menu_kb())
+    if field == "t":
+        await update.message.reply_text(f"✅ Title updated: {text}", reply_markup=_main_menu_kb())
+    else:
+        await update.message.reply_text("✅ Saved.", reply_markup=_main_menu_kb())
     return ST_MAIN
 
 
@@ -662,7 +923,7 @@ async def edit_upload_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     field = str(context.user_data.get("adm_edit_field", ""))
     tr = get_track(tid)
     if tr is None:
-        await update.message.reply_text("Track disappeared. Menu.", reply_markup=_main_menu_kb())
+        await update.message.reply_text("Track not found anymore. Returning to menu.", reply_markup=_main_menu_kb())
         return ST_MAIN
     title = str(tr.get("title", "track"))
     stem = sanitize_filename_stem(Path(str(tr.get("audio", ""))).stem or title)
@@ -697,7 +958,7 @@ async def edit_upload_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         elif field == "m":
             doc = update.message.document
             if doc is None or not (doc.file_name or "").lower().endswith(".mp3"):
-                await update.message.reply_text("Send MP3 as document.")
+                await update.message.reply_text("Send an MP3 file as a document.")
                 return ST_EDIT_UPLOAD
             songs = project_root() / "songs"
             songs.mkdir(parents=True, exist_ok=True)

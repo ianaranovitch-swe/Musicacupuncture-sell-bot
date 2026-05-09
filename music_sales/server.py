@@ -784,11 +784,38 @@ def create_app(
                     sess_id = str(session["id"] or "")
                 except Exception:
                     sess_id = ""
+                try:
+                    transaction_id = str(session.get("payment_intent") or "")
+                except Exception:
+                    transaction_id = ""
+                try:
+                    amount_total = int(session.get("amount_total") or 0)
+                except Exception:
+                    amount_total = 0
+                currency_code = str(session.get("currency") or "").upper()
+                amount_major = (amount_total / 100.0) if amount_total > 0 else 0.0
+
+                track_id_num = None
+                try:
+                    from pathlib import Path as _Path
+                    from tracks import TRACKS as _TRACKS
+
+                    for _t in _TRACKS:
+                        _stem = _Path(str(_t.get("audio", ""))).stem
+                        if _stem and resolve_song_id_by_audio_stem(_stem) == song_id:
+                            track_id_num = int(_t.get("id"))
+                            break
+                except Exception:
+                    track_id_num = None
                 append_sale_event(
                     song_id=song_id,
+                    track_id=track_id_num,
                     track_title=song_name,
+                    amount=amount_major,
+                    currency=currency_code,
                     source=(source or "telegram")[:32],
                     session_id=sess_id,
+                    transaction_id=transaction_id,
                     telegram_id=tid_int if tid_int > 0 else None,
                 )
             except Exception:

@@ -19,6 +19,8 @@ def test_mode_active() -> bool:
 BOT_TOKEN = _env("BOT_TOKEN")
 BACKEND_URL = _env("BACKEND_URL", "http://localhost:5000")
 STRIPE_SECRET_KEY = _env("STRIPE_SECRET_KEY")
+# Алиас для совместимости с формулировкой в ТЗ админки.
+STRIPE_API_KEY = _env("STRIPE_API_KEY")
 # Секрет подписи вебхука Stripe (Stripe Dashboard → Webhooks → Signing secret). В проде обязателен.
 STRIPE_WEBHOOK_SECRET = _env("STRIPE_WEBHOOK_SECRET")
 DOMAIN = _env("DOMAIN", "http://localhost:5000")
