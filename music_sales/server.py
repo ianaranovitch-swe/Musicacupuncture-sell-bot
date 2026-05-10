@@ -356,6 +356,11 @@ def create_app(
         """Страница о создателе MusicAcupuncture® (Michael B. Johnsson)."""
         return send_from_directory(str(root_path()), "about.html", mimetype="text/html")
 
+    @app.route("/website.html")
+    def website_landing_page() -> Any:
+        """Публичная витрина (тот же файл, что на GitHub Pages); ссылка «Back» из about.html ведёт сюда."""
+        return send_from_directory(str(root_path()), "website.html", mimetype="text/html")
+
     @app.route("/assets/<path:filename>")
     def static_assets(filename: str) -> Any:
         """Публичные файлы из папки assets/ (портрет для about.html и т.д.)."""

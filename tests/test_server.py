@@ -769,6 +769,22 @@ def test_miniapp_html_route(mocker, tmp_path):
     assert b"doctype html" in resp.data.lower()
 
 
+def test_website_html_route(mocker, tmp_path):
+    (tmp_path / "website.html").write_text("<!doctype html><title>shop</title>", encoding="utf-8")
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/website.html")
+    assert resp.status_code == 200
+    assert b"doctype html" in resp.data.lower()
+
+
 def test_covers_route_serves_file(mocker, tmp_path):
     covers = tmp_path / "covers"
     covers.mkdir()
