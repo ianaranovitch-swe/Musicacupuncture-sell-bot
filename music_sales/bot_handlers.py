@@ -16,6 +16,11 @@ from telegram import (
 from telegram.ext import ContextTypes
 
 from music_sales import config
+from music_sales.about_michael import (
+    ABOUT_MICHAEL_BODY,
+    ABOUT_MICHAEL_PHOTO_CAPTION,
+    ABOUT_MICHAEL_PHOTO_REL,
+)
 from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.owner_notify import notify_owner_async
@@ -50,9 +55,26 @@ def _miniapp_store_row(*, url_override: str | None = None) -> list[InlineKeyboar
     return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
 
 
+def _about_url_button_row() -> list[InlineKeyboardButton] | None:
+    """Ссылка на страницу About на HTTPS-backend (Railway)."""
+    url = (config.resolved_about_page_url() or "").strip()
+    if not url.startswith("https://"):
+        return None
+    return [
+        InlineKeyboardButton(
+            "About Michael — Founder of MusicAcupuncture®",
+            url=url,
+        )
+    ]
+
+
 def _free_track_markup() -> InlineKeyboardMarkup:
-    """Кнопка выдачи бесплатного трека (тексты UI — на английском)."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)]])
+    """Кнопка выдачи бесплатного трека + опционально About (тексты UI — на английском)."""
+    rows: list[list[InlineKeyboardButton]] = [[InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)]]
+    about_row = _about_url_button_row()
+    if about_row:
+        rows.append(about_row)
+    return InlineKeyboardMarkup(rows)
 
 
 def _repo_root() -> Path:
@@ -114,7 +136,7 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
-            "🎁 Your FREE gift from Mikael!\n"
+            "🎁 Your FREE gift from Michael!\n"
             f"✨ {FREE_TRACK_TITLE}\n\n"
             "This divine sound supports harmony,\n"
             "balance and positive energy flow in\n"
@@ -190,10 +212,14 @@ async def _send_miniapp_store_opener_if_configured(
     welcome = "Welcome! Open the Music Store from the menu button."
     if config.test_mode_active():
         welcome = "[TEST] " + welcome
+    rows = [row]
+    about_row = _about_url_button_row()
+    if about_row:
+        rows.append(about_row)
     await update.message.reply_text(
         welcome,
         # Inline-кнопку оставляем как fallback (на случай, если MenuButton не поддержан в клиенте/ошибка API).
-        reply_markup=InlineKeyboardMarkup([row]),
+        reply_markup=InlineKeyboardMarkup(rows),
     )
 
 
@@ -207,7 +233,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     # Приветствие + бесплатный подарок.
     await update.message.reply_text(
-        "🎁 Special gift from Mikael!\n\n"
+        "🎁 Special gift from Michael!\n\n"
         "Receive a FREE healing track:\n"
         f"✨ {FREE_TRACK_TITLE}\n\n"
         "This is our gift to you — no payment needed!\n"
@@ -225,6 +251,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /about: фото + полный текст; при HTTPS — кнопка на страницу about.html."""
+    if update.message is None:
+        return
+    chat_id = update.message.chat_id
+    root = _repo_root()
+    photo_path = root / ABOUT_MICHAEL_PHOTO_REL
+    about_row = _about_url_button_row()
+    markup = InlineKeyboardMarkup([about_row]) if about_row else None
+    try:
+        if photo_path.is_file():
+            with photo_path.open("rb") as photo:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=ABOUT_MICHAEL_PHOTO_CAPTION,
+                    reply_markup=markup,
+                )
+        else:
+            await update.message.reply_text(
+                "Photo file is not deployed yet. Ask admin to add assets/about-michael.png to the server.",
+                reply_markup=markup,
+            )
+    except Exception:
+        logger.exception("about_command: send_photo failed")
+        await update.message.reply_text(
+            "Could not send the portrait image. Full biography below.",
+            reply_markup=markup,
+        )
+    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY)
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Краткая справка: у бота остался только Mini App сценарий."""
     if update.message is None:
@@ -235,6 +293,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "",
         "Commands:",
         "• /start — open the Music Store Mini App",
+        "• /about — founder biography (Michael B. Johnsson)",
         "• /help — show this help message",
         "• /health — owner/developer diagnostics only",
         "",

@@ -87,6 +87,19 @@ def resolved_miniapp_url() -> str:
     return base
 
 
+def resolved_about_page_url() -> str:
+    """
+    Полный HTTPS URL страницы about.html (тот же хост, что и веб-backend на Railway).
+
+    Для кнопки в боте и Mini App; если BACKEND_URL/Domain не HTTPS — пустая строка.
+    """
+    for raw in (_env("BACKEND_URL"), _env("DOMAIN")):
+        u = (raw or "").strip().rstrip("/")
+        if u.startswith("https://"):
+            return f"{u}/about.html"
+    return ""
+
+
 def owner_telegram_id_int() -> int | None:
     if not OWNER_TELEGRAM_ID:
         return None

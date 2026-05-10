@@ -465,6 +465,18 @@
       color: var(--gold);
       cursor: pointer;
     }
+    .mini-about-line {
+      text-align: center;
+      margin: -4px 0 14px;
+    }
+    .mini-about-link {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -479,6 +491,9 @@
           <h1>🎵 Music Acupuncture</h1>
           <p>Divine Healing Sounds</p>
         </header>
+        <p class="mini-about-line" id="mini-about-line" style="display: none" role="navigation">
+          <a href="#" id="link-about-founder" class="mini-about-link">About Michael — Founder of MusicAcupuncture®</a>
+        </p>
         <div id="track-grid" class="grid" aria-label="Track list"></div>
       </div>
 
@@ -713,6 +728,30 @@
       });
     }
 
+    function getAboutPageUrl() {
+      const b = getCheckoutApiBase();
+      if (!b || !b.startsWith("http")) return "";
+      return `${b.replace(/\/$/, "")}/about.html`;
+    }
+
+    function wireAboutFounderLink() {
+      const line = document.getElementById("mini-about-line");
+      const a = document.getElementById("link-about-founder");
+      if (!line || !a) return;
+      const url = getAboutPageUrl();
+      if (!url) return;
+      line.style.display = "block";
+      a.href = url;
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (tg && typeof tg.openLink === "function") {
+          tg.openLink(url);
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      });
+    }
+
     function showAppShell() {
       const shell = document.getElementById("app-shell");
       if (shell) {
@@ -722,6 +761,7 @@
       syncTestModeBanner();
       mergeTrackDurationsFromServer();
       renderGrid();
+      wireAboutFounderLink();
     }
 
     function renderGrid() {

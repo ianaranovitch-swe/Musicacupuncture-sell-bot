@@ -149,8 +149,8 @@ async def test_start_skips_notify_when_visitor_is_owner(mocker):
     mocker.patch("music_sales.bot_handlers.config.owner_telegram_id_int", return_value=7846059164)
     visitor = MagicMock()
     visitor.id = 7846059164
-    visitor.username = "mikael"
-    visitor.first_name = "Mikael"
+    visitor.username = "michael"
+    visitor.first_name = "Michael"
     visitor.last_name = None
 
     update = MagicMock()

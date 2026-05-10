@@ -351,6 +351,27 @@ def create_app(
         """Статическая страница Telegram Mini App (один HTML-файл в корне репозитория)."""
         return send_from_directory(str(root_path()), "miniapp.html", mimetype="text/html")
 
+    @app.route("/about.html")
+    def about_michael_page() -> Any:
+        """Страница о создателе MusicAcupuncture® (Michael B. Johnsson)."""
+        return send_from_directory(str(root_path()), "about.html", mimetype="text/html")
+
+    @app.route("/assets/<path:filename>")
+    def static_assets(filename: str) -> Any:
+        """Публичные файлы из папки assets/ (портрет для about.html и т.д.)."""
+        assets_dir = (root_path() / "assets").resolve()
+        try:
+            target = (assets_dir / filename).resolve()
+        except OSError:
+            return jsonify({"error": "Invalid path"}), 400
+        try:
+            target.relative_to(assets_dir)
+        except ValueError:
+            return jsonify({"error": "Invalid path"}), 400
+        if not target.is_file():
+            return jsonify({"error": "Not found"}), 404
+        return send_from_directory(str(assets_dir), filename)
+
     @app.route("/covers/<path:filename>")
     def miniapp_cover(filename: str) -> Any:
         """Обложки для Mini App: только файлы внутри папки covers (без выхода вверх по путям)."""

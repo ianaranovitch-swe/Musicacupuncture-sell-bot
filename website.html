@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Therapeutic healing music for body, soul and chakras. Divine healing sounds by Mikael — Music Acupuncture." />
+  <meta name="description" content="Therapeutic healing music for body, soul and chakras. Divine healing sounds by Michael — Music Acupuncture." />
   <meta name="theme-color" content="#1a0533" />
   <meta property="og:title" content="Music Acupuncture - Divine Healing Sounds" />
   <meta property="og:description" content="Therapeutic healing music for body, soul and chakras." />
@@ -196,6 +196,11 @@
       width: 100%;
       max-width: 320px;
     }
+    .hero-buttons a.btn-outline {
+      display: inline-block;
+      width: 100%;
+      box-sizing: border-box;
+    }
     .btn-gold {
       font-family: inherit;
       font-size: 1.05rem;
@@ -259,6 +264,36 @@
       line-height: 1.6;
       color: var(--text);
       margin: 0 0 20px;
+    }
+
+    .about-founder-block {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .about-founder-photo {
+      width: 100%;
+      max-width: 420px;
+      display: block;
+      margin: 0 auto 24px;
+      border-radius: 16px;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .about-founder-prose p {
+      text-align: left;
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: var(--text);
+      margin: 0 0 1em;
+    }
+    .about-signature {
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--card-border);
+      color: var(--muted);
+    }
+    .about-signature strong {
+      color: var(--gold);
     }
 
     /* ========== Catalog grid ========== */
@@ -544,7 +579,7 @@
         <a href="#home">Home</a>
         <a href="#free">Free Track</a>
         <a href="#shop">Shop</a>
-        <a href="#about">About</a>
+        <a href="#about-michael">About Michael</a>
       </nav>
       <div class="currency-switch" aria-label="Currency">
         <button type="button" id="btn-curr-sek" class="active" data-curr="SEK">🇸🇪 SEK</button>
@@ -569,7 +604,7 @@
             >⬇️ Open MP3 in new tab</a>
         </div>
         <p style="font-size: 0.9rem; color: var(--muted); margin-bottom: 0;">
-          Thank you for supporting Music Acupuncture. 🙏<br />— Mikael
+          Thank you for supporting Music Acupuncture. 🙏<br />— Michael
         </p>
       </div>
     </div>
@@ -577,7 +612,7 @@
     <!-- ========== PAGE 1: Hero ========== -->
     <section id="home" class="hero">
       <h1>🎵 Music Acupuncture</h1>
-      <p class="tagline">Divine Healing Sounds by Mikael</p>
+      <p class="tagline">Divine Healing Sounds by Michael</p>
       <p class="lead">
         <strong>Divine Healing Music for Body and Soul.</strong><br />
         Music Acupuncture uses carefully crafted sound frequencies to support balance, calm, and inner harmony — a gentle daily practice for your energy and well-being.
@@ -585,12 +620,13 @@
       <div class="hero-buttons">
         <button type="button" class="btn-gold" id="hero-btn-free">🎁 Get Free Track</button>
         <button type="button" class="btn-outline" id="hero-btn-shop">🎵 Browse All Tracks</button>
+        <a href="#about-michael" class="btn-outline" id="hero-btn-about" style="text-decoration: none; text-align: center; line-height: 1.35;">About Michael — Founder</a>
       </div>
     </section>
 
     <!-- ========== PAGE 2: Free track ========== -->
     <section id="free" class="fade-in-up">
-      <h2 class="section-title">🎁 FREE GIFT from Mikael</h2>
+      <h2 class="section-title">🎁 FREE GIFT from Michael</h2>
       <p class="section-sub">A special divine sound for harmony and positive energy in your home and life.</p>
       <div class="free-box" id="free-box">
         <img class="cover-main" id="free-cover-img" alt="" />
@@ -608,34 +644,45 @@
       <div class="catalog-grid" id="catalog-grid"></div>
     </section>
 
-    <!-- ========== PAGE 6: About ========== -->
-    <section id="about" class="fade-in-up">
-      <h2 class="section-title">About</h2>
-      <div class="about-block">
-        <p>
-          <strong>Music Acupuncture</strong> is a healing music concept that combines therapeutic sound with intention —
-          supporting body, emotions, and subtle energy. Each track is created as a focused listening experience for daily use.
-        </p>
-        <h3>Mikael</h3>
-        <p>
-          Composer and creator of the Divine Healing Sounds series. This placeholder text can be replaced with your biography,
-          mission, and credentials.
-        </p>
-        <h3>Contact</h3>
-        <p>
-          Email: <em style="color: var(--muted);">(add your email)</em><br />
-          Telegram: <em style="color: var(--muted);">(optional)</em>
-        </p>
+    <!-- ========== About Michael (founder) ========== -->
+    <section id="about-michael" class="fade-in-up">
+      <h2 class="section-title">About Michael</h2>
+      <p class="section-sub">Founder &amp; President of MusicAcupuncture®</p>
+      <div class="about-block about-founder-block">
+        <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson" />
+        <div class="about-founder-prose">
+          <p>
+            <strong>Music Acupuncture®</strong> is a healing music concept that combines therapeutic sound with intention —
+            supporting body, emotions, and subtle energy.
+          </p>
+          <p>
+            Michael B. Johnsson is educated in several fields of alternative medicine, including Chiropractic, Acupuncture, and Kinesiology. His education and professional training have taken place in England, Denmark, and Sweden.
+          </p>
+          <p>
+            Over many years, Michael further deepened his knowledge through studies and practical training under the supervision of masters and practitioners in China, Korea, and other parts of Asia. During his time in Asia, he discovered the ancient principles of Tibetan sound therapy — a system based on the harmonizing effects of sound, vibration, and frequency on the human body and mind.
+          </p>
+          <p>
+            Inspired by this ancient wisdom, Michael spent years developing and refining a modern therapeutic method that eventually became MusicAcupuncture® — a unique system that combines traditional energetic principles with modern sound technology.
+          </p>
+          <p>
+            Today, MusicAcupuncture® is used by people around the world seeking relaxation, balance, energetic harmony, and support for overall well-being.
+          </p>
+          <p>Welcome to discover MusicAcupuncture®.</p>
+          <p class="about-signature">
+            <strong>— Michael B. Johnsson</strong><br />
+            Founder &amp; President of MusicAcupuncture®
+          </p>
+        </div>
       </div>
     </section>
 
     <!-- ========== Footer ========== -->
     <footer>
-      <p>© 2026 Music Acupuncture by Mikael</p>
+      <p>© 2026 Music Acupuncture by Michael</p>
       <p>
         <a href="#shop">Shop</a>
         <a href="#free">Free Track</a>
-        <a href="#about">Contact</a>
+        <a href="#about-michael">About Michael</a>
       </p>
       <p style="margin-top: 12px; font-size: 0.75rem;">
         <span style="opacity: 0.7;">Instagram · Facebook · YouTube</span> <span style="opacity: 0.5;">(links coming soon)</span>
@@ -1149,6 +1196,11 @@
     document.getElementById("free-desc").textContent = free.description;
   }
 
+  function initAboutFounderPhoto() {
+    var el = document.getElementById("about-founder-photo");
+    if (el) el.src = assetUrl("assets/about-michael.png");
+  }
+
   /* ---------- Nav mobile ---------- */
   document.getElementById("nav-toggle").addEventListener("click", function () {
     document.getElementById("nav-links").classList.toggle("open");
@@ -1196,6 +1248,7 @@
   initStars();
   initScrollFade();
   initFreeSection();
+  initAboutFounderPhoto();
   initSuccessPage();
   loadPricing();
 
