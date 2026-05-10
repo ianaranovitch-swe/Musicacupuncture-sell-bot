@@ -33,9 +33,14 @@ _BUILTIN_TRACKS: list[dict] = [
         "short_title": "🎁 Free Gift",
         "title": "Divine sound Super Feng Shui from God",
         "description": (
-            "Your free divine gift for home harmony and positive energy flow.\n"
-            "A special bonus track designed to support calmness, balance, and uplifting atmosphere. "
-            "Listen daily for best results."
+            "THIS SUPER FENG SHUI - SPACE CLEARING-MP3 IS ONE OF THE MOST POWERFUL TREATMENTS FOR ROOM AND SPACE. "
+            "IT IS ALSO ONE OF THE EASIEST AND FASTEST WAYS TO ACHIEVE A GOOD RESULT. "
+            "APART FROM ITS ABILITY TO BALANCE ROOM AND SPACE, YOU CAN ALSO ADD ONE MORE DIMENSION: "
+            "THE HARMONY AND HEALTH IT GIVES TO YOURSELF.\n\n"
+            "Feng Shui is the oriental art of enhancing and harmonizing the flow of energy in your surroundings. "
+            "Discover how Feng Shui can bring harmony and prosperity into your life, neutralize negative influences "
+            "in your house and create a healthy and positive living and working space. "
+            "You can create an environment that directly embraces and empowers your life."
         ),
         "price": "FREE",
         "price_amount": 0,

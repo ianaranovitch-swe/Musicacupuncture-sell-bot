@@ -319,10 +319,17 @@
     }
     .gallery-modal.open {
       display: block;
+      /* Иначе в Telegram WebView нижние фото галереи обрезаются — нужна прокрутка всего оверлея */
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      max-height: 100dvh;
+      overscroll-behavior: contain;
     }
     .gallery-modal-inner {
       max-width: 520px;
       margin: 0 auto;
+      padding-bottom: max(20px, env(safe-area-inset-bottom));
     }
     .gallery-close {
       background: transparent;
@@ -339,8 +346,40 @@
       grid-template-columns: 1fr;
       gap: 12px;
     }
-    /* Общее для всех картинок в модалке галереи */
-    .gallery-grid img {
+    /* CD сверху, фото футляра — в ряд со свайпом/скроллом (иначе последнее не видно на узком экране) */
+    .gallery-grid.gallery-grid-split {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .gallery-cases-scroll {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 14px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+      padding: 4px 2px 12px;
+      touch-action: pan-x;
+    }
+    /* Футляр в ленте: полный стиль здесь (не только .gallery-grid > img — обложки внутри .gallery-cases-scroll) */
+    .gallery-cases-scroll img.gallery-cover-case {
+      display: block;
+      flex: 0 0 min(85vw, 300px);
+      width: min(85vw, 300px);
+      max-width: none;
+      scroll-snap-align: center;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      aspect-ratio: 1;
+      object-fit: contain;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.35);
+    }
+    /* Общее для круглой обложки CD — только прямой потомок .gallery-grid (не img внутри .gallery-cases-scroll) */
+    .gallery-grid > img {
       width: 100%;
       border: 1px solid var(--card-border);
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
@@ -351,13 +390,6 @@
       aspect-ratio: 1;
       object-fit: cover;
       border-radius: 50%;
-    }
-    /* 2–я и дальше = фото футляра (прямоугольный кадр в квадрате, без круга) */
-    .gallery-grid img.gallery-cover-case {
-      aspect-ratio: 1;
-      object-fit: contain;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.35);
     }
     .detail-emoji-title {
       font-size: 1.05rem;
@@ -503,7 +535,7 @@
      */
     /* MA_AUTO_TRACKS_BEGIN */
     const tracks = [
-      {"id": 0, "emoji": "🎁", "shortName": "Free Gift", "fullTitle": "Divine sound Super Feng Shui from God", "description": "Your free divine gift for home harmony and positive energy flow.\nA special bonus track designed to support calmness, balance, and uplifting atmosphere. Listen daily for best results.", "cover": "covers/Divine-sound-Super-Feng-Shui-from-God.png", "isFree": true, "galleryCovers": ["covers/Divine-sound-Super-Feng-Shui-from-God.png", "covers/Divine sound Super Feng Shui from God CD cover front.png", "covers/Divine sound Super Feng Shui from God CD cover back.png"]},
+      {"id": 0, "emoji": "🎁", "shortName": "Free Gift", "fullTitle": "Divine sound Super Feng Shui from God", "description": "THIS SUPER FENG SHUI - SPACE CLEARING-MP3 IS ONE OF THE MOST POWERFUL TREATMENTS FOR ROOM AND SPACE. IT IS ALSO ONE OF THE EASIEST AND FASTEST WAYS TO ACHIEVE A GOOD RESULT. APART FROM ITS ABILITY TO BALANCE ROOM AND SPACE, YOU CAN ALSO ADD ONE MORE DIMENSION: THE HARMONY AND HEALTH IT GIVES TO YOURSELF.\n\nFeng Shui is the oriental art of enhancing and harmonizing the flow of energy in your surroundings. Discover how Feng Shui can bring harmony and prosperity into your life, neutralize negative influences in your house and create a healthy and positive living and working space. You can create an environment that directly embraces and empowers your life.", "cover": "covers/Divine-sound-Super-Feng-Shui-from-God.png", "isFree": true, "galleryCovers": ["covers/Divine-sound-Super-Feng-Shui-from-God.png", "covers/Divine sound Super Feng Shui from God CD cover front.png", "covers/Divine sound Super Feng Shui from God CD cover back.png"]},
       {"id": 1, "emoji": "🎵", "shortName": "Crown Chakra", "fullTitle": "Divine sound Crownchakra-Browchakra-Throatchakra from God", "description": "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", "cover": "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png"},
       {"id": 2, "emoji": "🎵", "shortName": "Estrogen", "fullTitle": "Divine sound Estrogen from God", "description": "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", "cover": "covers/Divine-sound-Estrogen-from-God.png"},
       {"id": 3, "emoji": "🎵", "shortName": "Heart", "fullTitle": "Divine sound Heart from God", "description": "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", "cover": "covers/Divine-sound-Heart-from-God.png"},
@@ -784,13 +816,21 @@
       const modal = document.getElementById("gallery-modal");
       const grid = document.getElementById("gallery-grid");
       if (!modal || !grid) return;
-      grid.innerHTML = selectedGalleryCovers
-        .map((src, i) => {
-          const cls = i === 0 ? "gallery-cover-cd" : "gallery-cover-case";
-          const alt = i === 0 ? "Round CD artwork" : "CD jewel case photo";
-          return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" class="${cls}" loading="lazy" />`;
-        })
-        .join("");
+      const paths = selectedGalleryCovers;
+      const cdSrc = paths[0];
+      const caseSrcs = paths.slice(1);
+      const cdHtml = `<img src="${escapeHtml(cdSrc)}" alt="${escapeHtml("Round CD artwork")}" class="gallery-cover-cd" loading="lazy" />`;
+      const casesHtml =
+        caseSrcs.length > 0
+          ? `<div class="gallery-cases-scroll" role="region" aria-label="Jewel case photos">${caseSrcs
+              .map(
+                (src) =>
+                  `<img src="${escapeHtml(src)}" alt="CD jewel case photo" class="gallery-cover-case" loading="lazy" />`
+              )
+              .join("")}</div>`
+          : "";
+      grid.className = caseSrcs.length > 0 ? "gallery-grid gallery-grid-split" : "gallery-grid";
+      grid.innerHTML = cdHtml + casesHtml;
       modal.classList.add("open");
       modal.setAttribute("aria-hidden", "false");
     }
