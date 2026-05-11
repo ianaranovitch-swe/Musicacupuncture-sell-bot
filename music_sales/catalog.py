@@ -29,6 +29,11 @@ def songs_dir() -> Path:
     return project_root() / _audio_sales_dir_name()
 
 
+def songs_dir_under(root: Path) -> Path:
+    """Папка с MP3 относительно заданного корня (например project_root_override на сервере)."""
+    return root / _audio_sales_dir_name()
+
+
 def _fixed_track_price_usd() -> int:
     """
     Фиксированная цена трека в целых долларах США (USD) для всех треков.
@@ -145,6 +150,16 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         }
 
     return out
+
+
+def free_bonus_audio_path(base: Path | None = None) -> Path:
+    """
+    Путь к бесплатному бонус-треку на диске (тот же файл, что у бота по file_id).
+
+    Файл намеренно не входит в discover_songs() — отдельная выдача через /free-track.
+    """
+    root = base if base is not None else project_root()
+    return songs_dir_under(root) / f"{_FREE_BONUS_STEM}.mp3"
 
 
 def song_path(song_id: str) -> Path:

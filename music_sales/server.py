@@ -15,7 +15,14 @@ import stripe
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from music_sales import config
-from music_sales.catalog import discover_songs, project_root, resolve_song_id_by_audio_stem, unit_amount_for_song
+from music_sales.catalog import (
+    discover_songs,
+    free_bonus_audio_path,
+    project_root,
+    resolve_song_id_by_audio_stem,
+    songs_dir_under,
+    unit_amount_for_song,
+)
 from music_sales.file_id_delivery import PURCHASE_DELIVERY_CAPTION, file_id_for_song, load_file_ids_dict
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
@@ -277,6 +284,8 @@ def create_app(
             "/website/download",
             "/website/download-redirect",
             "/website/download-file",
+            "/free-track",
+            "/free-track-file",
         ):
             return True
         return p.endswith(tails)
@@ -671,6 +680,46 @@ def create_app(
             return jsonify({"error": "Invalid path"}), 400
         if not p.is_file():
             return jsonify({"error": "File not found"}), 404
+        return send_from_directory(str(p.parent), p.name, as_attachment=True, download_name=p.name)
+
+    def _free_bonus_mp3_or_error() -> Union[Path, Tuple[Any, int]]:
+        """Путь к бонусному MP3 внутри songs_dir() или (json_error, status)."""
+        p = free_bonus_audio_path(root_path()).resolve()
+        allowed = songs_dir_under(root_path()).resolve()
+        try:
+            p.relative_to(allowed)
+        except ValueError:
+            return jsonify({"error": "Invalid free track path"}), 500
+        if not p.is_file():
+            return jsonify({"error": "Free track file not available on server"}), 404
+        return p
+
+    @app.route("/free-track", methods=["GET", "OPTIONS"])
+    def free_track_json() -> Any:
+        """
+        Публичная ссылка для website.html: JSON { "url": "…/free-track-file" }.
+        Браузер на GitHub Pages делает fetch (нужен CORS — см. _path_is_checkout_cors).
+        """
+        if request.method == "OPTIONS":
+            return "", 204
+        out = _free_bonus_mp3_or_error()
+        if isinstance(out, tuple):
+            return out[0], out[1]
+        base = (request.url_root or "").rstrip("/") or (domain or "").rstrip("/")
+        if base and not base.startswith("http"):
+            base = f"https://{base}"
+        url = f"{base}/free-track-file" if base else "/free-track-file"
+        return jsonify({"url": url})
+
+    @app.route("/free-track-file", methods=["GET", "OPTIONS"])
+    def free_track_file() -> Any:
+        """Отдаёт бонусный MP3 как attachment (без оплаты — для лендинга website.html)."""
+        if request.method == "OPTIONS":
+            return "", 204
+        out = _free_bonus_mp3_or_error()
+        if isinstance(out, tuple):
+            return out[0], out[1]
+        p = out
         return send_from_directory(str(p.parent), p.name, as_attachment=True, download_name=p.name)
 
     def _notify_owner_via_api(

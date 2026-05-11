@@ -404,6 +404,55 @@ def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_pa
     assert all("sendDocument" not in u for u in urls)
 
 
+def test_free_track_json_returns_file_url(tmp_path, mocker):
+    """website.html запрашивает GET /free-track — ответ { url: …/free-track-file }."""
+    songs = tmp_path / "songs"
+    songs.mkdir()
+    mp3 = songs / "Divine sound Super Feng Shui from God.mp3"
+    mp3.write_bytes(b"ID3\x00test")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/free-track")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body and "/free-track-file" in (body.get("url") or "")
+
+    file_resp = client.get("/free-track-file")
+    assert file_resp.status_code == 200
+    assert file_resp.data == b"ID3\x00test"
+
+
+def test_free_track_options_preflight_includes_cors(tmp_path, mocker):
+    mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://ianaranovitch-swe.github.io")
+    songs = tmp_path / "songs"
+    songs.mkdir()
+    (songs / "Divine sound Super Feng Shui from God.mp3").write_bytes(b"x")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.options(
+        "/free-track",
+        headers={"Origin": "https://ianaranovitch-swe.github.io"},
+    )
+    assert resp.status_code == 204
+    assert resp.headers.get("Access-Control-Allow-Origin") == "https://ianaranovitch-swe.github.io"
+
+
 def test_website_download_returns_signed_url(mocker):
     mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
     mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")

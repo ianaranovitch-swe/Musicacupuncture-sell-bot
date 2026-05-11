@@ -114,6 +114,7 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     mocker.patch("music_sales.health_report._miniapp_env_ok", return_value=(True, "ok"))
     mocker.patch("music_sales.health_report._cors_configured", return_value=(True, "ok"))
     mocker.patch("music_sales.health_report._file_ids_json_ok", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._free_track_website_ok", return_value=(True, "mocked OK"))
 
     (tmp_path / "songs").mkdir()
     (tmp_path / "covers").mkdir()
@@ -130,3 +131,43 @@ def test_build_health_report_one_track_all_files_present(mocker, tmp_path):
     assert r["discovered_mp3_count"] == 1
     assert r["mp3_count_matches_expected"] is True
     assert r["cover_count_matches_expected"] is True
+    assert "free_track" in r
+    assert r["free_track"]["mp3_on_disk"] is False
+    assert r["checks"]["free_track_website"]["ok"] is True
+
+
+def test_build_health_report_free_bonus_mp3_on_disk(mocker, tmp_path):
+    """Бонусный MP3 лежит на диске — free_track.mp3_on_disk True."""
+    fake_tracks = [
+        {
+            "id": 1,
+            "price": "$16",
+            "audio": "songs/demo.mp3",
+            "cover": "covers/demo.png",
+        }
+    ]
+    mocker.patch("music_sales.health_report.TRACKS", fake_tracks)
+    mocker.patch("music_sales.health_report.project_root", return_value=tmp_path)
+    mocker.patch("music_sales.health_report.songs_dir", return_value=tmp_path / "songs")
+    mocker.patch(
+        "music_sales.health_report.discover_songs",
+        return_value={"x": {"name": "Demo", "file": "songs/demo.mp3", "price_usd": 16}},
+    )
+    mocker.patch("music_sales.health_report._stripe_balance_ok", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._backend_options_ok", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._miniapp_env_ok", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._cors_configured", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._file_ids_json_ok", return_value=(True, "ok"))
+    mocker.patch("music_sales.health_report._free_track_website_ok", return_value=(True, "mocked OK"))
+
+    (tmp_path / "songs").mkdir()
+    (tmp_path / "covers").mkdir()
+    (tmp_path / "songs" / "demo.mp3").write_bytes(b"x")
+    (tmp_path / "covers" / "demo.png").write_bytes(b"x")
+    (tmp_path / "songs" / "Divine sound Super Feng Shui from God.mp3").write_bytes(b"mp3")
+
+    from music_sales.health_report import build_health_report
+
+    r = build_health_report()
+    assert r["free_track"]["mp3_on_disk"] is True
+    assert "Super Feng Shui" in r["free_track"]["bonus_mp3_relative"]

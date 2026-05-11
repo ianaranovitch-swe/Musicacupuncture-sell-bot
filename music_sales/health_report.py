@@ -18,7 +18,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from music_sales import config
-from music_sales.catalog import discover_songs, project_root, songs_dir
+from music_sales.catalog import discover_songs, free_bonus_audio_path, project_root, songs_dir
 from tracks import TRACKS
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,57 @@ def _file_ids_json_ok() -> Tuple[bool, str]:
     return True, f"FILE_IDS_JSON OK ({len(data)} keys)"
 
 
+def _free_track_bonus_mp3_relative(root: Path) -> str:
+    """Относительный путь бонусного MP3 (для /health без абсолютных путей)."""
+    p = free_bonus_audio_path(root)
+    try:
+        return str(p.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(p.name)
+
+
+def _free_track_website_ok() -> Tuple[bool, str]:
+    """
+    website.html: fetch GET BACKEND_URL/free-track, затем HEAD (или GET) по url из JSON.
+    Не входит в ready — только диагностика (самопинг может флапать при неверном BACKEND_URL).
+    """
+    base = (config.BACKEND_URL or "").strip().rstrip("/")
+    if not base:
+        return False, "BACKEND_URL not set (cannot probe /free-track)"
+    low = base.lower()
+    if not low.startswith("https://") and "localhost" not in low and "127.0.0.1" not in low:
+        return False, "BACKEND_URL must use https:// in production to probe /free-track"
+    api = f"{base}/free-track"
+    try:
+        r = requests.get(api, timeout=12)
+    except requests.RequestException as e:
+        return False, f"GET /free-track failed: {e!s}"[:200]
+    if r.status_code != 200:
+        return False, f"GET /free-track -> HTTP {r.status_code}"
+    try:
+        data = r.json()
+    except Exception as e:
+        return False, f"/free-track not JSON: {e!s}"[:120]
+    file_url = (data.get("url") or "").strip()
+    if not file_url:
+        return False, "/free-track JSON missing url"
+    try:
+        h = requests.head(file_url, timeout=12, allow_redirects=True)
+        if h.status_code == 405:
+            g = requests.get(file_url, timeout=12, stream=True)
+            try:
+                sc = g.status_code
+            finally:
+                g.close()
+        else:
+            sc = h.status_code
+    except requests.RequestException as e:
+        return False, f"MP3 URL request failed: {e!s}"[:200]
+    if sc != 200:
+        return False, f"free MP3 URL -> HTTP {sc}"
+    return True, "GET /free-track + MP3 URL OK"
+
+
 def build_health_report() -> Dict[str, Any]:
     """Собрать данные для /health (JSON). Без секретов в ответе."""
     root = project_root()
@@ -123,6 +174,10 @@ def build_health_report() -> Dict[str, Any]:
     mini_ok, mini_msg = _miniapp_env_ok()
     cors_ok, cors_msg = _cors_configured()
     file_ids_ok, file_ids_msg = _file_ids_json_ok()
+    bonus_path = free_bonus_audio_path(root)
+    free_mp3_on_disk = bonus_path.is_file()
+    free_mp3_rel = _free_track_bonus_mp3_relative(root)
+    free_site_ok, free_site_msg = _free_track_website_ok()
 
     webhook_secret_set = bool((config.STRIPE_WEBHOOK_SECRET or "").strip())
     mini_secret_set = bool((config.MINIAPP_CHECKOUT_SECRET or "").strip())
@@ -145,6 +200,10 @@ def build_health_report() -> Dict[str, Any]:
         "cover_count_matches_expected": present_cover_count == n_tracks,
         "present_cover_count": present_cover_count,
         "extra_mp3_files_not_in_tracks_py": extra_mp3,
+        "free_track": {
+            "bonus_mp3_relative": free_mp3_rel,
+            "mp3_on_disk": free_mp3_on_disk,
+        },
         "env": {
             "BOT_TOKEN_set": bool((config.BOT_TOKEN or "").strip()),
             "STRIPE_SECRET_KEY_set": bool((config.STRIPE_SECRET_KEY or "").strip()),
@@ -163,6 +222,7 @@ def build_health_report() -> Dict[str, Any]:
             "miniapp_url": {"ok": mini_ok, "detail": mini_msg},
             "miniapp_cors": {"ok": cors_ok, "detail": cors_msg},
             "file_ids_json": {"ok": file_ids_ok, "detail": file_ids_msg},
+            "free_track_website": {"ok": free_site_ok, "detail": free_site_msg},
         },
         "ready": bool(
             len(missing_audio) == 0
@@ -193,6 +253,10 @@ def format_health_html(report: Dict[str, Any], telegram_bot_line: str | None = N
         f"Present covers: {report.get('present_cover_count')}",
         f"discover_songs() MP3 count: {report.get('discovered_mp3_count')}",
         f"Songs folder exists: {report.get('songs_folder_exists')}",
+        "",
+        "<b>Free track (website download)</b>",
+        f"Bonus MP3 on disk: <b>{'YES' if (report.get('free_track') or {}).get('mp3_on_disk') else 'NO'}</b> "
+        f"({html.escape(str((report.get('free_track') or {}).get('bonus_mp3_relative') or ''))})",
         "",
         "<b>Checks</b>",
     ]
