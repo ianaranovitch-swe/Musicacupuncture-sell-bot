@@ -465,17 +465,57 @@
       color: var(--gold);
       cursor: pointer;
     }
-    .mini-about-line {
-      text-align: center;
-      margin: -4px 0 14px;
+    /* Первая строка сетки: заметная карточка «About Michael» (мини-портрет слева, текст справа). */
+    .card.card-about-founder {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 14px;
+      border-width: 2px;
+      border-color: rgba(255, 215, 0, 0.85);
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.14), rgba(255, 255, 255, 0.05));
+      box-shadow: 0 6px 22px rgba(255, 215, 0, 0.18);
     }
-    .mini-about-link {
-      color: var(--muted);
-      font-size: 0.82rem;
+    .card.card-about-founder .card-about-photo-wrap {
+      flex: 0 0 auto;
+    }
+    /* ~2–3 см по высоте на типичном экране (физический размер зависит от устройства). */
+    .card.card-about-founder .card-about-photo {
+      height: 2.5cm;
+      width: 2.5cm;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 2px solid var(--gold);
+      display: block;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+    .card.card-about-founder .card-about-body {
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+      padding: 0;
+    }
+    .card.card-about-founder .card-about-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1.2;
+      letter-spacing: 0.04em;
+    }
+    .card.card-about-founder .card-about-sub {
+      margin-top: 6px;
+      font-size: 0.78rem;
       font-weight: 600;
-      text-decoration: underline;
-      text-underline-offset: 3px;
-      cursor: pointer;
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .card.card-about-founder .card-about-hint {
+      margin-top: 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--muted);
     }
   </style>
 </head>
@@ -491,9 +531,6 @@
           <h1>🎵 Music Acupuncture</h1>
           <p>Divine Healing Sounds</p>
         </header>
-        <p class="mini-about-line" id="mini-about-line" style="display: none" role="navigation">
-          <a href="#" id="link-about-founder" class="mini-about-link">About Michael — Founder of MusicAcupuncture®</a>
-        </p>
         <div id="track-grid" class="grid" aria-label="Track list"></div>
       </div>
 
@@ -734,22 +771,13 @@
       return `${b.replace(/\/$/, "")}/about.html`;
     }
 
-    function wireAboutFounderLink() {
-      const line = document.getElementById("mini-about-line");
-      const a = document.getElementById("link-about-founder");
-      if (!line || !a) return;
-      const url = getAboutPageUrl();
+    function openAboutFounderPage(url) {
       if (!url) return;
-      line.style.display = "block";
-      a.href = url;
-      a.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (tg && typeof tg.openLink === "function") {
-          tg.openLink(url);
-        } else {
-          window.open(url, "_blank", "noopener,noreferrer");
-        }
-      });
+      if (tg && typeof tg.openLink === "function") {
+        tg.openLink(url);
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
     }
 
     function showAppShell() {
@@ -761,15 +789,31 @@
       syncTestModeBanner();
       mergeTrackDurationsFromServer();
       renderGrid();
-      wireAboutFounderLink();
     }
 
     function renderGrid() {
       const root = document.getElementById("track-grid");
       const priceStr = formatPrice(currentCurrency);
-      root.innerHTML = tracks
-        .map(
-          (t) => `
+      const aboutUrl = getAboutPageUrl();
+      const aboutCardHtml = aboutUrl
+        ? `
+        <article class="card card-about-founder" id="card-about-founder" role="link" tabindex="0" aria-label="Open About Michael, founder biography">
+          <div class="card-about-photo-wrap">
+            <img class="card-about-photo" src="assets/about-michael.png" alt="Michael B. Johnsson, founder" loading="eager" width="96" height="96" />
+          </div>
+          <div class="card-about-body">
+            <div class="card-about-title">ABOUT Michael</div>
+            <div class="card-about-sub">Founder of MusicAcupuncture®</div>
+            <div class="card-about-hint">Tap to read the full story</div>
+          </div>
+        </article>`
+        : "";
+
+      root.innerHTML =
+        aboutCardHtml +
+        tracks
+          .map(
+            (t) => `
         <article class="card" data-id="${t.id}" role="button" tabindex="0">
           <div class="card-img-wrap">
             <img src="${escapeHtml(t.cover)}" alt="" loading="lazy" />
@@ -781,10 +825,22 @@
             <div class="card-price">${t.isFree ? "🎁 FREE" : escapeHtml(priceStr)}</div>
           </div>
         </article>`
-        )
-        .join("");
+          )
+          .join("");
 
-      root.querySelectorAll(".card").forEach((el) => {
+      const aboutEl = document.getElementById("card-about-founder");
+      if (aboutEl && aboutUrl) {
+        const goAbout = () => openAboutFounderPage(aboutUrl);
+        aboutEl.addEventListener("click", goAbout);
+        aboutEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            goAbout();
+          }
+        });
+      }
+
+      root.querySelectorAll(".card:not(.card-about-founder)").forEach((el) => {
         const id = Number(el.getAttribute("data-id"));
         const open = () => openDetail(tracks.find((x) => x.id === id));
         el.addEventListener("click", open);
