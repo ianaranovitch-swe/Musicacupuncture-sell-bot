@@ -344,9 +344,16 @@ def create_app(
         return resolve_song_id_by_audio_stem(stem) if stem else None
 
     def _website_success_url(track_id_raw: Any) -> str:
+        """URL после оплаты с публичного сайта; приоритет: WEBSITE_SUCCESS_URL → HTTPS BACKEND_URL/DOMAIN → прод-домен."""
         base = (os.environ.get("WEBSITE_SUCCESS_URL") or "").strip()
         if not base:
-            base = "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html"
+            for raw in ((os.environ.get("BACKEND_URL") or config.BACKEND_URL), (os.environ.get("DOMAIN") or config.DOMAIN)):
+                u = (raw or "").strip().rstrip("/")
+                if u.startswith("https://"):
+                    base = f"{u}/website.html"
+                    break
+        if not base:
+            base = "https://musicacupuncture.digital/website.html"
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}success=true&track_id={track_id_raw}&session_id={{CHECKOUT_SESSION_ID}}"
 

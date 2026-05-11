@@ -724,7 +724,7 @@
   }
 
   /* ---------- Backend (Railway) ---------- */
-  const API_BASE = "https://web-production-ed267.up.railway.app".replace(/\/+$/, "");
+  const API_BASE = "https://musicacupuncture.digital".replace(/\/+$/, "");
   const CHECKOUT_SECRET = (function () {
     try {
       var q = new URLSearchParams(window.location.search);
@@ -735,7 +735,7 @@
   })();
   /** Success page after Stripe: configure the same URL in Stripe Dashboard for Payment Links. */
   const SUCCESS_PAGE_URL =
-    "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html?success=true&track_id={track_id}";
+    "https://musicacupuncture.digital/website.html?success=true&track_id={track_id}";
 
   /**
    * Track catalog: same content as miniapp.html + Stripe URLs from tracks.py (buy_url = USD, buy_url_sek = SEK).

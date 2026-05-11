@@ -74,6 +74,24 @@
 8. Сохрани endpoint и скопируй `Signing secret` в `STRIPE_WEBHOOK_SECRET`.
 9. Redeploy `web` и `worker`.
 
+### 5.1) Свой домен (пример: `musicacupuncture.digital`)
+
+Домен вешаем на сервис **`web`** (HTTPS). У **`worker`** домен не нужен для polling, но **те же URL** нужны в Variables для кнопки Mini App и ссылок.
+
+1. Railway → сервис **`web`** → **Settings** → **Networking** → **Custom Domain** → добавь `musicacupuncture.digital` (и при желании `www.…`). В DNS сделай запись, которую покажет Railway (часто **CNAME** на `xxx.up.railway.app`).
+2. Дождись статуса **Active** и зелёного TLS.
+3. В **Variables** у **`web`** и **`worker`** (одинаково, где применимо):
+   - `DOMAIN=https://musicacupuncture.digital`
+   - `BACKEND_URL=https://musicacupuncture.digital`
+   - `MINIAPP_URL=https://musicacupuncture.digital/miniapp.html`
+   - `MINIAPP_CORS_ORIGINS=https://musicacupuncture.digital`  
+     Если Mini App ещё открывается с GitHub Pages — добавь второй origin через запятую: `https://musicacupuncture.digital,https://USER.github.io`
+4. Stripe → Webhooks: URL **`https://musicacupuncture.digital/webhook`**, событие `checkout.session.completed`. Новый **Signing secret** → `STRIPE_WEBHOOK_SECRET` в **`web`** (и в **`worker`**, если там тоже используется Stripe).
+5. **@BotFather** → твой бот → настройки Mini App / Web App → домен **`musicacupuncture.digital`** (без `https://`), иначе Telegram не откроет WebApp.
+6. **Redeploy** `web` и `worker`.
+
+Опционально: `WEBSITE_SUCCESS_URL` — полный URL страницы успеха для оплат с сайта; если не задан, сервер берёт `BACKEND_URL`/`DOMAIN` и добавляет `/website.html`.
+
 ## 6) Пример env для worker
 
 ```env
