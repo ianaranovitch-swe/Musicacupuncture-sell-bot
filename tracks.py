@@ -1,6 +1,7 @@
-"""Catalog of 17 tracks: cover and audio share the same base filename (.png / .mp3).
+"""Каталог из 18 встроенных треков (обложка и MP3 — см. поля cover / audio).
 
-Поле buy_url_sek — ссылка Stripe в шведских кронах для Mini App; пока дублирует buy_url, замените на реальные SEK-ссылки.
+Поле buy_url_sek — ссылка Stripe для Mini App в SEK (может совпадать с buy_url).
+Опционально: is_featured, is_new, ui_emoji, ui_short_name — для витрины и фронта.
 """
 
 from __future__ import annotations
@@ -11,25 +12,9 @@ from pathlib import Path
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
 _BUILTIN_TRACKS: list[dict] = [
+    # Порядок для клавиатуры бота: сначала бесплатный, сразу новый релиз, дальше остальные (Mini App/сайт — см. ordered_frontend_pairs).
     {
-        "id": 1,
-        "short_title": "🎵 Crown Chakra",
-        "title": "Divine sound Crownchakra-Browchakra-Throatchakra from God",
-        "description": (
-            "Speak your truth with calm, clarity, and confidence.\n"
-            "Clear, uplifting frequencies to support communication and self-expression. "
-            "Helps you speak your truth with confidence and calm. Encourages authentic voice "
-            "and inner clarity. Listen daily for best results."
-        ),
-        "price": "$16",
-        "price_amount": 1600,
-        "cover": "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png",
-        "audio": "songs/Divine sound Crownchakra-Browchakra-Throatchakra from God.mp3",
-        "buy_url": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
-        "buy_url_sek": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"
-    },
-    {
-        "id": 17,
+        "id": 18,
         "short_title": "🎁 Free Gift",
         "title": "Divine sound Super Feng Shui from God",
         "description": (
@@ -48,6 +33,62 @@ _BUILTIN_TRACKS: list[dict] = [
         "audio": "songs/Divine sound Super Feng Shui from God.mp3",
         "buy_url": "",
         "buy_url_sek": ""
+    },
+    {
+        "id": 17,
+        "short_title": "🌙 ✨NEW✨ Sleep Best Silver Power",
+        "title": "Divine sound Sleep Best Silver Power from God",
+        "description": (
+            "🌙 The latest masterpiece from Soundmaster Mikael.\n\n"
+            "Struggling to relax and feel truly restored?\n"
+            "SLEEP BEST – Earth Grounding Silver Power is a "
+            "rare and exclusive healing audio experience, "
+            "crafted to release deep stress, reconnect your "
+            "body with calming earth energy, and guide you "
+            "into profound natural rest.\n\n"
+            "As you listen, a soft silver energy connects you "
+            "to the Earth… calming your thoughts… restoring "
+            "your natural rhythm… and carrying you into "
+            "stillness like never before.\n\n"
+            "✨ What you may experience:\n"
+            "• Deeper, more peaceful sleep from night one\n"
+            "• Full-body relaxation and grounding\n"
+            "• Calm energy flowing through mind and body\n"
+            "• Waking up refreshed and restored\n\n"
+            "💫 Perfect for nighttime relaxation, meditation "
+            "before sleep, and stress relief after a long day.\n\n"
+            "🎧 Close your eyes. Breathe slowly. Let go.\n\n"
+            "This is Mikael's most powerful creation yet."
+        ),
+        "price": "$16",
+        "price_sek": "169 kr",
+        "price_amount": 1600,
+        "currency": "USD",
+        "cover": "covers/Divine sound Sleep Best Silver Power from God.png",
+        "audio": "songs/Divine sound Sleep Best Silver Power from God.mp3",
+        "buy_url": "https://buy.stripe.com/7sY7sK8fz1Of7XfdcBcfK0i",
+        "buy_url_sek": "https://buy.stripe.com/7sY7sK8fz1Of7XfdcBcfK0i",
+        "is_featured": True,
+        "is_new": True,
+        "ui_emoji": "🌙",
+        "ui_short_name": "Sleep Best Silver Power",
+    },
+    {
+        "id": 1,
+        "short_title": "🎵 Crown Chakra",
+        "title": "Divine sound Crownchakra-Browchakra-Throatchakra from God",
+        "description": (
+            "Speak your truth with calm, clarity, and confidence.\n"
+            "Clear, uplifting frequencies to support communication and self-expression. "
+            "Helps you speak your truth with confidence and calm. Encourages authentic voice "
+            "and inner clarity. Listen daily for best results."
+        ),
+        "price": "$16",
+        "price_amount": 1600,
+        "cover": "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png",
+        "audio": "songs/Divine sound Crownchakra-Browchakra-Throatchakra from God.mp3",
+        "buy_url": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
+        "buy_url_sek": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"
     },
     {
         "id": 2,
@@ -328,6 +369,7 @@ def _read_json(path: Path, default: object) -> object:
 def _build_merged_catalog() -> list[dict]:
     """
     Собираем итоговый список: встроенные треки минус удалённые, + правки полей, + треки из tracks_extra.json.
+    Порядок элементов в _BUILTIN_TRACKS задаёт порядок кнопок каталога в Telegram-боте.
     Вызывается при старте и после админских изменений (reload_track_catalog).
     """
     deleted_raw = _read_json(_tracks_data_dir() / "tracks_deleted.json", [])

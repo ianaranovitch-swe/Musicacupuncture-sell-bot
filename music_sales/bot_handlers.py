@@ -142,7 +142,7 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "balance and positive energy flow in\n"
             "your home and life.\n\n"
             "Listen daily for best results. 🙏\n\n"
-            "Enjoy the other 16 healing tracks below 👇"
+            "Enjoy the other 17 healing tracks below 👇"
         ),
     )
 

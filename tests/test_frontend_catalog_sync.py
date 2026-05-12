@@ -9,6 +9,7 @@ from music_sales.frontend_catalog_sync import (
     ordered_frontend_pairs,
     peel_emoji_short,
     sync_frontend_html_catalog,
+    track_display_emoji_short,
     website_js_block,
 )
 
@@ -24,25 +25,61 @@ def test_peel_emoji_short_latin_first_word() -> None:
     assert name == "Vitamin track"
 
 
+def test_track_display_emoji_short_prefers_ui_fields() -> None:
+    t = {"short_title": "🎵 Long bot title", "ui_emoji": "🌙", "ui_short_name": "Sleep"}
+    assert track_display_emoji_short(t) == ("🌙", "Sleep")
+
+
 def test_ordered_frontend_free_then_paid_by_id() -> None:
     tracks = [
         {"id": 3, "price": "$16", "short_title": "🎵 Three", "title": "T3", "description": "d", "cover": "c3.png"},
-        {"id": 17, "price": "FREE", "short_title": "🎁 G", "title": "Free", "description": "f", "cover": "cf.png"},
+        {"id": 18, "price": "FREE", "short_title": "🎁 G", "title": "Free", "description": "f", "cover": "cf.png"},
         {"id": 1, "price": "$16", "short_title": "🎵 One", "title": "T1", "description": "d", "cover": "c1.png"},
     ]
     pairs = ordered_frontend_pairs(tracks)
     assert [p[0] for p in pairs] == [0, 1, 3]
-    assert pairs[0][1]["id"] == 17
+    assert pairs[0][1]["id"] == 18
+
+
+def test_ordered_frontend_featured_new_paid_first() -> None:
+    tracks = [
+        {"id": 18, "price": "FREE", "short_title": "🎁 F", "title": "Free", "description": "", "cover": "c0.png"},
+        {"id": 1, "price": "$16", "short_title": "🎵 One", "title": "T1", "description": "", "cover": "c1.png"},
+        {
+            "id": 17,
+            "price": "$16",
+            "short_title": "🎵 New",
+            "title": "T17",
+            "description": "",
+            "cover": "c17.png",
+            "is_featured": True,
+            "is_new": True,
+        },
+        {"id": 2, "price": "$16", "short_title": "🎵 Two", "title": "T2", "description": "", "cover": "c2.png"},
+    ]
+    pairs = ordered_frontend_pairs(tracks)
+    assert [p[0] for p in pairs] == [0, 17, 1, 2]
 
 
 def test_miniapp_js_contains_real_ids_for_paid() -> None:
     tracks = [
         {"id": 99, "price": "FREE", "short_title": "🎁 X", "title": "Free T", "description": "a\nb", "cover": "c/f.png"},
-        {"id": 5, "price": "$16", "short_title": "🎵 P", "title": "Paid", "description": "d", "cover": "x.png"},
+        {
+            "id": 5,
+            "price": "$16",
+            "short_title": "🎵 P",
+            "title": "Paid",
+            "description": "d",
+            "cover": "x.png",
+            "is_new": True,
+            "is_featured": True,
+        },
     ]
     js = miniapp_js_block(tracks)
     assert '"id": 0' in js
     assert '"id": 5' in js
+    assert '"isNew": true' in js
+    assert '"isFeatured": true' in js
     assert "Free T" in js
 
 

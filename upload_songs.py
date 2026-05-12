@@ -23,7 +23,8 @@ from telegram.request import HTTPXRequest
 
 from tracks import TRACKS
 
-# Бесплатный бонус: грузим тоже, чтобы file_id оказался в file_ids.json / FILE_IDS_JSON.
+# Бесплатный MP3 тот же, что в tracks.py (id 18): попадает в file_ids.json при обходе TRACKS.
+# Дублирующий блок внизу — запасной upload, если трек временно убрали из каталога.
 _FREE_BONUS_AUDIO = "songs/Divine sound Super Feng Shui from God.mp3"
 
 load_dotenv()
@@ -113,7 +114,7 @@ async def _run() -> None:
             )
             print(f"Done! file_id: {fid}")
 
-        # Отдельно грузим бесплатный бонус, который не входит в tracks.py.
+        # Запасной проход: если бонус не в TRACKS, всё равно пробуем загрузить тот же файл.
         bonus_path = ROOT / _FREE_BONUS_AUDIO
         bonus_key = Path(_FREE_BONUS_AUDIO).stem
         if bonus_path.is_file() and bonus_key not in results:

@@ -1,5 +1,5 @@
 """
-Simple Telegram bot: list 16 tracks from tracks.py, show cover + text, buy link when set.
+Simple Telegram bot: catalog from tracks.py (keyboard order: new releases first), cover + text, buy link when set.
 
 Run:  python bot.py
 
@@ -130,11 +130,15 @@ def _next_track_id(track_id: int) -> int:
 
 
 def _track_card_keyboard(track: dict) -> InlineKeyboardMarkup:
-    """Полная клавиатура: опционально Mini App + 16 кнопок треков + Buy + NEXT."""
+    """Полная клавиатура: Mini App + баннер эксклюзива + сетка кнопок треков (порядок как в TRACKS) + Buy + NEXT."""
     rows: list[list[InlineKeyboardButton]] = []
     store_url = _miniapp_url()
     if store_url:
         rows.append([InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))])
+    # Не кликабельный «лейбл» в Telegram нельзя — кнопка с noop: только всплывающее уведомление при тапе.
+    rows.append(
+        [InlineKeyboardButton("🆕 EXCLUSIVE NEW RELEASE", callback_data="catalog_banner")]
+    )
     for i in range(0, len(TRACKS), 2):
         left = TRACKS[i]
         row = [InlineKeyboardButton(left["short_title"], callback_data=str(left["id"]))]
@@ -214,6 +218,10 @@ async def on_track_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
+    if query.data == "catalog_banner":
+        await query.answer()
+        return
+
     try:
         if query.data.startswith("next:"):
             tid = int(query.data.split(":", 1)[1])
@@ -267,7 +275,9 @@ def main() -> None:
     app = Application.builder().token(token).build()
     app.add_handler(build_admin_conversation_handler())
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(on_track_button, pattern=r"^(buy_unavailable|\d+|next:\d+)$"))
+    app.add_handler(
+        CallbackQueryHandler(on_track_button, pattern=r"^(buy_unavailable|catalog_banner|\d+|next:\d+)$")
+    )
     app.add_error_handler(error_handler)
     logger.info("Bot polling…")
     app.run_polling()

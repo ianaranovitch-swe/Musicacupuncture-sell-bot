@@ -297,6 +297,19 @@
     }
 
     /* ========== Catalog grid ========== */
+    .catalog-exclusive-banner {
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: var(--gold);
+      margin: 0 0 18px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 215, 0, 0.45);
+      background: rgba(255, 215, 0, 0.08);
+      box-shadow: 0 0 24px rgba(255, 215, 0, 0.15), inset 0 0 0 1px rgba(255, 215, 0, 0.12);
+    }
     .catalog-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -360,6 +373,26 @@
       border-radius: 999px;
       background: rgba(255, 215, 0, 0.95);
       color: #1a0533;
+    }
+    .badge-new-site {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 2;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #ffe066, #ffd700 55%, #daa520);
+      color: #1a0533;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    }
+    .card-site-featured {
+      border-color: rgba(255, 215, 0, 0.75);
+      box-shadow:
+        0 0 26px rgba(255, 215, 0, 0.32),
+        0 8px 24px rgba(0, 0, 0, 0.4);
     }
     .card-body { padding: 6px 10px 12px; }
     .card-short {
@@ -641,6 +674,9 @@
     <section id="shop">
       <h2 class="section-title">Music Catalog</h2>
       <p class="section-sub">Tap a card for details and secure checkout.</p>
+      <p class="catalog-exclusive-banner" id="catalog-exclusive-banner" role="status" aria-live="polite">
+        ⭐️ EXCLUSIVE NEW RELEASE
+      </p>
       <div class="catalog-grid" id="catalog-grid"></div>
     </section>
 
@@ -739,12 +775,13 @@
 
   /**
    * Track catalog: same content as miniapp.html + Stripe URLs from tracks.py (buy_url = USD, buy_url_sek = SEK).
-   * id 0 = free Super Feng Shui; 1–16 = paid (Vitamins uses distinct SEK link in tracks.py).
+   * id 0 = free Super Feng Shui; платные id из tracks.py (в т.ч. 17 — новый эксклюзив), порядок карточек задаёт sync.
    * Блок MA_AUTO_* перезаписывается скриптом music_sales/frontend_catalog_sync.py после админки.
    */
   /* MA_AUTO_SITE_TRACKS_BEGIN */
   const TRACKS = [
     {"id": 0, "emoji": "🎁", "shortName": "Free Gift", "fullTitle": "Divine sound Super Feng Shui from God", "description": "THIS SUPER FENG SHUI - SPACE CLEARING-MP3 IS ONE OF THE MOST POWERFUL TREATMENTS FOR ROOM AND SPACE. IT IS ALSO ONE OF THE EASIEST AND FASTEST WAYS TO ACHIEVE A GOOD RESULT. APART FROM ITS ABILITY TO BALANCE ROOM AND SPACE, YOU CAN ALSO ADD ONE MORE DIMENSION: THE HARMONY AND HEALTH IT GIVES TO YOURSELF.\n\nFeng Shui is the oriental art of enhancing and harmonizing the flow of energy in your surroundings. Discover how Feng Shui can bring harmony and prosperity into your life, neutralize negative influences in your house and create a healthy and positive living and working space. You can create an environment that directly embraces and empowers your life.", "cover": "covers/Divine-sound-Super-Feng-Shui-from-God.png", "isFree": true, "buyUrl": null, "buyUrlUsd": null, "buyUrlSek": null},
+    {"id": 17, "emoji": "🌙", "shortName": "Sleep Best Silver Power", "fullTitle": "Divine sound Sleep Best Silver Power from God", "description": "🌙 The latest masterpiece from Soundmaster Mikael.\n\nStruggling to relax and feel truly restored?\nSLEEP BEST – Earth Grounding Silver Power is a rare and exclusive healing audio experience, crafted to release deep stress, reconnect your body with calming earth energy, and guide you into profound natural rest.\n\nAs you listen, a soft silver energy connects you to the Earth… calming your thoughts… restoring your natural rhythm… and carrying you into stillness like never before.\n\n✨ What you may experience:\n• Deeper, more peaceful sleep from night one\n• Full-body relaxation and grounding\n• Calm energy flowing through mind and body\n• Waking up refreshed and restored\n\n💫 Perfect for nighttime relaxation, meditation before sleep, and stress relief after a long day.\n\n🎧 Close your eyes. Breathe slowly. Let go.\n\nThis is Mikael's most powerful creation yet.", "cover": "covers/Divine sound Sleep Best Silver Power from God.png", "isFeatured": true, "isNew": true, "buyUrlUsd": "https://buy.stripe.com/7sY7sK8fz1Of7XfdcBcfK0i", "buyUrlSek": "https://buy.stripe.com/7sY7sK8fz1Of7XfdcBcfK0i"},
     {"id": 1, "emoji": "🎵", "shortName": "Crown Chakra", "fullTitle": "Divine sound Crownchakra-Browchakra-Throatchakra from God", "description": "Speak your truth with calm, clarity, and confidence.\nClear, uplifting frequencies to support communication and self-expression. Helps you speak your truth with confidence and calm. Encourages authentic voice and inner clarity. Listen daily for best results.", "cover": "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png", "buyUrlUsd": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00", "buyUrlSek": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00"},
     {"id": 2, "emoji": "🎵", "shortName": "Estrogen", "fullTitle": "Divine sound Estrogen from God", "description": "Support feminine balance, harmony, and natural flow.\nGentle frequencies designed to support feminine hormonal balance and well-being. Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow and emotional balance. Listen daily for best results.", "cover": "covers/Divine-sound-Estrogen-from-God.png", "buyUrlUsd": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02", "buyUrlSek": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02"},
     {"id": 3, "emoji": "🎵", "shortName": "Heart", "fullTitle": "Divine sound Heart from God", "description": "Open your heart to love, peace, and deep inner harmony.\nHealing vibrations designed to support your heart with love, emotional balance, and inner peace. Encourages harmony, circulation, and a deep sense of calm. A beautiful daily practice to awaken heart energy and connect with divine love. Listen daily for best results.", "cover": "covers/Divine-sound-Heart-from-God.png", "buyUrlUsd": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03", "buyUrlSek": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03"},
@@ -828,8 +865,12 @@
         : escapeHtml(dual.usd) + " · " + escapeHtml(dual.sek);
       const dur = t.durationLabel ? '<div class="card-dur">⏱ ' + escapeHtml(t.durationLabel) + "</div>" : "";
       const badge = t.isFree ? '<span class="badge-free">🎁 FREE</span>' : "";
+      const newBadge = !t.isFree && t.isNew ? '<span class="badge-new-site" aria-label="New release">🆕 NEW</span>' : "";
+      const featClass = !t.isFree && t.isFeatured && t.isNew ? " card-site-featured" : "";
       return (
-        '<article class="card" data-id="' +
+        '<article class="card' +
+        featClass +
+        '" data-id="' +
         t.id +
         '" role="button" tabindex="0">' +
         '<div class="card-img-wrap">' +
@@ -839,6 +880,7 @@
         '<span class="card-emoji">' +
         t.emoji +
         "</span>" +
+        newBadge +
         badge +
         "</div>" +
         '<div class="card-body">' +

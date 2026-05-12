@@ -481,7 +481,7 @@ def create_app(
         telegram_name = str(data.get("telegram_name") or "Unknown user")
         currency = str(data.get("currency") or "usd").strip().lower()
 
-        # Mini App шлёт track_id 1..16 — сопоставляем с файлом в tracks.py и song_id каталога.
+        # Mini App шлёт track_id (платные 1..17 и др.) — сопоставляем с файлом в tracks.py и song_id каталога.
         if song_id is None and track_id is not None:
             try:
                 from pathlib import Path as _Path

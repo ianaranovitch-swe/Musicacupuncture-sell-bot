@@ -43,6 +43,19 @@ def is_free_track(t: dict[str, Any]) -> bool:
     return False
 
 
+def track_display_emoji_short(t: dict[str, Any]) -> tuple[str, str]:
+    """
+    Эмодзи и короткое имя для Mini App / website: приоритет у ui_emoji + ui_short_name из tracks.py
+    (чтобы кнопка в боте могла быть длинной, а карточка — компактной).
+    """
+    ui_s = t.get("ui_short_name")
+    if ui_s and str(ui_s).strip():
+        raw_e = t.get("ui_emoji")
+        emoji = (str(raw_e).strip() if raw_e is not None else "") or "🎵"
+        return emoji, str(ui_s).strip()
+    return peel_emoji_short(str(t.get("short_title") or ""))
+
+
 def peel_emoji_short(short_title: str) -> tuple[str, str]:
     """
     Делим short_title на эмодзи и короткое имя (как в старом miniapp.html: «🎵 Estrogen» → 🎵 + Estrogen).
@@ -70,11 +83,17 @@ def _gallery_covers_miniapp(t: dict[str, Any], is_free: bool) -> list[str] | Non
 
 def ordered_frontend_pairs(tracks: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     """
-    Порядок как на сайте: сначала бесплатный с id 0 в UI, затем платные по возрастанию реального id.
+    Порядок как на сайте: сначала бесплатный с id 0 в UI, затем платные.
+    Платные: сначала is_featured + is_new (новый эксклюзив), остальные по возрастанию id.
     Реальные id в каталоге бота не трогаем — в JSON для фронта кладём display_id.
     """
     free = [t for t in tracks if is_free_track(t)]
-    paid = sorted((t for t in tracks if not is_free_track(t)), key=lambda x: int(x["id"]))
+
+    def _paid_sort_key(x: dict[str, Any]) -> tuple[int, int]:
+        feat = bool(x.get("is_featured")) and bool(x.get("is_new"))
+        return (0 if feat else 1, int(x["id"]))
+
+    paid = sorted((t for t in tracks if not is_free_track(t)), key=_paid_sort_key)
     out: list[tuple[int, dict[str, Any]]] = []
     if free:
         out.append((0, free[0]))
@@ -87,7 +106,7 @@ def miniapp_js_block(tracks: list[dict[str, Any]]) -> str:
     """Текст: const tracks = [ ... ]; (с отступами как в файле)."""
     rows: list[str] = []
     for display_id, t in ordered_frontend_pairs(tracks):
-        emoji, short_name = peel_emoji_short(str(t.get("short_title") or ""))
+        emoji, short_name = track_display_emoji_short(t)
         is_free = display_id == 0
         full_title = str(t.get("title") or "")
         desc = str(t.get("description") or "")
@@ -100,6 +119,10 @@ def miniapp_js_block(tracks: list[dict[str, Any]]) -> str:
             "description": desc,
             "cover": cover,
         }
+        if bool(t.get("is_featured")):
+            obj["isFeatured"] = True
+        if bool(t.get("is_new")):
+            obj["isNew"] = True
         if is_free:
             obj["isFree"] = True
         gal = _gallery_covers_miniapp(t, is_free)
@@ -115,7 +138,7 @@ def website_js_block(tracks: list[dict[str, Any]]) -> str:
     """Текст: const TRACKS = [ ... ];"""
     rows: list[str] = []
     for display_id, t in ordered_frontend_pairs(tracks):
-        emoji, short_name = peel_emoji_short(str(t.get("short_title") or ""))
+        emoji, short_name = track_display_emoji_short(t)
         is_free = display_id == 0
         full_title = str(t.get("title") or "")
         desc = str(t.get("description") or "")
@@ -128,6 +151,10 @@ def website_js_block(tracks: list[dict[str, Any]]) -> str:
             "description": desc,
             "cover": cover,
         }
+        if bool(t.get("is_featured")):
+            obj["isFeatured"] = True
+        if bool(t.get("is_new")):
+            obj["isNew"] = True
         if is_free:
             obj["isFree"] = True
             obj["buyUrl"] = None
