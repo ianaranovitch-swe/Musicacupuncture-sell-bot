@@ -144,17 +144,22 @@ def _parse_webhook_event(
     Иначе парсим JSON из тела запроса (только локально/в тестах — нельзя открывать в интернет).
     """
     if stripe_webhook_secret:
+        # Явно сохраняем используемый секрет в локальную переменную:
+        # так проще отлаживать ситуации, когда env в Railway не совпал с Stripe.
+        webhook_secret = stripe_webhook_secret
         payload = request.get_data()
         sig_header = request.headers.get("Stripe-Signature")
         if not sig_header:
             return jsonify({"error": "Missing Stripe-Signature header"}), 400
         try:
-            return stripe.Webhook.construct_event(payload, sig_header, stripe_webhook_secret)
+            return stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
         except ValueError as e:
             logger.warning("Invalid webhook payload: %s", e)
             return jsonify({"error": "Invalid payload"}), 400
         except stripe.error.SignatureVerificationError as e:
-            logger.warning("Webhook signature verification failed: %s", e)
+            # Подробный лог для быстрого поиска неверного секрета в проде.
+            app.logger.error(f"Webhook signature failed: {e}")
+            app.logger.error(f"Webhook secret used: {str(webhook_secret)[:20]}...")
             return jsonify({"error": "Invalid signature"}), 400
 
     body = request.get_json(silent=True)
@@ -874,7 +879,12 @@ def create_app(
                     amount_total = int(session.get("amount_total") or 0)
                 except Exception:
                     amount_total = 0
-                currency_code = str(session.get("currency") or "").upper()
+                # session в webhook может быть StripeObject (без dict.get),
+                # поэтому читаем валюту через getattr и безопасный fallback.
+                try:
+                    currency_code = str(getattr(session, "currency", "") or "").upper()
+                except Exception:
+                    currency_code = "USD"
                 amount_major = (amount_total / 100.0) if amount_total > 0 else 0.0
 
                 track_id_num = None
@@ -889,19 +899,24 @@ def create_app(
                             break
                 except Exception:
                     track_id_num = None
-                append_sale_event(
-                    song_id=song_id,
-                    track_id=track_id_num,
-                    track_title=song_name,
-                    amount=amount_major,
-                    currency=currency_code,
-                    source=(source or "telegram")[:32],
-                    session_id=sess_id,
-                    transaction_id=transaction_id,
-                    telegram_id=tid_int if tid_int > 0 else None,
-                )
+                # Лог продажи не должен ломать обработку платежа:
+                # если запись в файл/БД не удалась, продолжаем webhook.
+                try:
+                    append_sale_event(
+                        song_id=song_id,
+                        track_id=track_id_num,
+                        track_title=song_name,
+                        amount=amount_major,
+                        currency=currency_code,
+                        source=(source or "telegram")[:32],
+                        session_id=sess_id,
+                        transaction_id=transaction_id,
+                        telegram_id=tid_int if tid_int > 0 else None,
+                    )
+                except Exception:
+                    logger.exception("sales_log append failed")
             except Exception:
-                logger.exception("sales_log append failed")
+                logger.exception("sales_log preparation failed")
 
             # Website: не шлём документ в Telegram. Запасной путь: chat_id=0 невалиден в Telegram.
             if source == "website" or tid_int == 0:
