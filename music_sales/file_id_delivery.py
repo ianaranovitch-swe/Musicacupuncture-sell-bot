@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+import requests
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,3 +90,46 @@ def file_id_for_song(song: dict[str, Any], file_ids: dict[str, str] | None = Non
         return ids[name]
 
     return None
+
+
+def resolve_telegram_file_download_url(
+    bot_token: str,
+    file_id: str,
+    *,
+    timeout: int = 25,
+) -> tuple[str | None, str | None]:
+    """
+    Строит прямую ссылку на скачивание файла с CDN Telegram (getFile → …/file/bot<token>/…).
+
+    Важно: в URL попадает bot token — получив ссылку, человек теоретически может качать файл,
+    пока Telegram её принимает; для сайта это осознанный trade-off вместо Git LFS-заглушек на Railway.
+    """
+    tok = (bot_token or "").strip()
+    fid = (file_id or "").strip()
+    if not tok or not fid:
+        return None, "missing_bot_token_or_file_id"
+    try:
+        r = requests.get(
+            f"https://api.telegram.org/bot{tok}/getFile",
+            params={"file_id": fid},
+            timeout=timeout,
+        )
+    except requests.RequestException as e:
+        logger.warning("Telegram getFile request failed: %s", e)
+        return None, "getFile_network_error"
+    try:
+        data = r.json()
+    except ValueError:
+        logger.warning("Telegram getFile non-JSON, status=%s", r.status_code)
+        return None, "getFile_invalid_json"
+    if not data.get("ok"):
+        desc = str(data.get("description") or "unknown")
+        logger.warning("Telegram getFile not ok: %s", desc[:200])
+        return None, f"getFile_failed:{desc[:120]}"
+    result = data.get("result") or {}
+    file_path = str(result.get("file_path") or "").strip()
+    if not file_path:
+        return None, "getFile_missing_file_path"
+    # Путь от Telegram обычно ASCII; склеиваем как в документации Bot API.
+    url = f"https://api.telegram.org/file/bot{tok}/{file_path}"
+    return url, None

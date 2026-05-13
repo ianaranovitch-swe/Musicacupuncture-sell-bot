@@ -23,7 +23,12 @@ from music_sales.catalog import (
     songs_dir_under,
     unit_amount_for_song,
 )
-from music_sales.file_id_delivery import PURCHASE_DELIVERY_CAPTION, file_id_for_song, load_file_ids_dict
+from music_sales.file_id_delivery import (
+    PURCHASE_DELIVERY_CAPTION,
+    file_id_for_song,
+    load_file_ids_dict,
+    resolve_telegram_file_download_url,
+)
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
 logger = logging.getLogger(__name__)
@@ -681,58 +686,64 @@ def create_app(
         song = catalog.get(song_id)
         if not song:
             return jsonify({"error": "Unknown song"}), 404
-        rel = str(song.get("file") or "").strip()
-        if not rel:
-            return jsonify({"error": "Missing file path"}), 404
-        p = (root_path() / rel).resolve()
-        songs_root = (root_path() / "songs").resolve()
-        try:
-            p.relative_to(songs_root)
-        except ValueError:
-            return jsonify({"error": "Invalid path"}), 400
-        if not p.is_file():
-            return jsonify({"error": "File not found"}), 404
-        return send_from_directory(str(p.parent), p.name, as_attachment=True, download_name=p.name)
 
-    def _free_bonus_mp3_or_error() -> Union[Path, Tuple[Any, int]]:
-        """Путь к бонусному MP3 внутри songs_dir() или (json_error, status)."""
-        p = free_bonus_audio_path(root_path()).resolve()
-        allowed = songs_dir_under(root_path()).resolve()
-        try:
-            p.relative_to(allowed)
-        except ValueError:
-            return jsonify({"error": "Invalid free track path"}), 500
-        if not p.is_file():
-            return jsonify({"error": "Free track file not available on server"}), 404
-        return p
+        # На Railway в git часто лежат только Git LFS-указатели (~133 B), не настоящий MP3.
+        # Выдаём покупку через Telegram file_id + getFile → прямая ссылка на CDN Telegram.
+        file_ids = load_file_ids_dict()
+        tg_fid = file_id_for_song(song, file_ids)
+        if not tg_fid:
+            logger.warning("website download-file: нет file_id в FILE_IDS_JSON для song_id=%s", song_id)
+            return jsonify({"error": "Track download is not configured"}), 503
+        if not (config.BOT_TOKEN or "").strip():
+            logger.error("website download-file: BOT_TOKEN пуст — getFile невозможен")
+            return jsonify({"error": "Download is not available"}), 500
+        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), tg_fid)
+        if not tg_url:
+            logger.warning("website download-file: getFile не удался: %s", tg_err)
+            return jsonify({"error": "Could not prepare download link"}), 502
+        return redirect(tg_url, code=302)
+
+    def _free_bonus_telegram_file_id() -> str | None:
+        """Ключ в FILE_IDS_JSON = stem имени бонусного файла (как в upload_songs.py)."""
+        stem = free_bonus_audio_path(root_path()).stem
+        return (load_file_ids_dict().get(stem) or "").strip() or None
 
     @app.route("/free-track", methods=["GET", "OPTIONS"])
     def free_track_json() -> Any:
         """
-        Публичная ссылка для website.html: JSON { "url": "…/free-track-file" }.
-        Браузер на GitHub Pages делает fetch (нужен CORS — см. _path_is_checkout_cors).
+        Публичная ссылка для website.html: JSON { "url": "https://api.telegram.org/file/bot…/…" }.
+
+        Раньше отдавали /free-track-file с диска — на Railway после Git LFS там «пустышка».
+        Теперь сразу ссылка на CDN Telegram (тот же file_id, что для бота).
         """
         if request.method == "OPTIONS":
             return "", 204
-        out = _free_bonus_mp3_or_error()
-        if isinstance(out, tuple):
-            return out[0], out[1]
-        base = (request.url_root or "").rstrip("/") or (domain or "").rstrip("/")
-        if base and not base.startswith("http"):
-            base = f"https://{base}"
-        url = f"{base}/free-track-file" if base else "/free-track-file"
-        return jsonify({"url": url})
+        fid = _free_bonus_telegram_file_id()
+        if not fid:
+            return jsonify({"error": "Free track is not configured"}), 503
+        if not (config.BOT_TOKEN or "").strip():
+            return jsonify({"error": "Download is not available"}), 500
+        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
+        if not tg_url:
+            logger.warning("free-track: getFile не удался: %s", tg_err)
+            return jsonify({"error": "Could not prepare download link"}), 502
+        return jsonify({"url": tg_url})
 
     @app.route("/free-track-file", methods=["GET", "OPTIONS"])
     def free_track_file() -> Any:
-        """Отдаёт бонусный MP3 как attachment (без оплаты — для лендинга website.html)."""
+        """Совместимость: редирект на тот же CDN Telegram, что и /free-track (старые закладки)."""
         if request.method == "OPTIONS":
             return "", 204
-        out = _free_bonus_mp3_or_error()
-        if isinstance(out, tuple):
-            return out[0], out[1]
-        p = out
-        return send_from_directory(str(p.parent), p.name, as_attachment=True, download_name=p.name)
+        fid = _free_bonus_telegram_file_id()
+        if not fid:
+            return jsonify({"error": "Free track is not configured"}), 503
+        if not (config.BOT_TOKEN or "").strip():
+            return jsonify({"error": "Download is not available"}), 500
+        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
+        if not tg_url:
+            logger.warning("free-track-file: getFile не удался: %s", tg_err)
+            return jsonify({"error": "Could not prepare download link"}), 502
+        return redirect(tg_url, code=302)
 
     def _notify_owner_via_api(
         *,

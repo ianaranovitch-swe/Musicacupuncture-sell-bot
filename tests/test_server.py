@@ -405,11 +405,16 @@ def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_pa
 
 
 def test_free_track_json_returns_file_url(tmp_path, mocker):
-    """website.html запрашивает GET /free-track — ответ { url: …/free-track-file }."""
-    songs = tmp_path / "songs"
-    songs.mkdir()
-    mp3 = songs / "Divine sound Super Feng Shui from God.mp3"
-    mp3.write_bytes(b"ID3\x00test")
+    """website.html: GET /free-track — в url прямая ссылка Telegram CDN (обход Git LFS-заглушек на Railway)."""
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"Divine sound Super Feng Shui from God": "dummy_file_id"})},
+        clear=False,
+    )
+    mocker.patch(
+        "music_sales.server.resolve_telegram_file_download_url",
+        return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
+    )
 
     from music_sales.server import create_app
 
@@ -423,18 +428,24 @@ def test_free_track_json_returns_file_url(tmp_path, mocker):
     resp = client.get("/free-track")
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body and "/free-track-file" in (body.get("url") or "")
+    assert body and body.get("url", "").startswith("https://api.telegram.org/file/bot")
 
-    file_resp = client.get("/free-track-file")
-    assert file_resp.status_code == 200
-    assert file_resp.data == b"ID3\x00test"
+    file_resp = client.get("/free-track-file", follow_redirects=False)
+    assert file_resp.status_code == 302
+    assert "api.telegram.org/file/bot" in (file_resp.headers.get("Location") or "")
 
 
 def test_free_track_options_preflight_includes_cors(tmp_path, mocker):
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"Divine sound Super Feng Shui from God": "dummy_file_id"})},
+        clear=False,
+    )
+    mocker.patch(
+        "music_sales.server.resolve_telegram_file_download_url",
+        return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
+    )
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://ianaranovitch-swe.github.io")
-    songs = tmp_path / "songs"
-    songs.mkdir()
-    (songs / "Divine sound Super Feng Shui from God.mp3").write_bytes(b"x")
 
     from music_sales.server import create_app
 
@@ -521,6 +532,40 @@ def test_website_download_redirect_returns_302_to_file(mocker):
     )
     assert resp.status_code == 302
     assert "website/download-file" in (resp.headers.get("Location") or "")
+
+
+def test_website_download_file_redirects_to_telegram_cdn(mocker, tmp_path):
+    """После проверки подписи — редирект на CDN Telegram, без чтения MP3 с диска."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    mocker.patch("music_sales.server.file_id_for_song", return_value="dummy_tg_file_id")
+    mocker.patch(
+        "music_sales.server.resolve_telegram_file_download_url",
+        return_value=("https://api.telegram.org/file/botFAKE/music/paid.mp3", None),
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "api.telegram.org/file/bot" in (resp.headers.get("Location") or "")
 
 
 def test_website_download_get_json_includes_cors_headers(mocker):
