@@ -200,6 +200,28 @@ def create_app(
             return row
         return synthetic_song_row_for_song_id(song_id)
     domain = domain or config.DOMAIN
+
+    def _stripe_public_origin() -> str:
+        """
+        Stripe требует для success_url / cancel_url полный URL со схемой (https://…).
+        Частая ошибка в Railway: DOMAIN=musicacupuncture.digital без префикса → Invalid URL.
+        """
+        d = (domain or "").strip().rstrip("/")
+        if not d:
+            for cand in (
+                (os.environ.get("BACKEND_URL") or config.BACKEND_URL or "").strip().rstrip("/"),
+                (os.environ.get("DOMAIN") or config.DOMAIN or "").strip().rstrip("/"),
+            ):
+                if cand:
+                    d = cand
+                    break
+        if not d:
+            return "https://musicacupuncture.digital"
+        low = d.lower()
+        if low.startswith("https://") or low.startswith("http://"):
+            return d
+        return f"https://{d.lstrip('/')}"
+
     if not config.BOT_TOKEN:
         raise RuntimeError(
             "BOT_TOKEN is not set. The server needs it to send purchased audio in Telegram."
@@ -348,7 +370,9 @@ def create_app(
         custom = (config.CHECKOUT_SUCCESS_URL or "").strip()
         if custom.startswith("https://"):
             return custom
-        return domain + "/success"
+        if custom.startswith("http://"):
+            return custom
+        return _stripe_public_origin() + "/success"
 
     def _song_id_from_track_id(track_id_raw: Any) -> str | None:
         try:
@@ -542,7 +566,7 @@ def create_app(
                 ],
                 mode="payment",
                 success_url=_checkout_success_url(),
-                cancel_url=domain + "/cancel",
+                cancel_url=_stripe_public_origin() + "/cancel",
                 # Дублируем telegram_id в client_reference_id как запасной канал,
                 # если в будущем metadata потеряется в промежуточном потоке.
                 client_reference_id=str(telegram_id),
@@ -596,7 +620,7 @@ def create_app(
                 ],
                 mode="payment",
                 success_url=_website_success_url(track_id),
-                cancel_url=domain + "/cancel",
+                cancel_url=_stripe_public_origin() + "/cancel",
                 client_reference_id="0",
                 metadata={
                     "telegram_id": "0",
@@ -707,6 +731,16 @@ def create_app(
         tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), tg_fid)
         if not tg_url:
             logger.warning("website download-file: getFile не удался: %s", tg_err)
+            if tg_err and "too big" in tg_err.lower():
+                return jsonify(
+                    {
+                        "error": "Could not prepare download link",
+                        "hint": (
+                            "Telegram Bot API limits direct downloads to about 20 MB. "
+                            "Use the Telegram bot to receive this track."
+                        ),
+                    }
+                ), 502
             return jsonify({"error": "Could not prepare download link"}), 502
         return redirect(tg_url, code=302)
 
@@ -738,6 +772,16 @@ def create_app(
         tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
         if not tg_url:
             logger.warning("free-track: getFile не удался: %s", tg_err)
+            if tg_err and "too big" in tg_err.lower():
+                return jsonify(
+                    {
+                        "error": "Could not prepare download link",
+                        "hint": (
+                            "Telegram Bot API limits direct downloads to about 20 MB. "
+                            "Use the Telegram bot to receive the free track."
+                        ),
+                    }
+                ), 502
             return jsonify({"error": "Could not prepare download link"}), 502
         return jsonify({"url": tg_url})
 
@@ -754,6 +798,16 @@ def create_app(
         tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
         if not tg_url:
             logger.warning("free-track-file: getFile не удался: %s", tg_err)
+            if tg_err and "too big" in tg_err.lower():
+                return jsonify(
+                    {
+                        "error": "Could not prepare download link",
+                        "hint": (
+                            "Telegram Bot API limits direct downloads to about 20 MB. "
+                            "Use the Telegram bot to receive the free track."
+                        ),
+                    }
+                ), 502
             return jsonify({"error": "Could not prepare download link"}), 502
         return redirect(tg_url, code=302)
 

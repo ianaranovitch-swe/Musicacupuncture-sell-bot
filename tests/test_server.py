@@ -41,7 +41,26 @@ def test_create_checkout_returns_stripe_url(mocker):
     assert kwargs["metadata"]["telegram_name"] == "Unknown user"
 
 
-def test_create_checkout_accepts_selected_currency(mocker):
+def test_create_checkout_cancel_url_https_when_domain_has_no_scheme(mocker):
+    """Stripe: cancel_url must include scheme — bare host used to raise InvalidRequestError."""
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        domain="musicacupuncture.example",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 42})
+    assert resp.status_code == 200
+    kwargs = create.call_args.kwargs
+    assert kwargs["cancel_url"] == "https://musicacupuncture.example/cancel"
+    assert kwargs["success_url"] == "https://musicacupuncture.example/success"
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"
     create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
