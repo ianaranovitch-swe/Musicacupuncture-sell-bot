@@ -287,6 +287,27 @@ def test_website_create_payment_without_secret(mocker):
     assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
 
 
+def test_website_create_payment_works_without_songs_folder(mocker, tmp_path, monkeypatch):
+    """Railway без MP3 в репо: checkout всё раже строится из tracks.py + synthetic row."""
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=None,
+    )
+    client = app.test_client()
+    resp = client.post("/website-create-payment", json={"track_id": 2, "currency": "usd"})
+    assert resp.status_code == 200
+    assert resp.get_json()["url"] == "https://stripe.test/session"
+    create.assert_called_once()
+
+
 def test_create_checkout_400_when_missing_fields(mocker):
     from music_sales.server import create_app
 

@@ -1076,6 +1076,15 @@
     var status = document.getElementById("free-status");
     status.textContent = "";
     setLoading(true);
+    /* Сначала прямой GET на backend → 302 на Telegram CDN (без fetch/CORS и без <a download> на чужой origin). */
+    try {
+      var w = window.open(API_BASE + "/free-track-file", "_blank", "noopener,noreferrer");
+      if (w) {
+        status.textContent = "If a new tab opened, the download should start there. Thank you! 🙏";
+        setLoading(false);
+        return;
+      }
+    } catch (e) {}
     try {
       var r = await fetch(API_BASE + "/free-track", { method: "GET", mode: "cors" });
       if (r.ok) {
@@ -1083,7 +1092,16 @@
           return null;
         });
         if (data && data.url) {
-          triggerDownload(data.url, "Divine sound Super Feng Shui from God.mp3");
+          /* Без атрибута download: иначе браузер игнорирует имя файла для cross-origin (Telegram CDN). */
+          try {
+            var w2 = window.open(data.url, "_blank", "noopener,noreferrer");
+            if (w2) {
+              status.textContent = "Download started. Enjoy your gift! 🙏";
+              setLoading(false);
+              return;
+            }
+          } catch (e0) {}
+          window.location.href = data.url;
           status.textContent = "Download started. Enjoy your gift! 🙏";
           setLoading(false);
           return;

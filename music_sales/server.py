@@ -21,6 +21,7 @@ from music_sales.catalog import (
     project_root,
     resolve_song_id_by_audio_stem,
     songs_dir_under,
+    synthetic_song_row_for_song_id,
     unit_amount_for_song,
 )
 from music_sales.file_id_delivery import (
@@ -189,6 +190,15 @@ def create_app(
 
     def get_catalog() -> Dict[str, Dict[str, Any]]:
         return songs_catalog if songs_catalog is not None else discover_songs()
+
+    def _resolved_song_row(song_id: str) -> dict[str, Any] | None:
+        """Строка трека: тестовый songs_catalog, иначе discover_songs() + синтетика из tracks.py (Railway без MP3)."""
+        if songs_catalog is not None:
+            return songs_catalog.get(song_id)
+        row = discover_songs().get(song_id)
+        if row:
+            return row
+        return synthetic_song_row_for_song_id(song_id)
     domain = domain or config.DOMAIN
     if not config.BOT_TOKEN:
         raise RuntimeError(
@@ -566,10 +576,8 @@ def create_app(
         if not song_id:
             return jsonify({"error": "Unknown track_id"}), 400
 
-        catalog = get_catalog()
-        try:
-            song = catalog[song_id]
-        except KeyError:
+        song = _resolved_song_row(song_id)
+        if not song:
             return jsonify({"error": "Unknown song_id"}), 400
 
         try:
@@ -682,8 +690,7 @@ def create_app(
         if not hmac.compare_digest(sig, expected):
             return jsonify({"error": "Invalid token"}), 403
 
-        catalog = get_catalog()
-        song = catalog.get(song_id)
+        song = _resolved_song_row(song_id)
         if not song:
             return jsonify({"error": "Unknown song"}), 404
 
@@ -718,6 +725,11 @@ def create_app(
         """
         if request.method == "OPTIONS":
             return "", 204
+        file_ids = load_file_ids_dict()
+        stem = free_bonus_audio_path(root_path()).stem
+        logger.info("Free track requested")
+        logger.info("File IDs keys: %s", list(file_ids.keys()))
+        logger.info("Looking for Super Feng Shui key %r in_file_ids=%s", stem, stem in file_ids)
         fid = _free_bonus_telegram_file_id()
         if not fid:
             return jsonify({"error": "Free track is not configured"}), 503

@@ -7,8 +7,28 @@
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from pathlib import Path
+
+
+def _test_mode_env_on() -> bool:
+    """Совпадает с music_sales.config.test_mode_active() — без импорта config из tracks (порядок загрузки)."""
+    v = (os.environ.get("TEST_MODE") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def _test_payment_link_for_all_tracks() -> str | None:
+    """
+    Один тестовый Payment Link для всех платных треков (Stripe test mode).
+    Приоритет: TEST_PAYMENT_LINK → TEST_PAYMENT_LINK_USD (как в bot.py).
+    """
+    if not _test_mode_env_on():
+        return None
+    link = (os.environ.get("TEST_PAYMENT_LINK") or "").strip()
+    if link:
+        return link
+    return (os.environ.get("TEST_PAYMENT_LINK_USD") or "").strip() or None
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
 _BUILTIN_TRACKS: list[dict] = [
@@ -400,6 +420,20 @@ def _build_merged_catalog() -> list[dict]:
     for raw in extras:
         if isinstance(raw, dict) and "id" in raw:
             out.append(deepcopy(raw))
+
+    # TEST_MODE: один тестовый линк вместо buy.stripe.com без test_ (fallback на сайте, если checkout не сработал).
+    test_link = _test_payment_link_for_all_tracks()
+    if test_link:
+        for t in out:
+            if str(t.get("price", "")).strip().upper() == "FREE":
+                continue
+            try:
+                if int(t.get("price_amount") or -1) == 0:
+                    continue
+            except (TypeError, ValueError):
+                pass
+            t["buy_url"] = test_link
+            t["buy_url_sek"] = test_link
     return out
 
 

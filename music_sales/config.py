@@ -55,6 +55,8 @@ DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")
 # TEST_MODE: см. test_mode_active(). Цены теста (целые доллары / целые SEK).
 TEST_PRICE_USD = _env("TEST_PRICE_USD", "1")
 TEST_PRICE_SEK = _env("TEST_PRICE_SEK", "10")
+# Опционально: один тестовый Payment Link для всех платных треков (tracks.py + website fallback при TEST_MODE).
+TEST_PAYMENT_LINK = _env("TEST_PAYMENT_LINK")
 # Опционально: готовые Stripe Payment Links для простого бота (bot.py), не для динамического Checkout с webhook.
 TEST_PAYMENT_LINK_USD = _env("TEST_PAYMENT_LINK_USD")
 TEST_PAYMENT_LINK_SEK = _env("TEST_PAYMENT_LINK_SEK")

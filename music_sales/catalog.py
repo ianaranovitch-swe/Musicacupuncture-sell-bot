@@ -86,10 +86,25 @@ def _song_id_from_stem(stem: str) -> str:
     return s or "track"
 
 
+def _track_dict_is_free_gift(t: dict[str, Any]) -> bool:
+    """Совпадает с витриной: FREE по полю price или нулевой price_amount."""
+    if str(t.get("price", "")).strip().upper() == "FREE":
+        return True
+    try:
+        if int(t.get("price_amount") or -1) == 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
 def resolve_song_id_by_audio_stem(stem: str) -> str | None:
     """
     Находит song_id в каталоге discover_songs() по stem имени файла .mp3
     (совпадает с логикой имён из папки songs).
+
+    Если на диске нет папки songs/ или файлов (часто Railway) — пробуем tracks.py:
+    тот же stem даёт тот же базовый song_id, что и при сканировании диска.
     """
     stem = (stem or "").strip()
     if not stem:
@@ -98,6 +113,46 @@ def resolve_song_id_by_audio_stem(stem: str) -> str | None:
         file_stem = Path(str(meta.get("file", ""))).stem
         if file_stem == stem:
             return song_id
+    try:
+        from tracks import TRACKS
+    except ImportError:
+        return None
+    for t in TRACKS:
+        if Path(str(t.get("audio", "") or "")).stem != stem:
+            continue
+        if _track_dict_is_free_gift(t):
+            return None
+        return _song_id_from_stem(stem)
+    return None
+
+
+def synthetic_song_row_for_song_id(song_id: str) -> dict[str, Any] | None:
+    """
+    Строка каталога как у discover_songs(), но только из tracks.py (без MP3 на диске).
+
+    Нужна для website checkout / скачивания на Railway, где в репозитории нет бинарников songs/.
+    """
+    sid = (song_id or "").strip()
+    if not sid:
+        return None
+    try:
+        from tracks import TRACKS
+    except ImportError:
+        return None
+    for t in TRACKS:
+        stem = Path(str(t.get("audio", "") or "")).stem
+        if not stem or _song_id_from_stem(stem) != sid:
+            continue
+        if _track_dict_is_free_gift(t):
+            return None
+        name = str(t.get("title") or stem)
+        dir_name = _audio_sales_dir_name()
+        fname = Path(str(t.get("audio", "") or f"{stem}.mp3")).name
+        return {
+            "name": name,
+            "price_usd": _fixed_track_price_usd(),
+            "file": f"{dir_name}/{fname}",
+        }
     return None
 
 
