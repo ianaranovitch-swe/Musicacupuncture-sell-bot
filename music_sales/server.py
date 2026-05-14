@@ -164,8 +164,8 @@ def _parse_webhook_event(
             return jsonify({"error": "Invalid payload"}), 400
         except stripe.error.SignatureVerificationError as e:
             # Подробный лог для быстрого поиска неверного секрета в проде.
-            app.logger.error(f"Webhook signature failed: {e}")
-            app.logger.error(f"Webhook secret used: {str(webhook_secret)[:20]}...")
+            logger.error("Webhook signature failed: %s", e)
+            logger.error("Webhook secret prefix (debug): %s...", str(webhook_secret)[:20])
             return jsonify({"error": "Invalid signature"}), 400
 
     body = request.get_json(silent=True)
