@@ -475,7 +475,7 @@ def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_pa
 
 
 def test_free_track_json_returns_file_url(tmp_path, mocker):
-    """website.html: GET /free-track — в url прямая ссылка Telegram CDN (обход Git LFS-заглушек на Railway)."""
+    """website.html: GET /free-track — url ведёт на тот же backend /free-track-file (прокси без токена в браузере)."""
     mocker.patch.dict(
         os.environ,
         {"FILE_IDS_JSON": json.dumps({"Divine sound Super Feng Shui from God": "dummy_file_id"})},
@@ -485,6 +485,20 @@ def test_free_track_json_returns_file_url(tmp_path, mocker):
         "music_sales.server.resolve_telegram_file_download_url",
         return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
     )
+
+    class _FakeUpstream:
+        status_code = 200
+        headers = {"Content-Length": "4"}
+        closed = False
+
+        def iter_content(self, chunk_size=None):
+            yield b"\x00\x00\x00\x00"
+
+        def close(self):
+            self.closed = True
+
+    fake_up = _FakeUpstream()
+    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
 
     from music_sales.server import create_app
 
@@ -498,11 +512,15 @@ def test_free_track_json_returns_file_url(tmp_path, mocker):
     resp = client.get("/free-track")
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body and body.get("url", "").startswith("https://api.telegram.org/file/bot")
+    assert body and body.get("url")
+    assert "/free-track-file" in (body.get("url") or "")
+    assert "api.telegram.org" not in (body.get("url") or "")
 
     file_resp = client.get("/free-track-file", follow_redirects=False)
-    assert file_resp.status_code == 302
-    assert "api.telegram.org/file/bot" in (file_resp.headers.get("Location") or "")
+    assert file_resp.status_code == 200
+    assert file_resp.mimetype == "audio/mpeg"
+    assert file_resp.data == b"\x00\x00\x00\x00"  # съедаем стрим — иначе finally/close может не вызваться
+    assert fake_up.closed
 
 
 def test_free_track_options_preflight_includes_cors(tmp_path, mocker):
@@ -604,8 +622,8 @@ def test_website_download_redirect_returns_302_to_file(mocker):
     assert "website/download-file" in (resp.headers.get("Location") or "")
 
 
-def test_website_download_file_redirects_to_telegram_cdn(mocker, tmp_path):
-    """После проверки подписи — редирект на CDN Telegram, без чтения MP3 с диска."""
+def test_website_download_file_streams_from_telegram_cdn(mocker, tmp_path):
+    """После проверки подписи — прокси-стрим с CDN Telegram (без 302 с BOT_TOKEN в Location)."""
     import hashlib
     import hmac
     import time
@@ -617,6 +635,21 @@ def test_website_download_file_redirects_to_telegram_cdn(mocker, tmp_path):
         "music_sales.server.resolve_telegram_file_download_url",
         return_value=("https://api.telegram.org/file/botFAKE/music/paid.mp3", None),
     )
+
+    class _FakeUpstream:
+        status_code = 200
+        headers = {"Content-Length": "6"}
+        closed = False
+
+        def iter_content(self, chunk_size=None):
+            yield b"fakeMP"
+
+        def close(self):
+            self.closed = True
+
+    fake_up = _FakeUpstream()
+    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
+
     from music_sales.server import create_app
 
     app = create_app(
@@ -634,8 +667,11 @@ def test_website_download_file_redirects_to_telegram_cdn(mocker, tmp_path):
         f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
         follow_redirects=False,
     )
-    assert resp.status_code == 302
-    assert "api.telegram.org/file/bot" in (resp.headers.get("Location") or "")
+    assert resp.status_code == 200
+    assert resp.data == b"fakeMP"
+    assert "audio/mpeg" in (resp.headers.get("Content-Type") or "")
+    assert "attachment" in (resp.headers.get("Content-Disposition") or "")
+    assert fake_up.closed
 
 
 def test_website_download_get_json_includes_cors_headers(mocker):

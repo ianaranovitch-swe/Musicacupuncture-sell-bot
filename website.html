@@ -1074,7 +1074,7 @@
     var status = document.getElementById("free-status");
     status.textContent = "";
     setLoading(true);
-    /* Сначала прямой GET на backend → 302 на Telegram CDN (без fetch/CORS и без <a download> на чужой origin). */
+    /* Сначала прямой GET на backend: прокси-стрим MP3 с Telegram (без редиректа с bot-токеном в URL). */
     try {
       var w = window.open(API_BASE + "/free-track-file", "_blank", "noopener,noreferrer");
       if (w) {
@@ -1169,7 +1169,7 @@
         showSuccessDirectLink(redirectUrl);
         actions.style.display = "flex";
         msg.textContent =
-          "Tap “Open MP3 in new tab” or “Download again” — your browser will open Railway and start the MP3 (no extra login). Thank you! 🙏";
+          "Tap “Open MP3 in new tab” or “Download again” — your browser will open Railway and stream the MP3 (no extra login). Thank you! 🙏";
         /* Опционально: второй путь через fetch+скачивание, если CORS на Railway настроен. */
         (async function () {
           var jsonUrl = await tryFetchPurchaseDownload(tid, sessionId);

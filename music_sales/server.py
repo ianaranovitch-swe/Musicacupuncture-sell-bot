@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import hmac
 import hashlib
 import time
@@ -12,7 +13,7 @@ from urllib.parse import urlparse
 
 import requests
 import stripe
-from flask import Flask, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory, stream_with_context
 
 from music_sales import config
 from music_sales.catalog import (
@@ -33,6 +34,135 @@ from music_sales.file_id_delivery import (
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_mp3_attachment_filename(display_name: str) -> str:
+    """
+    Имя для заголовка Content-Disposition: без переводов строк и без кавычек внутри.
+    Только ASCII — меньше сюрпризов у браузеров на GitHub Pages → Railway.
+    """
+    base = (display_name or "").strip() or "track"
+    base = re.sub(r"[\r\n\t]+", " ", base)
+    safe = "".join(
+        c if (c.isascii() and (c.isalnum() or c in "._- ")) else "_" for c in base
+    )
+    safe = re.sub(r"_+", "_", safe).strip(" ._") or "track"
+    if not safe.lower().endswith(".mp3"):
+        safe = f"{safe}.mp3"
+    return safe[:180]
+
+
+def _telegram_download_too_big(tg_err: str | None) -> bool:
+    """Ошибка getFile из-за лимита Bot API (~20 MB на скачивание файла ботом)."""
+    if not tg_err:
+        return False
+    low = tg_err.lower()
+    return "too big" in low or "file is too big" in low
+
+
+def _json_telegram_download_error(tg_err: str | None) -> tuple[Any, int]:
+    """Единый JSON при сбое getFile / CDN (англ. тексты — UI для пользователя сайта)."""
+    if _telegram_download_too_big(tg_err):
+        return (
+            jsonify(
+                {
+                    "error": "Could not prepare download link",
+                    "hint": (
+                        "Telegram Bot API limits direct downloads to about 20 MB. "
+                        "Use the Telegram bot to receive this track."
+                    ),
+                }
+            ),
+            502,
+        )
+    return jsonify({"error": "Could not prepare download link"}), 502
+
+
+def _stream_mp3_from_telegram(
+    bot_token: str,
+    file_id: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+) -> Union[Response, Tuple[Any, int]]:
+    """
+    Прокси: getFile → GET по URL CDN Telegram с stream=True → чанки в браузер.
+
+    Так мы не отдаём клиенту ссылку с BOT_TOKEN в query/path (в отличие от 302 на api.telegram.org).
+    На диск Railway файл не пишем — только проходной поток (обход Git LFS-заглушек).
+
+    Важно: если сам Telegram отказывает в getFile (файл > ~20 MB для Bot API), стриминг не поможет —
+    нужен другой хостинг файла или выдача только через бота.
+    """
+    tg_url, tg_err = resolve_telegram_file_download_url(bot_token, file_id)
+    if not tg_url:
+        logger.warning("%s: getFile не удался: %s", log_prefix, tg_err)
+        return _json_telegram_download_error(tg_err)
+
+    disp_name = attachment_filename.replace('"', "'")
+    try:
+        upstream = requests.get(tg_url, stream=True, timeout=(25, 7200))
+    except requests.RequestException as e:
+        logger.warning("%s: не удалось открыть поток с CDN Telegram: %s", log_prefix, e)
+        return jsonify({"error": "Could not download file from Telegram"}), 502
+
+    if upstream.status_code != 200:
+        try:
+            peek = (upstream.text or "")[:400]
+        except Exception:
+            peek = ""
+        upstream.close()
+        logger.warning(
+            "%s: CDN Telegram HTTP %s, фрагмент ответа: %r",
+            log_prefix,
+            upstream.status_code,
+            peek,
+        )
+        return jsonify({"error": "Could not download file from Telegram"}), 502
+
+    cl = upstream.headers.get("Content-Length")
+    headers: dict[str, str] = {"Content-Disposition": f'attachment; filename="{disp_name}"'}
+    if cl and str(cl).isdigit():
+        headers["Content-Length"] = str(cl)
+
+    @stream_with_context
+    def chunks():
+        try:
+            for block in upstream.iter_content(chunk_size=64 * 1024):
+                if block:
+                    yield block
+        finally:
+            upstream.close()
+
+    return Response(chunks(), mimetype="audio/mpeg", headers=headers)
+
+
+def _head_mp3_from_telegram(
+    bot_token: str,
+    file_id: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+) -> Union[Response, Tuple[Any, int]]:
+    """Лёгкая проверка для health / браузеров: без тела, только заголовки после getFile."""
+    tg_url, tg_err = resolve_telegram_file_download_url(bot_token, file_id)
+    if not tg_url:
+        logger.warning("%s (HEAD): getFile не удался: %s", log_prefix, tg_err)
+        return _json_telegram_download_error(tg_err)
+
+    disp_name = attachment_filename.replace('"', "'")
+    hdrs: dict[str, str] = {
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition": f'attachment; filename="{disp_name}"',
+    }
+    try:
+        h = requests.head(tg_url, timeout=25, allow_redirects=True)
+        if h.status_code == 200 and h.headers.get("Content-Length"):
+            hdrs["Content-Length"] = str(h.headers["Content-Length"])
+    except requests.RequestException as e:
+        logger.info("%s (HEAD): HEAD к CDN не удался (%s) — отдаём 200 без Content-Length", log_prefix, e)
+
+    return Response("", status=200, headers=hdrs)
 
 
 def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
@@ -696,9 +826,13 @@ def create_app(
             return jsonify(out[0]), out[1]
         return jsonify({"url": out})
 
-    @app.route("/website/download-file", methods=["GET", "OPTIONS"])
+    @app.route("/website/download-file", methods=["GET", "HEAD", "OPTIONS"])
     def website_download_file() -> Any:
-        """Отдаём MP3-файл как attachment по короткоживущей подписи."""
+        """
+        Отдаём MP3 по короткоживущей подписи: прокси-стрим с CDN Telegram (не кладём MP3 на диск Railway).
+
+        Раньше делали 302 на URL с BOT_TOKEN — теперь токен остаётся только на сервере между getFile и GET.
+        """
         if request.method == "OPTIONS":
             return "", 204
         song_id = (request.args.get("song_id") or "").strip()
@@ -720,8 +854,6 @@ def create_app(
         if not song:
             return jsonify({"error": "Unknown song"}), 404
 
-        # На Railway в git часто лежат только Git LFS-указатели (~133 B), не настоящий MP3.
-        # Выдаём покупку через Telegram file_id + getFile → прямая ссылка на CDN Telegram.
         file_ids = load_file_ids_dict()
         tg_fid = file_id_for_song(song, file_ids)
         if not tg_fid:
@@ -730,21 +862,16 @@ def create_app(
         if not (config.BOT_TOKEN or "").strip():
             logger.error("website download-file: BOT_TOKEN пуст — getFile невозможен")
             return jsonify({"error": "Download is not available"}), 500
-        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), tg_fid)
-        if not tg_url:
-            logger.warning("website download-file: getFile не удался: %s", tg_err)
-            if tg_err and "too big" in tg_err.lower():
-                return jsonify(
-                    {
-                        "error": "Could not prepare download link",
-                        "hint": (
-                            "Telegram Bot API limits direct downloads to about 20 MB. "
-                            "Use the Telegram bot to receive this track."
-                        ),
-                    }
-                ), 502
-            return jsonify({"error": "Could not prepare download link"}), 502
-        return redirect(tg_url, code=302)
+
+        attachment = _safe_mp3_attachment_filename(str(song.get("name") or song_id))
+        tok = config.BOT_TOKEN.strip()
+        if request.method == "HEAD":
+            res = _head_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment, log_prefix="website download-file")
+        else:
+            res = _stream_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment, log_prefix="website download-file")
+        if isinstance(res, tuple):
+            return res[0], res[1]
+        return res
 
     def _free_bonus_telegram_file_id() -> str | None:
         """Ключ в FILE_IDS_JSON = stem имени бонусного файла (как в upload_songs.py)."""
@@ -754,64 +881,47 @@ def create_app(
     @app.route("/free-track", methods=["GET", "OPTIONS"])
     def free_track_json() -> Any:
         """
-        Публичная ссылка для website.html: JSON { "url": "https://api.telegram.org/file/bot…/…" }.
+        Публичная ссылка для website.html: JSON { "url": "<BACKEND>/free-track-file" }.
 
-        Раньше отдавали /free-track-file с диска — на Railway после Git LFS там «пустышка».
-        Теперь сразу ссылка на CDN Telegram (тот же file_id, что для бота).
+        Сам MP3 тянется с Telegram только на сервере (/free-track-file), без URL с BOT_TOKEN в браузере.
         """
         if request.method == "OPTIONS":
             return "", 204
-        file_ids = load_file_ids_dict()
         stem = free_bonus_audio_path(root_path()).stem
-        logger.info("Free track requested")
-        logger.info("File IDs keys: %s", list(file_ids.keys()))
-        logger.info("Looking for Super Feng Shui key %r in_file_ids=%s", stem, stem in file_ids)
         fid = _free_bonus_telegram_file_id()
         if not fid:
+            logger.warning("free-track: нет file_id в FILE_IDS_JSON для stem=%r", stem)
             return jsonify({"error": "Free track is not configured"}), 503
         if not (config.BOT_TOKEN or "").strip():
+            logger.error("free-track: BOT_TOKEN пуст — скачивание через Telegram невозможно")
             return jsonify({"error": "Download is not available"}), 500
-        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
-        if not tg_url:
-            logger.warning("free-track: getFile не удался: %s", tg_err)
-            if tg_err and "too big" in tg_err.lower():
-                return jsonify(
-                    {
-                        "error": "Could not prepare download link",
-                        "hint": (
-                            "Telegram Bot API limits direct downloads to about 20 MB. "
-                            "Use the Telegram bot to receive the free track."
-                        ),
-                    }
-                ), 502
-            return jsonify({"error": "Could not prepare download link"}), 502
-        return jsonify({"url": tg_url})
+        base = (request.url_root or "").rstrip("/")
+        file_url = f"{base}/free-track-file"
+        logger.info("free-track: отдаём прокси-URL %s (stem=%r)", file_url, stem)
+        return jsonify({"url": file_url})
 
-    @app.route("/free-track-file", methods=["GET", "OPTIONS"])
+    @app.route("/free-track-file", methods=["GET", "HEAD", "OPTIONS"])
     def free_track_file() -> Any:
-        """Совместимость: редирект на тот же CDN Telegram, что и /free-track (старые закладки)."""
+        """Прокси-стрим бонусного трека с CDN Telegram (тот же file_id, что у бота)."""
         if request.method == "OPTIONS":
             return "", 204
         fid = _free_bonus_telegram_file_id()
         if not fid:
+            logger.warning("free-track-file: нет file_id в FILE_IDS_JSON")
             return jsonify({"error": "Free track is not configured"}), 503
         if not (config.BOT_TOKEN or "").strip():
+            logger.error("free-track-file: BOT_TOKEN пуст")
             return jsonify({"error": "Download is not available"}), 500
-        tg_url, tg_err = resolve_telegram_file_download_url(config.BOT_TOKEN.strip(), fid)
-        if not tg_url:
-            logger.warning("free-track-file: getFile не удался: %s", tg_err)
-            if tg_err and "too big" in tg_err.lower():
-                return jsonify(
-                    {
-                        "error": "Could not prepare download link",
-                        "hint": (
-                            "Telegram Bot API limits direct downloads to about 20 MB. "
-                            "Use the Telegram bot to receive the free track."
-                        ),
-                    }
-                ), 502
-            return jsonify({"error": "Could not prepare download link"}), 502
-        return redirect(tg_url, code=302)
+
+        attachment = _safe_mp3_attachment_filename(free_bonus_audio_path(root_path()).stem)
+        tok = config.BOT_TOKEN.strip()
+        if request.method == "HEAD":
+            res = _head_mp3_from_telegram(tok, fid, attachment_filename=attachment, log_prefix="free-track-file")
+        else:
+            res = _stream_mp3_from_telegram(tok, fid, attachment_filename=attachment, log_prefix="free-track-file")
+        if isinstance(res, tuple):
+            return res[0], res[1]
+        return res
 
     def _notify_owner_via_api(
         *,
