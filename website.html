@@ -760,6 +760,7 @@
   }
 
   /* ---------- Backend (Railway) ---------- */
+  /* Stripe success redirect настраивается на сервере: WEBSITE_SUCCESS_URL или BACKEND_URL/…/website.html */
   const API_BASE = "https://web-production-ed267.up.railway.app".replace(/\/+$/, "");
   const CHECKOUT_SECRET = (function () {
     try {
@@ -769,11 +770,8 @@
       return "";
     }
   })();
-  /** Success page after Stripe: configure the same URL in Stripe Dashboard for Payment Links. */
-  const SUCCESS_PAGE_URL =
-    "https://ianaranovitch-swe.github.io/Musicacupuncture-sell-bot/website.html?success=true&track_id={track_id}";
-
   /**
+   * После Stripe редирект задаётся на сервере (WEBSITE_SUCCESS_URL или BACKEND_URL + /website.html).
    * Track catalog: same content as miniapp.html + Stripe URLs from tracks.py (buy_url = USD, buy_url_sek = SEK).
    * id 0 = free Super Feng Shui; платные id из tracks.py (в т.ч. 17 — новый эксклюзив), порядок карточек задаёт sync.
    * Блок MA_AUTO_* перезаписывается скриптом music_sales/frontend_catalog_sync.py после админки.
@@ -1313,7 +1311,7 @@
   loadPricing();
 
   /* Expose for debugging */
-  window.__MA_SITE__ = { TRACKS: TRACKS, API_BASE: API_BASE, SITE_BASE: SITE_BASE, SUCCESS_PAGE_URL: SUCCESS_PAGE_URL };
+  window.__MA_SITE__ = { TRACKS: TRACKS, API_BASE: API_BASE, SITE_BASE: SITE_BASE };
 })();
   </script>
 </body>

@@ -204,19 +204,20 @@ def create_app(
     def _stripe_public_origin() -> str:
         """
         Stripe требует для success_url / cancel_url полный URL со схемой (https://…).
-        Частая ошибка в Railway: DOMAIN=musicacupuncture.digital без префикса → Invalid URL.
+        Если в .env только хост без схемы — дописываем https:// (см. DOMAIN/BACKEND_URL).
         """
-        d = (domain or "").strip().rstrip("/")
+        candidates = [
+            (domain or "").strip().rstrip("/"),
+            (os.environ.get("BACKEND_URL") or config.BACKEND_URL or "").strip().rstrip("/"),
+            (os.environ.get("DOMAIN") or config.DOMAIN or "").strip().rstrip("/"),
+        ]
+        d = ""
+        for cand in candidates:
+            if cand:
+                d = cand
+                break
         if not d:
-            for cand in (
-                (os.environ.get("BACKEND_URL") or config.BACKEND_URL or "").strip().rstrip("/"),
-                (os.environ.get("DOMAIN") or config.DOMAIN or "").strip().rstrip("/"),
-            ):
-                if cand:
-                    d = cand
-                    break
-        if not d:
-            return "https://musicacupuncture.digital"
+            d = (config.BACKEND_URL or config.DOMAIN or "http://localhost:5000").strip().rstrip("/")
         low = d.lower()
         if low.startswith("https://") or low.startswith("http://"):
             return d
@@ -388,16 +389,17 @@ def create_app(
         return resolve_song_id_by_audio_stem(stem) if stem else None
 
     def _website_success_url(track_id_raw: Any) -> str:
-        """URL после оплаты с публичного сайта; приоритет: WEBSITE_SUCCESS_URL → HTTPS BACKEND_URL/DOMAIN → прод-домен."""
-        base = (os.environ.get("WEBSITE_SUCCESS_URL") or "").strip()
+        """
+        URL после оплаты с публичного сайта (Stripe success_url).
+
+        Приоритет: WEBSITE_SUCCESS_URL (полный URL страницы, например GitHub Pages).
+        Иначе: тот же публичный origin, что и для cancel_url (_stripe_public_origin) + /website.html
+        — без жёстко зашитого домена, чтобы совпадало с BACKEND_URL/Railway или Pages.
+        """
+        base = (os.environ.get("WEBSITE_SUCCESS_URL") or "").strip().rstrip("/")
         if not base:
-            for raw in ((os.environ.get("BACKEND_URL") or config.BACKEND_URL), (os.environ.get("DOMAIN") or config.DOMAIN)):
-                u = (raw or "").strip().rstrip("/")
-                if u.startswith("https://"):
-                    base = f"{u}/website.html"
-                    break
-        if not base:
-            base = "https://musicacupuncture.digital/website.html"
+            origin = _stripe_public_origin()
+            base = f"{origin.rstrip('/')}/website.html"
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}success=true&track_id={track_id_raw}&session_id={{CHECKOUT_SESSION_ID}}"
 

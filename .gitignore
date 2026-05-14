@@ -30,3 +30,6 @@ songs/**/*.wav
 
 # Telegram file_id map from upload_songs.py (do not commit)
 file_ids.json
+
+# Runtime sales / admin stats (local + Railway; do not commit — use SALES_LOG_JSON on server if needed)
+sales_log.json

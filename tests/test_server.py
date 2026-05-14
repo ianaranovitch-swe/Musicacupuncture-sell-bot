@@ -61,6 +61,9 @@ def test_create_checkout_cancel_url_https_when_domain_has_no_scheme(mocker):
     kwargs = create.call_args.kwargs
     assert kwargs["cancel_url"] == "https://musicacupuncture.example/cancel"
     assert kwargs["success_url"] == "https://musicacupuncture.example/success"
+
+
+def test_create_checkout_accepts_selected_currency(mocker):
     mock_session = mocker.Mock()
     mock_session.url = "https://stripe.test/session"
     create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
@@ -79,6 +82,33 @@ def test_create_checkout_cancel_url_https_when_domain_has_no_scheme(mocker):
     kwargs = create.call_args.kwargs
     assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 16900
+
+
+def test_website_create_payment_success_url_follows_backend_without_hardcoded_domain(mocker, monkeypatch):
+    """WEBSITE_SUCCESS_URL не задан — success_url = тот же origin, что cancel, + /website.html."""
+    monkeypatch.delenv("WEBSITE_SUCCESS_URL", raising=False)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    mocker.patch("music_sales.server.config.BACKEND_URL", "https://railway-backend.example")
+    mocker.patch("music_sales.server.config.DOMAIN", "")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        domain="https://railway-backend.example",
+    )
+    client = app.test_client()
+    resp = client.post("/website-create-payment", json={"track_id": 2, "currency": "usd"})
+    assert resp.status_code == 200
+    su = create.call_args.kwargs["success_url"]
+    assert "railway-backend.example/website.html" in su
+    assert "musicacupuncture.digital" not in su
 
 
 def test_create_checkout_uses_custom_success_url_when_configured(mocker):
