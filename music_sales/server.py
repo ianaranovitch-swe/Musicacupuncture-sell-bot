@@ -270,23 +270,32 @@ def _deliver_mp3_for_website_song(
     use_head: bool,
 ) -> Union[Response, Tuple[Any, int]]:
     """
-    Выдача MP3 на сайт: Google Drive → pCloud → Telegram (первый настроенный источник).
+    Выдача MP3 на сайт: Google Drive → pCloud → Telegram.
+
+    Если Drive настроен, но скачивание не удалось (403, нет Share, битый ключ) —
+    не обрываем выдачу: пробуем Telegram (как в боте).
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
     if gdrive_id and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
         if use_head:
-            return _head_mp3_from_google_drive(
+            drive_res = _head_mp3_from_google_drive(
                 gdrive_id,
                 attachment_filename=attachment_filename,
                 log_prefix=f"{log_prefix} (Drive)",
             )
-        return _stream_mp3_from_google_drive(
-            gdrive_id,
-            attachment_filename=attachment_filename,
-            log_prefix=f"{log_prefix} (Drive)",
+        else:
+            drive_res = _stream_mp3_from_google_drive(
+                gdrive_id,
+                attachment_filename=attachment_filename,
+                log_prefix=f"{log_prefix} (Drive)",
+            )
+        if not isinstance(drive_res, tuple):
+            return drive_res
+        logger.warning(
+            "%s: Google Drive не сработал — пробуем Telegram / pCloud (см. логи Drive выше)",
+            log_prefix,
         )
-
-    if gdrive_id and not (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+    elif gdrive_id and not (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
         logger.warning(
             "%s: google_drive_file_id задан, но GOOGLE_SERVICE_ACCOUNT_JSON пуст — пробуем запасные источники",
             log_prefix,

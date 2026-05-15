@@ -1,5 +1,6 @@
 """Тесты Google Drive delivery (без реального API)."""
 
+import json
 from unittest.mock import MagicMock, patch
 
 
@@ -28,6 +29,26 @@ def test_iter_drive_file_chunks_yields_bytes(mocker, tmp_path):
             it, err = iter_drive_file_chunks("file123")
     assert err is None
     assert b"".join(list(it)) == b"abcdef"
+
+
+def test_credentials_from_inline_json(mocker):
+    """Railway Variables: GOOGLE_SERVICE_ACCOUNT_JSON как одна строка JSON."""
+    inline = json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "p",
+            "private_key_id": "k",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----\n",
+            "client_email": "bot@p.iam.gserviceaccount.com",
+            "client_id": "1",
+        }
+    )
+    mocker.patch("music_sales.google_drive_delivery.config.GOOGLE_SERVICE_ACCOUNT_JSON", inline)
+    with patch("google.oauth2.service_account.Credentials.from_service_account_info") as mock_info:
+        from music_sales.google_drive_delivery import _credentials_from_env
+
+        _credentials_from_env()
+    mock_info.assert_called_once()
 
 
 def test_builtin_tracks_have_google_drive_ids():

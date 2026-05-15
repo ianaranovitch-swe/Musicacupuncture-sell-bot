@@ -550,6 +550,52 @@ def test_free_track_json_returns_file_url(tmp_path, mocker):
     assert fake_up.closed
 
 
+def test_free_track_file_falls_back_to_telegram_when_drive_fails(tmp_path, mocker):
+    """Если Drive настроен, но API отказал — MP3 всё равно с Telegram (как в боте)."""
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"Divine sound Super Feng Shui from God": "dummy_file_id"})},
+        clear=False,
+    )
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(None, "drive_http_403"),
+    )
+    mocker.patch(
+        "music_sales.server.resolve_telegram_file_download_url",
+        return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
+    )
+
+    class _FakeUpstream:
+        status_code = 200
+        headers = {"Content-Length": "3"}
+        closed = False
+
+        def iter_content(self, chunk_size=None):
+            yield b"tg!"
+
+        def close(self):
+            self.closed = True
+
+    fake_up = _FakeUpstream()
+    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/free-track-file", follow_redirects=False)
+    assert resp.status_code == 200
+    assert resp.data == b"tg!"
+    assert fake_up.closed
+
+
 def test_free_track_options_preflight_includes_cors(tmp_path, mocker):
     mocker.patch.dict(
         os.environ,
