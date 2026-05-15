@@ -154,6 +154,14 @@ def health_command_allowed_user_ids() -> set[int]:
     return out
 
 
+# Google Drive: путь к JSON ключу Service Account (выдача MP3 на сайте >20 MB, приоритет над Telegram).
+GOOGLE_SERVICE_ACCOUNT_JSON = _env("GOOGLE_SERVICE_ACCOUNT_JSON")
+
+# Опционально: pCloud fileid для выдачи MP3 на сайте после Stripe (файлы >20 MB; см. PCLOUD_AUTH_TOKEN в .env).
+PCLOUD_AUTH_TOKEN = _env("PCLOUD_AUTH_TOKEN")
+# API-хост: api.pcloud.com (US) или eapi.pcloud.com (EU), без https://
+PCLOUD_API_HOST = _env("PCLOUD_API_HOST", "api.pcloud.com")
+
 # Логирование (бот): LOG_LEVEL=DEBUG|INFO|WARNING|ERROR; LOG_FILE по умолчанию logs/bot.log
 LOG_LEVEL = _env("LOG_LEVEL", "INFO")
 LOG_FILE_RAW = os.environ.get("LOG_FILE")

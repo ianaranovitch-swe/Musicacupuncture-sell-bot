@@ -38,6 +38,39 @@ def test_discover_songs_uses_test_price_when_test_mode(monkeypatch, tmp_path):
     assert next(iter(found.values()))["price_usd"] == 1
 
 
+def test_discover_songs_merges_google_drive_file_id_from_catalog_json(monkeypatch, tmp_path):
+    songs_dir = tmp_path / "songs"
+    songs_dir.mkdir()
+    (songs_dir / "alpha.mp3").write_bytes(b"x")
+    (songs_dir / "catalog.json").write_text(
+        '{"alpha.mp3": {"name": "Alpha Nice", "google_drive_file_id": "gd123"}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+
+    found = discover_songs()
+    row = next(iter(found.values()))
+    assert row.get("google_drive_file_id") == "gd123"
+
+
+def test_discover_songs_merges_pcloud_fileid_from_catalog_json(monkeypatch, tmp_path):
+    """catalog.json может задать pcloud_fileid для website / Stripe download."""
+    songs_dir = tmp_path / "songs"
+    songs_dir.mkdir()
+    (songs_dir / "alpha.mp3").write_bytes(b"x")
+    (songs_dir / "catalog.json").write_text(
+        '{"alpha.mp3": {"name": "Alpha Nice", "pcloud_fileid": "42424242"}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+
+    found = discover_songs()
+    assert len(found) == 1
+    row = next(iter(found.values()))
+    assert row["name"] == "Alpha Nice"
+    assert row.get("pcloud_fileid") == "42424242"
+
+
 def test_song_path_joins_project_root(monkeypatch, tmp_path):
     songs_dir = tmp_path / "songs"
     songs_dir.mkdir()
@@ -66,6 +99,40 @@ def test_synthetic_song_row_for_song_id(monkeypatch, tmp_path):
     assert row is not None
     assert row["file"].startswith("songs/")
     assert "Estrogen" in row["name"]
+
+
+def test_synthetic_song_row_includes_google_drive_file_id_from_tracks(monkeypatch, tmp_path):
+    import tracks
+
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    from music_sales.catalog import _song_id_from_stem, synthetic_song_row_for_song_id
+
+    stem = "Divine sound Sleep Best Silver Power from God"
+    sid = _song_id_from_stem(stem)
+    row = synthetic_song_row_for_song_id(sid)
+    assert row is not None
+    assert row.get("google_drive_file_id") == tracks._BUILTIN_GOOGLE_DRIVE_IDS[17]
+
+
+def test_synthetic_song_row_includes_pcloud_fileid_from_tracks(monkeypatch, tmp_path):
+    import tracks
+
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    from music_sales.catalog import _song_id_from_stem, synthetic_song_row_for_song_id
+
+    stem = "Divine sound Sleep Best Silver Power from God"
+    new_tracks: list[dict] = []
+    for t in tracks.TRACKS:
+        d = dict(t)
+        if str(d.get("audio", "")).endswith(f"{stem}.mp3"):
+            d["pcloud_fileid"] = "771992"
+        new_tracks.append(d)
+    monkeypatch.setattr(tracks, "TRACKS", new_tracks)
+
+    sid = _song_id_from_stem(stem)
+    row = synthetic_song_row_for_song_id(sid)
+    assert row is not None
+    assert row.get("pcloud_fileid") == "771992"
 
 
 def test_tracks_reload_applies_test_payment_link(monkeypatch):

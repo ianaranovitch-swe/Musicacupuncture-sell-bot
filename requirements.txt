@@ -5,6 +5,8 @@ flask
 gunicorn
 stripe
 requests
+google-api-python-client>=2.100
+google-auth>=2.23
 Pillow>=10.0
 mutagen>=1.47
 pytest>=8.0

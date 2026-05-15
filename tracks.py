@@ -2,6 +2,8 @@
 
 Поле buy_url_sek — ссылка Stripe для Mini App в SEK (может совпадать с buy_url).
 Опционально: is_featured, is_new, ui_emoji, ui_short_name — для витрины и фронта.
+Опционально: google_drive_file_id — ID файла в Google Drive для скачивания с сайта после Stripe (файлы >20 MB).
+Нужен GOOGLE_SERVICE_ACCOUNT_JSON и доступ SA к папке с MP3. См. _BUILTIN_GOOGLE_DRIVE_IDS.
 """
 
 from __future__ import annotations
@@ -29,6 +31,29 @@ def _test_payment_link_for_all_tracks() -> str | None:
     if link:
         return link
     return (os.environ.get("TEST_PAYMENT_LINK_USD") or "").strip() or None
+
+
+# Google Drive file IDs для website / Stripe download (все 18 MP3, включая бесплатный id 18).
+_BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
+    1: "1v4Tv0LGcgvlHEYDq4gTapVYnlbt5560O",
+    2: "1zwat55udeiJD5aEIpQ3YLJKGTYuKHGJI",
+    3: "12B0RmB4ViwJIi916Aowy32t7T5hTvqqi",
+    4: "1BH6Y2Ad8UrUrCrQoXW-eAl7f32QAaVFu",
+    5: "1Gpk8D-gfs6O2IoKthEVJ-Aj1KPwWNdIB",
+    6: "1hdM8b5UnImkSJAxfymO4pKeDneWlnuii",
+    7: "10mqVlA0bvt9SUTcwHIoJNzHujK-7-Bh6",
+    8: "1BeBfmzXkEJh4svFHNHzsFopUnzIs-eff",
+    9: "18lVS9P7ZbEKxAr1qta4WHeDr9lr5mtbt",
+    10: "1YK5IrCmThG9np6xVurr3EWa5vSaEUDyW",
+    11: "1v3r70B0mr7i_fJZltQS3LpRaJSChskjd",
+    12: "14J_-gDqrmhbAy--Z-2_5wuMqzNfVd1ur",
+    13: "10jWeAvLxS69qqZ7oyVcHorCuqTUe2FpV",
+    14: "1l9EjCgfLZ0910LsVRZzpmwy9bJDTsEN8",
+    15: "1v3kf1uH4kAva5WQZgmTVWNDk_QHCDpYZ",
+    16: "1nqBnWYr8EcJhVJTSP2BMQirx5gXie-2A",
+    17: "10GwbO5VBYUnvsCiLHDTKKDAFR_d-uVU7",
+    18: "1Ic-8UEK9o9B7X0f1Ve0r0fTxpg08iG84",
+}
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
 _BUILTIN_TRACKS: list[dict] = [
@@ -416,6 +441,9 @@ def _build_merged_catalog() -> list[dict]:
         ov = overrides.get(str(tid))
         if isinstance(ov, dict):
             merged.update(ov)
+        gid = _BUILTIN_GOOGLE_DRIVE_IDS.get(tid)
+        if gid and not str(merged.get("google_drive_file_id") or "").strip():
+            merged["google_drive_file_id"] = gid
         out.append(merged)
     for raw in extras:
         if isinstance(raw, dict) and "id" in raw:

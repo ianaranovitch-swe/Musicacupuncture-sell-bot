@@ -674,6 +674,116 @@ def test_website_download_file_streams_from_telegram_cdn(mocker, tmp_path):
     assert fake_up.closed
 
 
+def test_website_download_file_streams_via_google_drive_when_configured(mocker, tmp_path):
+    """При google_drive_file_id + GOOGLE_SERVICE_ACCOUNT_JSON — стрим с Drive."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    catalog_gd = {
+        "song1": {
+            "name": "Large Track",
+            "price_usd": 16,
+            "file": "songs/song1.mp3",
+            "google_drive_file_id": "gdrive_file_abc",
+        }
+    }
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch(
+        "music_sales.server.drive_file_metadata",
+        return_value=({"size": "8", "name": "track.mp3"}, None),
+    )
+    mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(iter([b"gdrive!"]), None),
+    )
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_gd,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert resp.data == b"gdrive!"
+    assert "audio/mpeg" in (resp.headers.get("Content-Type") or "")
+
+
+def test_website_download_file_streams_via_pcloud_when_configured(mocker, tmp_path):
+    """Если у трека pcloud_fileid и задан PCLOUD_AUTH_TOKEN — стрим с pCloud, без Telegram getFile."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    catalog_pc = {
+        "song1": {
+            "name": "Large Track",
+            "price_usd": 16,
+            "file": "songs/song1.mp3",
+            "pcloud_fileid": "424242",
+        }
+    }
+    mocker.patch("music_sales.server.config.PCLOUD_AUTH_TOKEN", "pc_secret")
+    resolve_pc = mocker.patch(
+        "music_sales.server.resolve_pcloud_direct_download_url",
+        return_value=("https://c1.pcloud.com/p/x/y.mp3", None),
+    )
+
+    class _FakeUpstream:
+        status_code = 200
+        headers = {"Content-Length": "4"}
+        closed = False
+
+        def iter_content(self, chunk_size=None):
+            yield b"pc!!"
+
+        def close(self):
+            self.closed = True
+
+    fake_up = _FakeUpstream()
+    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_pc,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert resp.data == b"pc!!"
+    assert resolve_pc.called
+    args, _kwargs = resolve_pc.call_args
+    assert args[0] == "pc_secret"
+    assert args[1] == "424242"
+    assert fake_up.closed
+
+
 def test_website_download_get_json_includes_cors_headers(mocker):
     """GitHub Pages делает fetch к /website/download — в ответе нужен Access-Control-Allow-Origin."""
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://pages.example")

@@ -31,6 +31,8 @@ from music_sales.file_id_delivery import (
     load_file_ids_dict,
     resolve_telegram_file_download_url,
 )
+from music_sales.google_drive_delivery import drive_file_metadata, iter_drive_file_chunks
+from music_sales.pcloud_delivery import resolve_pcloud_direct_download_url
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,78 @@ def _json_telegram_download_error(tg_err: str | None) -> tuple[Any, int]:
     return jsonify({"error": "Could not prepare download link"}), 502
 
 
+def _stream_attached_mpeg_from_url(
+    source_url: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+    upstream_label: str = "upstream",
+) -> Union[Response, Tuple[Any, int]]:
+    """Общий прокси: GET по уже готовому URL с stream=True → attachment audio/mpeg."""
+    disp_name = attachment_filename.replace('"', "'")
+    try:
+        upstream = requests.get(source_url, stream=True, timeout=(25, 7200))
+    except requests.RequestException as e:
+        logger.warning("%s: не удалось открыть поток (%s): %s", log_prefix, upstream_label, e)
+        return jsonify({"error": "Could not download file from storage"}), 502
+
+    if upstream.status_code != 200:
+        try:
+            peek = (upstream.text or "")[:400]
+        except Exception:
+            peek = ""
+        upstream.close()
+        logger.warning(
+            "%s: %s HTTP %s, фрагмент ответа: %r",
+            log_prefix,
+            upstream_label,
+            upstream.status_code,
+            peek,
+        )
+        return jsonify({"error": "Could not download file from storage"}), 502
+
+    cl = upstream.headers.get("Content-Length")
+    headers: dict[str, str] = {
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition": f'attachment; filename="{disp_name}"',
+    }
+    if cl and str(cl).isdigit():
+        headers["Content-Length"] = str(cl)
+
+    @stream_with_context
+    def chunks():
+        try:
+            for block in upstream.iter_content(chunk_size=64 * 1024):
+                if block:
+                    yield block
+        finally:
+            upstream.close()
+
+    return Response(chunks(), mimetype="audio/mpeg", headers=headers)
+
+
+def _head_attached_mpeg_from_url(
+    source_url: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+) -> Union[Response, Tuple[Any, int]]:
+    """HEAD по готовому URL — только заголовки для проверок (без тела)."""
+    disp_name = attachment_filename.replace('"', "'")
+    hdrs: dict[str, str] = {
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition": f'attachment; filename="{disp_name}"',
+    }
+    try:
+        h = requests.head(source_url, timeout=25, allow_redirects=True)
+        if h.status_code == 200 and h.headers.get("Content-Length"):
+            hdrs["Content-Length"] = str(h.headers["Content-Length"])
+    except requests.RequestException as e:
+        logger.info("%s (HEAD): HEAD не удался (%s) — отдаём 200 без Content-Length", log_prefix, e)
+
+    return Response("", status=200, headers=hdrs)
+
+
 def _stream_mp3_from_telegram(
     bot_token: str,
     file_id: str,
@@ -99,42 +173,13 @@ def _stream_mp3_from_telegram(
         logger.warning("%s: getFile не удался: %s", log_prefix, tg_err)
         return _json_telegram_download_error(tg_err)
 
-    disp_name = attachment_filename.replace('"', "'")
-    try:
-        upstream = requests.get(tg_url, stream=True, timeout=(25, 7200))
-    except requests.RequestException as e:
-        logger.warning("%s: не удалось открыть поток с CDN Telegram: %s", log_prefix, e)
-        return jsonify({"error": "Could not download file from Telegram"}), 502
-
-    if upstream.status_code != 200:
-        try:
-            peek = (upstream.text or "")[:400]
-        except Exception:
-            peek = ""
-        upstream.close()
-        logger.warning(
-            "%s: CDN Telegram HTTP %s, фрагмент ответа: %r",
-            log_prefix,
-            upstream.status_code,
-            peek,
-        )
-        return jsonify({"error": "Could not download file from Telegram"}), 502
-
-    cl = upstream.headers.get("Content-Length")
-    headers: dict[str, str] = {"Content-Disposition": f'attachment; filename="{disp_name}"'}
-    if cl and str(cl).isdigit():
-        headers["Content-Length"] = str(cl)
-
-    @stream_with_context
-    def chunks():
-        try:
-            for block in upstream.iter_content(chunk_size=64 * 1024):
-                if block:
-                    yield block
-        finally:
-            upstream.close()
-
-    return Response(chunks(), mimetype="audio/mpeg", headers=headers)
+    attachment = attachment_filename.replace('"', "'")
+    return _stream_attached_mpeg_from_url(
+        tg_url,
+        attachment_filename=attachment,
+        log_prefix=log_prefix,
+        upstream_label="Telegram CDN",
+    )
 
 
 def _head_mp3_from_telegram(
@@ -150,19 +195,136 @@ def _head_mp3_from_telegram(
         logger.warning("%s (HEAD): getFile не удался: %s", log_prefix, tg_err)
         return _json_telegram_download_error(tg_err)
 
+    attachment = attachment_filename.replace('"', "'")
+    return _head_attached_mpeg_from_url(tg_url, attachment_filename=attachment, log_prefix=log_prefix)
+
+
+def _stream_mp3_from_google_drive(
+    drive_file_id: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+) -> Union[Response, Tuple[Any, int]]:
+    """Прокси: Drive API alt=media → чанки в браузер (ссылку Drive не отдаём)."""
+    meta, meta_err = drive_file_metadata(drive_file_id)
+    if meta_err and not meta:
+        logger.warning("%s: Drive metadata: %s", log_prefix, meta_err)
+
+    chunk_iter, stream_err = iter_drive_file_chunks(drive_file_id)
+    if not chunk_iter:
+        logger.error("%s: Drive stream failed: %s", log_prefix, stream_err)
+        return jsonify({"error": "Could not download file from cloud storage"}), 502
+
+    disp_name = attachment_filename.replace('"', "'")
+    headers: dict[str, str] = {
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition": f'attachment; filename="{disp_name}"',
+    }
+    if meta:
+        try:
+            sz = int(meta.get("size") or 0)
+            if sz > 0:
+                headers["Content-Length"] = str(sz)
+        except (TypeError, ValueError):
+            pass
+
+    @stream_with_context
+    def chunks():
+        for block in chunk_iter:
+            yield block
+
+    return Response(chunks(), mimetype="audio/mpeg", headers=headers)
+
+
+def _head_mp3_from_google_drive(
+    drive_file_id: str,
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+) -> Union[Response, Tuple[Any, int]]:
+    """HEAD: только заголовки по метаданным Drive."""
+    meta, err = drive_file_metadata(drive_file_id)
+    if not meta:
+        logger.warning("%s (HEAD): Drive metadata failed: %s", log_prefix, err)
+        return jsonify({"error": "Could not prepare download from cloud storage"}), 502
+
     disp_name = attachment_filename.replace('"', "'")
     hdrs: dict[str, str] = {
         "Content-Type": "audio/mpeg",
         "Content-Disposition": f'attachment; filename="{disp_name}"',
     }
     try:
-        h = requests.head(tg_url, timeout=25, allow_redirects=True)
-        if h.status_code == 200 and h.headers.get("Content-Length"):
-            hdrs["Content-Length"] = str(h.headers["Content-Length"])
-    except requests.RequestException as e:
-        logger.info("%s (HEAD): HEAD к CDN не удался (%s) — отдаём 200 без Content-Length", log_prefix, e)
-
+        sz = int(meta.get("size") or 0)
+        if sz > 0:
+            hdrs["Content-Length"] = str(sz)
+    except (TypeError, ValueError):
+        pass
     return Response("", status=200, headers=hdrs)
+
+
+def _deliver_mp3_for_website_song(
+    song: dict[str, Any],
+    *,
+    attachment_filename: str,
+    log_prefix: str,
+    use_head: bool,
+) -> Union[Response, Tuple[Any, int]]:
+    """
+    Выдача MP3 на сайт: Google Drive → pCloud → Telegram (первый настроенный источник).
+    """
+    gdrive_id = str(song.get("google_drive_file_id") or "").strip()
+    if gdrive_id and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+        if use_head:
+            return _head_mp3_from_google_drive(
+                gdrive_id,
+                attachment_filename=attachment_filename,
+                log_prefix=f"{log_prefix} (Drive)",
+            )
+        return _stream_mp3_from_google_drive(
+            gdrive_id,
+            attachment_filename=attachment_filename,
+            log_prefix=f"{log_prefix} (Drive)",
+        )
+
+    if gdrive_id and not (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+        logger.warning(
+            "%s: google_drive_file_id задан, но GOOGLE_SERVICE_ACCOUNT_JSON пуст — пробуем запасные источники",
+            log_prefix,
+        )
+
+    pc_fid = str(song.get("pcloud_fileid") or "").strip()
+    pc_auth = (config.PCLOUD_AUTH_TOKEN or "").strip()
+    api_host = (config.PCLOUD_API_HOST or "api.pcloud.com").strip()
+    if pc_fid and pc_auth:
+        pc_url, pc_err = resolve_pcloud_direct_download_url(pc_auth, pc_fid, api_host=api_host)
+        if not pc_url:
+            logger.error("%s: pCloud getfilelink failed: %s", log_prefix, pc_err)
+            return jsonify({"error": "Could not prepare download from cloud storage"}), 502
+        if use_head:
+            return _head_attached_mpeg_from_url(
+                pc_url,
+                attachment_filename=attachment_filename,
+                log_prefix=f"{log_prefix} (pCloud)",
+            )
+        return _stream_attached_mpeg_from_url(
+            pc_url,
+            attachment_filename=attachment_filename,
+            log_prefix=f"{log_prefix} (pCloud)",
+            upstream_label="pCloud CDN",
+        )
+
+    file_ids = load_file_ids_dict()
+    tg_fid = file_id_for_song(song, file_ids)
+    if not tg_fid:
+        logger.warning("%s: нет FILE_IDS_JSON для трека", log_prefix)
+        return jsonify({"error": "Track download is not configured"}), 503
+    if not (config.BOT_TOKEN or "").strip():
+        logger.error("%s: BOT_TOKEN пуст", log_prefix)
+        return jsonify({"error": "Download is not available"}), 500
+    tok = config.BOT_TOKEN.strip()
+    if use_head:
+        return _head_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
+    return _stream_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
 
 
 def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
@@ -829,9 +991,9 @@ def create_app(
     @app.route("/website/download-file", methods=["GET", "HEAD", "OPTIONS"])
     def website_download_file() -> Any:
         """
-        Отдаём MP3 по короткоживущей подписи: прокси-стрим с CDN Telegram (не кладём MP3 на диск Railway).
+        Отдаём MP3 по короткоживущей подписи.
 
-        Раньше делали 302 на URL с BOT_TOKEN — теперь токен остаётся только на сервере между getFile и GET.
+        Приоритет: Google Drive (google_drive_file_id) → pCloud → Telegram file_id.
         """
         if request.method == "OPTIONS":
             return "", 204
@@ -854,24 +1016,30 @@ def create_app(
         if not song:
             return jsonify({"error": "Unknown song"}), 404
 
-        file_ids = load_file_ids_dict()
-        tg_fid = file_id_for_song(song, file_ids)
-        if not tg_fid:
-            logger.warning("website download-file: нет file_id в FILE_IDS_JSON для song_id=%s", song_id)
-            return jsonify({"error": "Track download is not configured"}), 503
-        if not (config.BOT_TOKEN or "").strip():
-            logger.error("website download-file: BOT_TOKEN пуст — getFile невозможен")
-            return jsonify({"error": "Download is not available"}), 500
-
         attachment = _safe_mp3_attachment_filename(str(song.get("name") or song_id))
-        tok = config.BOT_TOKEN.strip()
-        if request.method == "HEAD":
-            res = _head_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment, log_prefix="website download-file")
-        else:
-            res = _stream_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment, log_prefix="website download-file")
+        res = _deliver_mp3_for_website_song(
+            song,
+            attachment_filename=attachment,
+            log_prefix=f"website download-file song_id={song_id}",
+            use_head=request.method == "HEAD",
+        )
         if isinstance(res, tuple):
             return res[0], res[1]
         return res
+
+    def _free_bonus_google_drive_file_id() -> str | None:
+        """google_drive_file_id бесплатного трека из tracks.py (id 18 / Super Feng Shui)."""
+        stem = free_bonus_audio_path(root_path()).stem
+        try:
+            from tracks import TRACKS
+        except ImportError:
+            return None
+        for t in TRACKS:
+            if Path(str(t.get("audio", "") or "")).stem != stem:
+                continue
+            gid = str(t.get("google_drive_file_id") or "").strip()
+            return gid or None
+        return None
 
     def _free_bonus_telegram_file_id() -> str | None:
         """Ключ в FILE_IDS_JSON = stem имени бонусного файла (как в upload_songs.py)."""
@@ -883,17 +1051,19 @@ def create_app(
         """
         Публичная ссылка для website.html: JSON { "url": "<BACKEND>/free-track-file" }.
 
-        Сам MP3 тянется с Telegram только на сервере (/free-track-file), без URL с BOT_TOKEN в браузере.
+        MP3 отдаёт /free-track-file (Drive → Telegram), без публичной ссылки Drive.
         """
         if request.method == "OPTIONS":
             return "", 204
         stem = free_bonus_audio_path(root_path()).stem
-        fid = _free_bonus_telegram_file_id()
-        if not fid:
-            logger.warning("free-track: нет file_id в FILE_IDS_JSON для stem=%r", stem)
+        gdrive = _free_bonus_google_drive_file_id()
+        tg_fid = _free_bonus_telegram_file_id()
+        has_drive = bool(gdrive and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+        if not has_drive and not tg_fid:
+            logger.warning("free-track: нет google_drive_file_id и FILE_IDS_JSON для stem=%r", stem)
             return jsonify({"error": "Free track is not configured"}), 503
-        if not (config.BOT_TOKEN or "").strip():
-            logger.error("free-track: BOT_TOKEN пуст — скачивание через Telegram невозможно")
+        if not has_drive and not (config.BOT_TOKEN or "").strip():
+            logger.error("free-track: BOT_TOKEN пуст — Telegram fallback невозможен")
             return jsonify({"error": "Download is not available"}), 500
         base = (request.url_root or "").rstrip("/")
         file_url = f"{base}/free-track-file"
@@ -902,23 +1072,28 @@ def create_app(
 
     @app.route("/free-track-file", methods=["GET", "HEAD", "OPTIONS"])
     def free_track_file() -> Any:
-        """Прокси-стрим бонусного трека с CDN Telegram (тот же file_id, что у бота)."""
+        """Прокси-стрим бонусного трека: Google Drive или Telegram."""
         if request.method == "OPTIONS":
             return "", 204
-        fid = _free_bonus_telegram_file_id()
-        if not fid:
-            logger.warning("free-track-file: нет file_id в FILE_IDS_JSON")
+        stem = free_bonus_audio_path(root_path()).stem
+        song_row: dict[str, Any] = {
+            "name": stem,
+            "file": f"songs/{stem}.mp3",
+        }
+        gid = _free_bonus_google_drive_file_id()
+        if gid:
+            song_row["google_drive_file_id"] = gid
+        tg = _free_bonus_telegram_file_id()
+        if not gid and not tg:
             return jsonify({"error": "Free track is not configured"}), 503
-        if not (config.BOT_TOKEN or "").strip():
-            logger.error("free-track-file: BOT_TOKEN пуст")
-            return jsonify({"error": "Download is not available"}), 500
 
-        attachment = _safe_mp3_attachment_filename(free_bonus_audio_path(root_path()).stem)
-        tok = config.BOT_TOKEN.strip()
-        if request.method == "HEAD":
-            res = _head_mp3_from_telegram(tok, fid, attachment_filename=attachment, log_prefix="free-track-file")
-        else:
-            res = _stream_mp3_from_telegram(tok, fid, attachment_filename=attachment, log_prefix="free-track-file")
+        attachment = _safe_mp3_attachment_filename(stem)
+        res = _deliver_mp3_for_website_song(
+            song_row,
+            attachment_filename=attachment,
+            log_prefix="free-track-file",
+            use_head=request.method == "HEAD",
+        )
         if isinstance(res, tuple):
             return res[0], res[1]
         return res

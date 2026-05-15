@@ -59,9 +59,10 @@ def _fixed_track_price_usd() -> int:
 def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:
     """
     Опциональный `songs/catalog.json` (или `<AUDIO_SALES_DIR>/catalog.json`):
-      { "Track.mp3": { "name": "Красивое имя для кнопки" } }
+      { "Track.mp3": { "name": "…", "google_drive_file_id": "1abc…", "pcloud_fileid": "123" } }
 
     Важно: цены из JSON игнорируются — витрина использует фиксированную USD-цену из кода/окружения.
+    google_drive_file_id — приоритет для сайта (GOOGLE_SERVICE_ACCOUNT_JSON); pcloud_fileid — запасной вариант.
     """
     meta = folder / "catalog.json"
     if not meta.is_file():
@@ -148,11 +149,18 @@ def synthetic_song_row_for_song_id(song_id: str) -> dict[str, Any] | None:
         name = str(t.get("title") or stem)
         dir_name = _audio_sales_dir_name()
         fname = Path(str(t.get("audio", "") or f"{stem}.mp3")).name
-        return {
+        row: Dict[str, Any] = {
             "name": name,
             "price_usd": _fixed_track_price_usd(),
             "file": f"{dir_name}/{fname}",
         }
+        gid = t.get("google_drive_file_id")
+        if gid is not None and str(gid).strip():
+            row["google_drive_file_id"] = str(gid).strip()
+        pid = t.get("pcloud_fileid")
+        if pid is not None and str(pid).strip():
+            row["pcloud_fileid"] = str(pid).strip()
+        return row
     return None
 
 
@@ -203,6 +211,12 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
             "price_usd": price_usd,
             "file": f"{dir_name}/{path.name}",
         }
+        gid = ov.get("google_drive_file_id")
+        if gid is not None and str(gid).strip():
+            out[song_id]["google_drive_file_id"] = str(gid).strip()
+        pid = ov.get("pcloud_fileid")
+        if pid is not None and str(pid).strip():
+            out[song_id]["pcloud_fileid"] = str(pid).strip()
 
     return out
 
