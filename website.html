@@ -830,6 +830,52 @@
     document.getElementById("global-loading").classList.toggle("active", !!on);
   }
 
+  /**
+   * Открыть URL в новой вкладке. Важно: первый window.open — синхронно в обработчике клика,
+   * иначе браузер блокирует всплывающие окна (кажется, что «ничего не происходит»).
+   */
+  function openUrlInNewTabOrSameTab(url, statusEl) {
+    if (!url || !/^https?:\/\//i.test(url)) return false;
+    var w = null;
+    try {
+      w = window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {}
+    if (w) {
+      if (statusEl) statusEl.textContent = "If a new tab opened, continue there. Thank you! 🙏";
+      return true;
+    }
+    try {
+      window.location.href = url;
+      if (statusEl) statusEl.textContent = "Opening download…";
+      return true;
+    } catch (e2) {}
+    return false;
+  }
+
+  /** Checkout Stripe: сначала пустая вкладка (синхронно), потом подставляем URL после fetch. */
+  function openCheckoutUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return false;
+    var tab = null;
+    try {
+      tab = window.open("about:blank", "_blank", "noopener,noreferrer");
+    } catch (e) {}
+    if (tab) {
+      try {
+        tab.location.href = url;
+        return true;
+      } catch (e2) {
+        try {
+          tab.close();
+        } catch (e3) {}
+      }
+    }
+    try {
+      window.location.href = url;
+      return true;
+    } catch (e4) {}
+    return false;
+  }
+
   async function loadPricing() {
     try {
       const r = await fetch(API_BASE + "/miniapp-pricing", { method: "GET", mode: "cors" });
@@ -985,12 +1031,29 @@
 
   async function openStripeForTrack(track, useSek) {
     if (!track || track.isFree) return;
+    /* Вкладка сразу в клике — иначе popup-blocker после await. */
+    var checkoutTab = null;
+    try {
+      checkoutTab = window.open("about:blank", "_blank", "noopener,noreferrer");
+    } catch (e) {}
     setLoading(true);
     var url = await createBackendCheckout(track, useSek);
     setLoading(false);
     if (url && /^https?:\/\//i.test(url)) {
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (checkoutTab && !checkoutTab.closed) {
+        try {
+          checkoutTab.location.href = url;
+          return;
+        } catch (e0) {}
+      }
+      if (openCheckoutUrl(url)) return;
+      alert("Could not open checkout. Allow pop-ups for this site or try again.");
       return;
+    }
+    if (checkoutTab) {
+      try {
+        checkoutTab.close();
+      } catch (e1) {}
     }
     /* Fallback to static links if backend checkout is unavailable. */
     url = useSek ? track.buyUrlSek : track.buyUrlUsd;
@@ -1001,7 +1064,9 @@
     if (serverPricing && serverPricing.test_mode) {
       alert("TEST mode is enabled, but backend checkout endpoint did not return a URL. Fallback link may use live mode.");
     }
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!openCheckoutUrl(url)) {
+      alert("Could not open payment page. Allow pop-ups for this site.");
+    }
   }
 
   /**
@@ -1072,17 +1137,13 @@
 
   async function handleFreeDownload() {
     var status = document.getElementById("free-status");
-    status.textContent = "";
+    status.textContent = "Starting download…";
+    /* Синхронно в клике — иначе popup-blocker. */
+    var directUrl = API_BASE + "/free-track-file";
+    if (openUrlInNewTabOrSameTab(directUrl, status)) {
+      return;
+    }
     setLoading(true);
-    /* Сначала прямой GET на backend: прокси-стрим MP3 с Telegram (без редиректа с bot-токеном в URL). */
-    try {
-      var w = window.open(API_BASE + "/free-track-file", "_blank", "noopener,noreferrer");
-      if (w) {
-        status.textContent = "If a new tab opened, the download should start there. Thank you! 🙏";
-        setLoading(false);
-        return;
-      }
-    } catch (e) {}
     try {
       var r = await fetch(API_BASE + "/free-track", { method: "GET", mode: "cors" });
       if (r.ok) {
@@ -1090,36 +1151,23 @@
           return null;
         });
         if (data && data.url) {
-          /* Без атрибута download: иначе браузер игнорирует имя файла для cross-origin (Telegram CDN). */
-          try {
-            var w2 = window.open(data.url, "_blank", "noopener,noreferrer");
-            if (w2) {
-              status.textContent = "Download started. Enjoy your gift! 🙏";
-              setLoading(false);
-              return;
-            }
-          } catch (e0) {}
-          window.location.href = data.url;
-          status.textContent = "Download started. Enjoy your gift! 🙏";
           setLoading(false);
-          return;
+          if (openUrlInNewTabOrSameTab(data.url, status)) return;
         }
       }
     } catch (e) {}
-    /* Fallback: direct file on GitHub Pages if you host the MP3 in the repo (optional). */
+    setLoading(false);
     var fallback = assetUrl("songs/Divine sound Super Feng Shui from God.mp3");
     try {
       var head = await fetch(fallback, { method: "HEAD", mode: "cors" });
       if (head.ok) {
         triggerDownload(fallback, "Divine sound Super Feng Shui from God.mp3");
-        status.textContent = "Download started. If the server endpoint /free-track is added on Railway, it will be used automatically.";
-        setLoading(false);
+        status.textContent = "Download started from this site (backup file).";
         return;
       }
     } catch (e2) {}
     status.innerHTML =
-      "Automatic download is not available yet. Please use the <a href='#free' style='color:var(--gold);'>Telegram bot</a> for the free gift, or ask the admin to enable <code>/free-track</code> on Railway or host the MP3 on this site.";
-    setLoading(false);
+      'Download could not start. Allow pop-ups for this site, or use the <a href="#free" style="color:var(--gold);">Telegram bot</a> for the free gift.';
   }
 
   function scrollToId(id) {

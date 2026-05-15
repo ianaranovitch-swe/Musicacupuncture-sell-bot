@@ -7,7 +7,11 @@ on:
     branches: ["main", "experiment"]
     paths:
       - "miniapp.html"
+      - "website.html"
+      - "about.html"
+      - "index.html"
       - "covers/**"
+      - "assets/**"
       - ".github/workflows/deploy-miniapp-pages.yml"
 
 permissions:
@@ -40,12 +44,17 @@ jobs:
       # Samla statiska filer i _site (GitHub Pages rot för denna deploy).
       - name: Build static site folder
         run: |
-          mkdir -p _site/covers
+          mkdir -p _site/covers _site/assets
           cp miniapp.html _site/miniapp.html
-          cp miniapp.html _site/index.html
+          if [ -f website.html ]; then cp website.html _site/website.html; fi
+          if [ -f about.html ]; then cp about.html _site/about.html; fi
+          if [ -f index.html ]; then cp index.html _site/index.html; else cp miniapp.html _site/index.html; fi
           touch _site/.nojekyll
           if [ -d covers ]; then
             find covers -maxdepth 1 -type f -exec cp {} _site/covers/ \;
+          fi
+          if [ -d assets ]; then
+            find assets -maxdepth 1 -type f -exec cp {} _site/assets/ \;
           fi
           echo "Published files:" && find _site -type f | head -50
 
