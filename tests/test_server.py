@@ -198,6 +198,33 @@ def test_create_checkout_options_preflight(mocker):
     assert resp2.headers.get("Access-Control-Allow-Origin") == "https://example.github.io"
 
 
+def test_create_checkout_cors_auto_allows_domain_from_backend_url(mocker):
+    """Если MINIAPP_CORS_ORIGINS пуст — origin из DOMAIN/BACKEND_URL всё равно разрешён (musicacupuncture.digital)."""
+    mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "")
+    mocker.patch.dict(
+        os.environ,
+        {
+            "DOMAIN": "https://musicacupuncture.digital",
+            "BACKEND_URL": "https://musicacupuncture.digital",
+        },
+        clear=False,
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.options(
+        "/website-create-payment",
+        headers={"Origin": "https://musicacupuncture.digital"},
+    )
+    assert resp.status_code == 204
+    assert resp.headers.get("Access-Control-Allow-Origin") == "https://musicacupuncture.digital"
+
+
 def test_create_checkout_cors_accepts_trailing_slash_in_env(mocker):
     """В MINIAPP_CORS_ORIGINS часто добавляют / в конце — сравнение нормализуем."""
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://example.github.io/")

@@ -574,27 +574,54 @@ def create_app(
             netloc = host
         return f"{scheme}://{netloc}"
 
-    def _cors_headers_for_create_checkout() -> dict[str, str]:
-        """CORS для Mini App на другом origin (например GitHub Pages)."""
-        origin_raw = (request.headers.get("Origin") or "").strip()
+    def _cors_allowed_origin_keys() -> set[str]:
+        """
+        Разрешённые Origin (нормализованные ключи).
+
+        1) MINIAPP_CORS_ORIGINS (через запятую)
+        2) Автоматически origin из DOMAIN, BACKEND_URL, MINIAPP_URL, WEBSITE_SUCCESS_URL —
+           чтобы на проде musicacupuncture.digital не забывали дублировать домен в CORS.
+        """
+        allowed: set[str] = set()
         raw = _cors_origins_from_env()
-        if not origin_raw or not raw:
-            return {}
-        origin_key = _cors_origin_key(origin_raw)
-        if not origin_key:
-            logger.warning("CORS: invalid Origin header %r", origin_raw[:160])
-            return {}
-        allowed_keys: set[str] = set()
         for part in raw.split(","):
             if not part.strip():
                 continue
             k = _cors_origin_key(part)
             if k:
-                allowed_keys.add(k)
+                allowed.add(k)
+        auto_sources = [
+            os.environ.get("DOMAIN") or config.DOMAIN,
+            os.environ.get("BACKEND_URL") or config.BACKEND_URL,
+            os.environ.get("MINIAPP_URL") or config.MINIAPP_URL,
+            os.environ.get("WEBSITE_SUCCESS_URL") or "",
+            os.environ.get("CHECKOUT_SUCCESS_URL") or config.CHECKOUT_SUCCESS_URL,
+        ]
+        for val in auto_sources:
+            k = _cors_origin_key(str(val or "").strip())
+            if k:
+                allowed.add(k)
+        return allowed
+
+    def _cors_headers_for_create_checkout() -> dict[str, str]:
+        """CORS для Mini App / website на другом origin (GitHub Pages, свой домен)."""
+        origin_raw = (request.headers.get("Origin") or "").strip()
+        if not origin_raw:
+            return {}
+        origin_key = _cors_origin_key(origin_raw)
+        if not origin_key:
+            logger.warning("CORS: invalid Origin header %r", origin_raw[:160])
+            return {}
+        allowed_keys = _cors_allowed_origin_keys()
+        if not allowed_keys:
+            logger.warning("CORS: no allowed origins (set MINIAPP_CORS_ORIGINS and/or DOMAIN/BACKEND_URL)")
+            return {}
         if origin_key not in allowed_keys:
             logger.warning(
-                "CORS: checkout request Origin=%r not in MINIAPP_CORS_ORIGINS (normalized keys mismatch)",
+                "CORS: checkout request Origin=%r not allowed (MINIAPP_CORS_ORIGINS + DOMAIN/BACKEND_URL). "
+                "Allowed keys: %s",
                 origin_raw[:160],
+                ", ".join(sorted(allowed_keys)[:8]),
             )
             return {}
         # В заголовке ответа должно совпадать с тем, что прислал браузер (обычно без хвостового /).
