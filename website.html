@@ -807,7 +807,7 @@
         <img class="cover-main" id="free-cover-img" alt="" />
         <h3 style="color: var(--gold); margin: 0 0 12px;">Divine sound Super Feng Shui from God</h3>
         <p class="desc" id="free-desc"></p>
-        <button type="button" class="btn-gold" id="btn-download-free">🎁 Download Free Track</button>
+        <button type="button" class="btn-gold" id="btn-download-free">⬇️ Download again</button>
         <p id="free-status" style="font-size: 0.8rem; color: var(--muted); margin-top: 14px; margin-bottom: 0;"></p>
       </div>
     </section>
@@ -1468,23 +1468,43 @@
   }
 
   var freeDownloadStarted = false;
+  var freeDownloadIframe = null;
 
-  async function handleFreeDownload() {
-    if (freeDownloadStarted) return;
+  /**
+   * Один автоматический старт бесплатного MP3 (iframe → /free-track-file).
+   * Без window.open + fetch — иначе некоторые браузеры качают файл дважды.
+   */
+  function startFreeTrackDownload(opts) {
+    opts = opts || {};
+    var allowRepeat = opts.allowRepeat === true;
+    if (freeDownloadStarted && !allowRepeat) return false;
+
     var status = document.getElementById("free-status");
-    status.textContent = "Starting download…";
-    /* Одна выдача: только /free-track-file (без второго fetch + повторного окна). */
     var directUrl = API_BASE + "/free-track-file";
     freeDownloadStarted = true;
-    if (openUrlInNewTabOrSameTab(directUrl, status)) {
-      setTimeout(function () {
-        freeDownloadStarted = false;
-      }, 5000);
-      return;
+    if (status) status.textContent = "Starting download…";
+
+    if (freeDownloadIframe && freeDownloadIframe.parentNode) {
+      try {
+        freeDownloadIframe.parentNode.removeChild(freeDownloadIframe);
+      } catch (e) {}
     }
-    freeDownloadStarted = false;
-    status.innerHTML =
-      'Download could not start. Allow pop-ups for this site, or use the <a href="#free" style="color:var(--gold);">Telegram bot</a> for the free gift.';
+    freeDownloadIframe = document.createElement("iframe");
+    freeDownloadIframe.setAttribute("aria-hidden", "true");
+    freeDownloadIframe.title = "Free track download";
+    freeDownloadIframe.style.cssText = "position:absolute;width:0;height:0;border:0;visibility:hidden;";
+    freeDownloadIframe.src = directUrl;
+    document.body.appendChild(freeDownloadIframe);
+
+    if (status) {
+      status.textContent =
+        "Your download should start automatically. If not, tap “Download again” or use the Telegram bot.";
+    }
+    return true;
+  }
+
+  function handleFreeDownload() {
+    startFreeTrackDownload({ allowRepeat: true });
   }
 
   function scrollToId(id) {
@@ -1630,6 +1650,7 @@
 
   document.getElementById("hero-btn-free").addEventListener("click", function () {
     scrollToId("free");
+    startFreeTrackDownload({ allowRepeat: false });
   });
   document.getElementById("hero-btn-shop").addEventListener("click", function () {
     scrollToId("shop");
