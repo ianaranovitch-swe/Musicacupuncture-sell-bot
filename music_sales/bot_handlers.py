@@ -26,6 +26,7 @@ from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.owner_notify import notify_owner_async
 from music_sales.sales_log import append_free_download_event
+from music_sales.admin_panel import is_admin, offer_admin_reply_keyboard
 from music_sales.testimonials_bot import main_menu_reviews_button_row, random_start_testimonial_blurb
 
 logger = logging.getLogger(__name__)
@@ -253,6 +254,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user is not None:
         logger.info("/start from user_id=%s username=%s", user.id, user.username or "-")
         await notify_owner_about_visitor(context, user)
+    if user is not None and is_admin(user.id):
+        await offer_admin_reply_keyboard(update, context)
     if not _miniapp_store_row():
         await update.message.reply_text(
             "Music Store is not configured yet. Ask admin to set MINIAPP_URL (HTTPS) and BACKEND_URL."
@@ -321,12 +324,25 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "• ⭐ Customer Reviews — on /start (browse all reviews)",
         "• /help — show this help message",
         "• /health — owner/developer diagnostics only",
-        "",
-        "How to buy:",
-        "1) Open /start",
-        "2) Choose a track and currency in the Mini App",
-        "3) Tap Buy and complete Stripe checkout",
-        "",
-        "Tip: if checkout opened in background, tap Buy again and open the latest checkout link/button.",
     ]
+    if update.effective_user and is_admin(update.effective_user.id):
+        lines.extend(
+            [
+                "",
+                "Admin:",
+                "• /admin — admin panel",
+                "• 🔐 Admin — same panel (button at the bottom of the chat)",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "How to buy:",
+            "1) Open /start",
+            "2) Choose a track and currency in the Mini App",
+            "3) Tap Buy and complete Stripe checkout",
+            "",
+            "Tip: if checkout opened in background, tap Buy again and open the latest checkout link/button.",
+        ]
+    )
     await update.message.reply_text("\n".join(lines))

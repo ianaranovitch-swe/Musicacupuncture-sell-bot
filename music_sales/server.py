@@ -5,6 +5,7 @@ import os
 import re
 import hmac
 import hashlib
+import tempfile
 import time
 from urllib.parse import urlencode
 from pathlib import Path
@@ -480,6 +481,56 @@ def _tg_api_url(method: str) -> str:
     return f"https://api.telegram.org/bot{config.BOT_TOKEN}/{method}"
 
 
+def _send_purchase_document_by_file_id(telegram_id: int, file_id: str) -> None:
+    """Быстрая доставка по file_id (мелкие MP3, уже загруженные в Telegram)."""
+    resp = requests.post(
+        _tg_api_url("sendDocument"),
+        data={
+            "chat_id": telegram_id,
+            "document": file_id,
+            "caption": PURCHASE_DELIVERY_CAPTION,
+        },
+        timeout=120,
+    )
+    resp.raise_for_status()
+
+
+def _send_purchase_document_mp3_file(telegram_id: int, mp3_path: Path, *, filename: str) -> None:
+    """Доставка с диска (временный файл после Drive или локальный MP3)."""
+    safe_name = (filename or mp3_path.name).replace('"', "'")[:200]
+    with mp3_path.open("rb") as fh:
+        resp = requests.post(
+            _tg_api_url("sendDocument"),
+            data={"chat_id": telegram_id, "caption": PURCHASE_DELIVERY_CAPTION},
+            files={"document": (safe_name, fh, "audio/mpeg")},
+            timeout=600,
+        )
+    resp.raise_for_status()
+
+
+def _download_drive_mp3_to_tempfile(gdrive_id: str) -> Path:
+    """Скачать MP3 с Google Drive во временный файл (большие треки >20 MB для Bot API getFile)."""
+    chunks, err = iter_drive_file_chunks(gdrive_id)
+    if err or chunks is None:
+        raise OSError(f"Google Drive: {err or 'stream unavailable'}")
+    fd, tmp_name = tempfile.mkstemp(suffix=".mp3")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            for block in chunks:
+                if block:
+                    out.write(block)
+        if tmp_path.stat().st_size < 1024:
+            raise OSError("Google Drive returned an empty or invalid MP3 file")
+        return tmp_path
+    except Exception:
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
 def deliver_purchase(
     telegram_id: int,
     song_id: str,
@@ -487,31 +538,69 @@ def deliver_purchase(
     root: Path,
 ) -> None:
     """
-    Отправка покупки в Telegram по file_id из FILE_IDS_JSON (без локальных MP3).
+    Отправка покупки в Telegram после Stripe.
 
-    upload_songs.py загружает файлы через send_document — тот же тип file_id
-    нужно отправлять через sendDocument (sendAudio с document file_id часто даёт 400).
-    Параметр root оставлен для совместимости вызовов; диск для доставки не читаем.
+    Порядок (как на сайте для крупных MP3):
+    1) FILE_IDS_JSON / file_id — быстро для небольших файлов;
+    2) Google Drive (tracks.py google_drive_file_id) — Sleep Best и др. >20 MB;
+    3) локальный файл songs/… если есть на диске (dev / полный деплой).
     """
-    _ = root  # явно не используем — см. докстринг
-    song = songs_catalog[song_id]
-    file_ids = load_file_ids_dict()
-    fid = file_id_for_song(song, file_ids)
-    if not fid:
+    if song_id not in songs_catalog:
+        raise KeyError(song_id)
+    song = enrich_song_row_delivery_ids(dict(songs_catalog[song_id]), song_id)
+    file_rel = str(song.get("file") or "").strip()
+    stem = Path(file_rel).stem if file_rel else song_id
+    filename = f"{stem}.mp3" if stem else "track.mp3"
+
+    fid = file_id_for_song(song, load_file_ids_dict())
+    if fid:
+        try:
+            _send_purchase_document_by_file_id(telegram_id, fid)
+            logger.info("deliver_purchase: file_id ok user=%s song_id=%s", telegram_id, song_id)
+            return
+        except requests.RequestException as e:
+            logger.warning(
+                "deliver_purchase: file_id send failed user=%s song_id=%s: %s — trying Drive",
+                telegram_id,
+                song_id,
+                e,
+            )
+
+    gdrive_id = str(song.get("google_drive_file_id") or "").strip()
+    if gdrive_id and drive_credentials_available():
+        tmp: Path | None = None
+        try:
+            tmp = _download_drive_mp3_to_tempfile(gdrive_id)
+            _send_purchase_document_mp3_file(telegram_id, tmp, filename=filename)
+            logger.info("deliver_purchase: Drive ok user=%s song_id=%s", telegram_id, song_id)
+            return
+        finally:
+            if tmp is not None:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    if file_rel:
+        local = (root / file_rel).resolve()
+        try:
+            if local.is_file() and local.stat().st_size > 1024:
+                _send_purchase_document_mp3_file(telegram_id, local, filename=filename)
+                logger.info("deliver_purchase: local file ok user=%s song_id=%s", telegram_id, song_id)
+                return
+        except requests.RequestException as e:
+            raise OSError(f"Local MP3 send failed: {e}") from e
+
+    if not fid and not gdrive_id:
         raise OSError(
-            "No Telegram file_id for this track (check FILE_IDS_JSON keys vs upload_songs.py stems)."
+            "No delivery source: add FILE_IDS_JSON key or google_drive_file_id in tracks.py "
+            f"(stem «{stem}»)."
         )
-    title = str(song.get("name") or song_id)
-    resp = requests.post(
-        _tg_api_url("sendDocument"),
-        data={
-            "chat_id": telegram_id,
-            "document": fid,
-            "caption": PURCHASE_DELIVERY_CAPTION,
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
+    if gdrive_id and not drive_credentials_available():
+        raise OSError(
+            "Track uses Google Drive but GOOGLE_SERVICE_ACCOUNT_JSON is missing or invalid on Web service."
+        )
+    raise OSError("Could not deliver MP3 (file_id, Drive, and local file all failed).")
 
 
 def _parse_webhook_event(
@@ -1430,12 +1519,28 @@ def create_app(
                 )
             except OSError as e:
                 logger.exception("Failed to send audio: %s", e)
+                fail_reason = str(e).strip()[:220] or "Audio delivery failed"
+                try:
+                    requests.post(
+                        _tg_api_url("sendMessage"),
+                        data={
+                            "chat_id": int(telegram_id),
+                            "text": (
+                                "Payment received — thank you! "
+                                "We could not send your MP3 automatically. "
+                                "Please contact support and mention this track name."
+                            ),
+                        },
+                        timeout=30,
+                    )
+                except Exception:
+                    logger.warning("Could not notify buyer about delivery failure")
                 _notify_owner_via_api(
                     actor_name=telegram_name,
                     event="Payment result",
                     song_name=song_name,
                     payment_ok=False,
-                    reason="Audio delivery failed",
+                    reason=fail_reason,
                 )
             except KeyError:
                 logger.exception("Unknown song in webhook metadata: %s", song_id)

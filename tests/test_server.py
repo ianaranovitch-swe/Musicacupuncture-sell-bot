@@ -1190,13 +1190,18 @@ def test_webhook_ignores_other_events(mocker, tmp_path):
     assert send_doc_calls == []
 
 
-def test_deliver_purchase_raises_when_file_id_missing(mocker, tmp_path):
+def test_deliver_purchase_raises_when_no_delivery_source(mocker, tmp_path):
     mocker.patch.dict(os.environ, {"FILE_IDS_JSON": "{}"}, clear=False)
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=False)
+    mocker.patch(
+        "music_sales.server.enrich_song_row_delivery_ids",
+        side_effect=lambda row, _sid: row,
+    )
     mock_post = mocker.patch("music_sales.server.requests.post")
 
     from music_sales.server import deliver_purchase
 
-    with pytest.raises(OSError, match="No Telegram file_id"):
+    with pytest.raises(OSError, match="No delivery source"):
         deliver_purchase(
             telegram_id=555,
             song_id="song1",
@@ -1204,6 +1209,39 @@ def test_deliver_purchase_raises_when_file_id_missing(mocker, tmp_path):
             root=tmp_path,
         )
     mock_post.assert_not_called()
+
+
+def test_deliver_purchase_uses_google_drive_when_file_id_missing(mocker, tmp_path):
+    mocker.patch.dict(os.environ, {"FILE_IDS_JSON": "{}"}, clear=False)
+    mocker.patch("music_sales.server.file_id_for_song", return_value=None)
+    mocker.patch(
+        "music_sales.server.enrich_song_row_delivery_ids",
+        side_effect=lambda row, _sid: row,
+    )
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
+    mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(iter([b"\xff\xfb" + b"x" * 3000]), None),
+    )
+    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post.return_value.raise_for_status = MagicMock()
+
+    from music_sales.server import deliver_purchase
+
+    deliver_purchase(
+        telegram_id=555,
+        song_id="song1",
+        songs_catalog={
+            "song1": {
+                "name": "Divine sound Sleep Best Silver Power from God",
+                "file": "songs/Divine sound Sleep Best Silver Power from God.mp3",
+                "google_drive_file_id": "drive_file_17",
+            }
+        },
+        root=tmp_path,
+    )
+    mock_post.assert_called_once()
+    assert "files" in mock_post.call_args[1]
 
 
 def test_deliver_purchase_posts_send_document(mocker, tmp_path):

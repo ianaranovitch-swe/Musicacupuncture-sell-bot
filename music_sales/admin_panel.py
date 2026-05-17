@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import stripe
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -45,6 +45,9 @@ from music_sales.tracks_admin_persist import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Текст кнопки внизу чата (Reply keyboard) — совпадает с фильтром входа в админку.
+ADMIN_MENU_BUTTON_TEXT = "🔐 Admin"
 
 # --- Состояния диалога ---
 (
@@ -79,7 +82,30 @@ def _builtin_ids() -> set[int]:
 def is_admin(user_id: int | None) -> bool:
     if user_id is None:
         return False
-    return int(user_id) in config.admin_telegram_ids()
+    uid = int(user_id)
+    if uid in config.admin_telegram_ids():
+        return True
+    owner = config.owner_telegram_id_int()
+    if owner is not None and uid == owner:
+        return True
+    dev = config.developer_telegram_id_int()
+    if dev is not None and uid == dev:
+        return True
+    return False
+
+
+def admin_reply_keyboard() -> ReplyKeyboardMarkup:
+    """Постоянная кнопка внизу экрана Telegram (только для чатов админов)."""
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(ADMIN_MENU_BUTTON_TEXT)]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def admin_menu_button_filter():
+    """Сообщение с текстом кнопки 🔐 Admin (без /admin)."""
+    return filters.Regex(f"^{re.escape(ADMIN_MENU_BUTTON_TEXT)}$")
 
 
 def _log(uid: int, action: str, detail: dict[str, Any] | None = None) -> None:
@@ -226,8 +252,28 @@ def _file_ids_json_env_payload() -> str:
     return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
+async def offer_admin_reply_keyboard(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Показать кнопку 🔐 Admin внизу чата (один раз при /start или при первом входе в админку)."""
+    if update.effective_message is None:
+        return
+    uid = update.effective_user.id if update.effective_user else None
+    if not is_admin(uid):
+        return
+    if context.user_data.get("admin_bottom_kb_shown"):
+        return
+    context.user_data["admin_bottom_kb_shown"] = True
+    await context.bot.send_message(
+        chat_id=update.effective_message.chat_id,
+        text="Admin: tap 🔐 Admin at the bottom of the screen (or type /admin).",
+        reply_markup=admin_reply_keyboard(),
+    )
+
+
 async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Точка входа /admin."""
+    """Точка входа: /admin или кнопка 🔐 Admin внизу чата."""
     if update.effective_user is None or update.message is None:
         return ConversationHandler.END
     uid = update.effective_user.id
@@ -235,6 +281,7 @@ async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.message.reply_text("⛔️ Access denied")
         return ConversationHandler.END
     _log(uid, "admin_open")
+    await offer_admin_reply_keyboard(update, context)
     await update.message.reply_text(
         "🔐 Admin panel\nChoose an action:",
         reply_markup=_main_menu_kb(),
@@ -1013,10 +1060,14 @@ async def _admin_main_text_router(update: Update, context: ContextTypes.DEFAULT_
 def build_admin_conversation_handler() -> ConversationHandler:
     """Собираем ConversationHandler (подключается в bot.py)."""
     return ConversationHandler(
-        entry_points=[CommandHandler("admin", admin_start)],
+        entry_points=[
+            CommandHandler("admin", admin_start),
+            MessageHandler(admin_menu_button_filter(), admin_start),
+        ],
         states={
             ST_MAIN: [
                 CallbackQueryHandler(admin_main_callback, pattern=r"^adm:"),
+                MessageHandler(admin_menu_button_filter(), admin_start),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, _admin_main_text_router),
             ],
             ST_ADD_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_title)],
