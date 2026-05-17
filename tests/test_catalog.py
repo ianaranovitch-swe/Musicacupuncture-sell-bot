@@ -107,7 +107,7 @@ def test_enrich_song_row_adds_google_drive_id_from_tracks(monkeypatch, tmp_path)
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     songs = tmp_path / "songs"
     songs.mkdir()
-    stem = "Divine sound NO Alcohol from God"
+    stem = "Divine sound NO Smoking from God"
     (songs / f"{stem}.mp3").write_bytes(b"x")
     from music_sales.catalog import _song_id_from_stem, discover_songs, enrich_song_row_delivery_ids
 

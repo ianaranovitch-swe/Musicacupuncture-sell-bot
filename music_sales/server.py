@@ -874,16 +874,18 @@ def create_app(
                 sek_n = 10
             usd_n = max(1, usd_n)
             sek_n = max(1, sek_n)
-            return jsonify(
-                {
-                    "test_mode": True,
-                    "usd_display": f"${usd_n}",
-                    "sek_display": f"{sek_n} kr",
-                    "badge_usd": f"USD · ${usd_n}",
-                    "badge_sek": f"SEK · {sek_n} kr",
-                    "track_durations": _miniapp_track_durations_payload(),
-                }
-            )
+            payload: dict[str, Any] = {
+                "test_mode": True,
+                "usd_display": f"${usd_n}",
+                "sek_display": f"{sek_n} kr",
+                "badge_usd": f"USD · ${usd_n}",
+                "badge_sek": f"SEK · {sek_n} kr",
+                "track_durations": _miniapp_track_durations_payload(),
+            }
+            test_link = config.resolved_test_payment_link()
+            if test_link:
+                payload["test_payment_link"] = test_link
+            return jsonify(payload)
         try:
             usd_n = int((os.environ.get("DEFAULT_TRACK_PRICE_USD") or config.DEFAULT_TRACK_PRICE_USD or "16").strip() or "16")
         except ValueError:

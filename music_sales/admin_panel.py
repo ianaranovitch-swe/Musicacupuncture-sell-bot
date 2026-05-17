@@ -205,10 +205,8 @@ def _rename_track_media_files(track_id: int, uid: int) -> tuple[bool, str]:
 def _main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("➕ Add New Track", callback_data="adm:add")],
+            # Временно скрыто (по запросу владельца): Add / Edit / Delete track
             [InlineKeyboardButton("📋 View All Tracks", callback_data="adm:list")],
-            [InlineKeyboardButton("✏️ Edit Track", callback_data="adm:editm")],
-            [InlineKeyboardButton("🗑️ Delete Track", callback_data="adm:delm")],
             [InlineKeyboardButton("📊 Sales Statistics", callback_data="adm:stats")],
             [InlineKeyboardButton("🧾 Show FILE_IDS_JSON", callback_data="adm:fileids")],
             [InlineKeyboardButton("⭐ Manage Reviews", callback_data="adm:reviews")],

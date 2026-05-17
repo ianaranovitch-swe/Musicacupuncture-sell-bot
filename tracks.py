@@ -44,8 +44,8 @@ _BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
     7: "1BGpC9i8fONZpk9nrRoe73XrADO5xHjM8",  # Liver
     8: "1mFVhJ7gUcvBTBPqAFgcIdOhXB6iSgA8K",  # Lungs
     9: "17HLadREh9qfzwWHM9ep-LUv3s9-6C590",  # Minerals
-    10: "1XsBadTOeWQJJdUVZ4R30uFiZMDG92YXg",  # NO Alcohol
-    11: "11mGugzc2TktuDqHB6GTaxykgypt6TopB",  # NO Smoking
+    10: "11mGugzc2TktuDqHB6GTaxykgypt6TopB",  # NO Smoking (обложки в Drive были перепутаны с id 11)
+    11: "1XsBadTOeWQJJdUVZ4R30uFiZMDG92YXg",  # NO Alcohol
     12: "1X7Sq4D43rM4or6G65yBTKR_1sGOCCioK",  # Rootchakra
     13: "1YYttkfbwA3NgHl7-ibMHj1MMjd02hor-",  # Sacralchakra and Navelchakra
     14: "12FiyEH4r56yKlJrrMAYaQWIje-glcOYP",  # Solarplexuschakra and Spleenchakra
@@ -276,23 +276,6 @@ _BUILTIN_TRACKS: list[dict] = [
     },
     {
         "id": 10,
-        "short_title": "🎵 NO Alcohol",
-        "title": "Divine sound NO Alcohol from God",
-        "description": (
-            "Release alcohol and return to clarity and control.\n"
-            "Gentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, "
-            "restore inner balance, and strengthen self-control. A daily sound practice guiding you "
-            "toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results."
-        ),
-        "price": "$16",
-        "price_amount": 1600,
-        "cover": "covers/Divine-sound-NO-Alcohol-from-God.png",
-        "audio": "songs/Divine sound NO Alcohol from God.mp3",
-        "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
-        "buy_url_sek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"
-    },
-    {
-        "id": 11,
         "short_title": "🎵 NO Smoking",
         "title": "Divine sound NO Smoking from God",
         "description": (
@@ -308,6 +291,23 @@ _BUILTIN_TRACKS: list[dict] = [
         "audio": "songs/Divine sound NO Smoking from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
         "buy_url_sek": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"
+    },
+    {
+        "id": 11,
+        "short_title": "🎵 NO Alcohol",
+        "title": "Divine sound NO Alcohol from God",
+        "description": (
+            "Release alcohol and return to clarity and control.\n"
+            "Gentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, "
+            "restore inner balance, and strengthen self-control. A daily sound practice guiding you "
+            "toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results."
+        ),
+        "price": "$16",
+        "price_amount": 1600,
+        "cover": "covers/Divine-sound-NO-Alcohol-from-God.png",
+        "audio": "songs/Divine sound NO Alcohol from God.mp3",
+        "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
+        "buy_url_sek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"
     },
     {
         "id": 12,

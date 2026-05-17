@@ -3,15 +3,19 @@
 Перезаписать блоки MA_AUTO_* в miniapp.html и website.html из tracks.TRACKS.
 
 Зачем: на GitHub Pages лежит статический HTML — в нём зашиты buyUrl / buyUrlSek.
-При TEST_MODE=true и TEST_PAYMENT_LINK в .env нужно пересобрать этот блок локально и закоммитить.
+TEST_MODE на Railway (Web + Worker) переключает тест/live без пересборки HTML:
+  TEST_MODE=true  — дешёвые цены, /miniapp-pricing, /website-create-payment, бот.
+  TEST_MODE=false — боевые цены и Stripe Checkout.
 
-Как пользоваться (локально, перед push на GitHub Pages):
-  1) В .env выставьте TEST_MODE=true и TEST_PAYMENT_LINK=https://buy.stripe.com/test_...
-  2) Из корня репозитория:  python scripts/sync_frontend_from_env.py
-  3) Проверьте diff в miniapp.html, website.html (и _site/*.html если есть)
-  4) git add / commit / push
+Скрипт sync пишет в HTML боевые buyUrl из tracks.py (fallback, если API недоступен).
+Запускайте sync с TEST_MODE=false (или без TEST_MODE в .env), чтобы в git не попали тест-ссылки.
 
-Railway: сервису этот скрипт не обязателен — оплата идёт через /website-create-payment и .env там.
+Как пользоваться (локально, перед push статики на GitHub Pages):
+  1) TEST_MODE=false в .env (или не задавать TEST_MODE)
+  2) python scripts/sync_frontend_from_env.py
+  3) git add miniapp.html website.html …
+
+Railway: TEST_MODE и TEST_PAYMENT_LINK только в Variables — redeploy Web + Worker.
 """
 
 from __future__ import annotations

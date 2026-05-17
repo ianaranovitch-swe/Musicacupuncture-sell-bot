@@ -708,9 +708,34 @@
       opacity: 1;
       transform: translateY(0);
     }
+    /* Баннер TEST_MODE с Railway (/miniapp-pricing) */
+    .test-mode-banner {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-align: center;
+      color: #ffb3b3;
+      background: #5c1515;
+      border-bottom: 1px solid rgba(255, 80, 80, 0.45);
+    }
+    .test-mode-banner.show {
+      display: block;
+    }
+    body.has-test-banner-padding .nav-bar {
+      top: 36px;
+    }
   </style>
 </head>
 <body>
+  <div id="test-mode-banner" class="test-mode-banner" aria-live="polite">
+    TEST MODE — prices and checkout use Railway TEST_MODE (not live payments)
+  </div>
   <!-- Animated starfield -->
   <canvas id="stars-canvas" aria-hidden="true"></canvas>
 
@@ -937,8 +962,8 @@
     {"id": 7, "emoji": "🎵", "shortName": "Liver", "fullTitle": "Divine sound Liver from God", "description": "Cleanse, renew, and bring clarity to your whole body.\nHarmonizing vibrations designed to support liver energy and natural detox processes. Encourages renewal, clarity, and emotional release. Helps your body feel lighter, cleaner, and more balanced through daily listening. Listen daily for best results.", "cover": "covers/Divine-sound-Liver-from-God.png", "buyUrlUsd": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07", "buyUrlSek": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07"},
     {"id": 8, "emoji": "🎵", "shortName": "Lungs", "fullTitle": "Divine sound Lungs from God", "description": "Breathe deeper, relax fully, and awaken your life energy.\nGentle healing vibrations for lungs and breathing. Supports deeper breath, relaxation, and life energy flow. Helps release stress and open the body to clarity, calmness, and renewed vitality through conscious listening. Listen daily for best results.", "cover": "covers/Divine-sound-Lungs-from-God.png", "buyUrlUsd": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08", "buyUrlSek": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08"},
     {"id": 9, "emoji": "🎵", "shortName": "Minerals", "fullTitle": "Divine sound Minerals from God", "description": "Restore balance, strength, and deep cellular harmony.\nGrounding frequencies created to support your body's mineral balance and inner stability. Encourages strength, resilience, and deep cellular harmony. Helps your body feel supported, balanced, and naturally energized through consistent listening. Listen daily for best results.", "cover": "covers/Divine-sound-Minerals-from-God.png", "buyUrlUsd": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09", "buyUrlSek": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09"},
-    {"id": 10, "emoji": "🎵", "shortName": "NO Alcohol", "fullTitle": "Divine sound NO Alcohol from God", "description": "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", "cover": "covers/Divine-sound-NO-Alcohol-from-God.png", "buyUrlUsd": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b", "buyUrlSek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"},
-    {"id": 11, "emoji": "🎵", "shortName": "NO Smoking", "fullTitle": "Divine sound NO Smoking from God", "description": "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", "cover": "covers/Divine-sound-NO-Smoking-from-God.png", "buyUrlUsd": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a", "buyUrlSek": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"},
+    {"id": 10, "emoji": "🎵", "shortName": "NO Smoking", "fullTitle": "Divine sound NO Smoking from God", "description": "Break free from smoking and reclaim your health.\nSupportive healing vibrations designed to help release the habit of smoking. Encourages inner strength, calmness, and control over cravings. Helps reprogram your mind and body toward freedom, clarity, and a healthier, smoke-free life. Listen daily for best results.", "cover": "covers/Divine-sound-NO-Smoking-from-God.png", "buyUrlUsd": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a", "buyUrlSek": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a"},
+    {"id": 11, "emoji": "🎵", "shortName": "NO Alcohol", "fullTitle": "Divine sound NO Alcohol from God", "description": "Release alcohol and return to clarity and control.\nGentle yet powerful frequencies to support freedom from alcohol. Helps calm urges, restore inner balance, and strengthen self-control. A daily sound practice guiding you toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results.", "cover": "covers/Divine-sound-NO-Alcohol-from-God.png", "buyUrlUsd": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b", "buyUrlSek": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b"},
     {"id": 12, "emoji": "🎵", "shortName": "Root Chakra", "fullTitle": "Divine sound Rootchakra from God", "description": "Feel grounded, safe, and strong in your foundation.\nGrounding frequencies to strengthen stability, safety, and physical energy. Supports connection to the earth and inner security. Ideal for building a strong foundation in body and life. Listen daily for best results.", "cover": "covers/Divine-sound-Rootchakra-from-God.png", "buyUrlUsd": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c", "buyUrlSek": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c"},
     {"id": 13, "emoji": "🎵", "shortName": "Sacral & Navel Chakra", "fullTitle": "Divine sound Sacralchakra and Navelchakra from God", "description": "Awaken joy, creativity, and emotional flow.\nFlowing vibrations to awaken creativity, joy, and emotional balance. Supports sensual energy, inspiration, and positive life force. Helps you reconnect with pleasure and inner movement. Listen daily for best results.", "cover": "covers/Divine-sound-Sacralchakra-and-Navelchakra-from-God.png", "buyUrlUsd": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d", "buyUrlSek": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d"},
     {"id": 14, "emoji": "🎵", "shortName": "Solar Plexus", "fullTitle": "Divine sound Solarplexuschakra and Spleenchakra from God", "description": "Step into your power with confidence and clarity.\nEmpowering frequencies for confidence, personal power, and clarity. Supports motivation, inner strength, and self-belief. A daily boost for your willpower and direction in life. Listen daily for best results.", "cover": "covers/Divine-sound-Solarplexuschakra-and-Spleenchakra-from-God.png", "buyUrlUsd": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e", "buyUrlSek": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e"},
@@ -1149,32 +1174,31 @@
     } catch (e) {}
   }
 
-  /** Checkout Stripe: сначала пустая вкладка (синхронно), потом подставляем URL после fetch. */
+  /** Открыть Stripe Checkout в новой вкладке (без about:blank — только URL оплаты). */
   function openCheckoutUrl(url) {
     if (!url || !/^https?:\/\//i.test(url)) return false;
-    var tab = null;
     try {
-      tab = window.open("about:blank", "_blank", "noopener,noreferrer");
-    } catch (e) {}
-    if (tab) {
-      writeCheckoutWaitingPage(tab);
-      try {
-        tab.location.href = url;
+      var tab = window.open(url, "_blank", "noopener,noreferrer");
+      if (tab) {
         try {
           tab.focus();
         } catch (eFocus) {}
         return true;
-      } catch (e2) {
-        try {
-          tab.close();
-        } catch (e3) {}
       }
-    }
+    } catch (e) {}
     try {
       window.location.href = url;
       return true;
-    } catch (e4) {}
+    } catch (e2) {}
     return false;
+  }
+
+  function syncTestModeBanner() {
+    var el = document.getElementById("test-mode-banner");
+    if (!el) return;
+    var on = Boolean(serverPricing && serverPricing.test_mode);
+    el.classList.toggle("show", on);
+    document.body.classList.toggle("has-test-banner-padding", on);
   }
 
   async function loadPricing() {
@@ -1184,6 +1208,7 @@
     } catch (e) {
       serverPricing = null;
     }
+    syncTestModeBanner();
     mergeDurations();
     renderCatalog();
     updateCurrencyButtons();
@@ -1333,45 +1358,23 @@
 
   async function openStripeForTrack(track, useSek) {
     if (!track || track.isFree) return;
-    /* Вкладка сразу в клике — иначе popup-blocker после await. */
-    var checkoutTab = null;
-    try {
-      checkoutTab = window.open("about:blank", "_blank", "noopener,noreferrer");
-      writeCheckoutWaitingPage(checkoutTab);
-    } catch (e) {}
     setLoading(true);
     var url = await createBackendCheckout(track, useSek);
     setLoading(false);
-    if (url && /^https?:\/\//i.test(url)) {
-      if (checkoutTab && !checkoutTab.closed) {
-        try {
-          checkoutTab.location.href = url;
-          try {
-            checkoutTab.focus();
-          } catch (eFocus) {}
-          return;
-        } catch (e0) {}
+    if (!url || !/^https?:\/\//i.test(url)) {
+      /* TEST_MODE на Railway: fallback из /miniapp-pricing, не live-ссылки из HTML. */
+      if (serverPricing && serverPricing.test_mode && serverPricing.test_payment_link) {
+        url = serverPricing.test_payment_link;
+      } else {
+        url = useSek ? track.buyUrlSek : track.buyUrlUsd;
       }
-      if (openCheckoutUrl(url)) return;
-      alert("Could not open checkout. Allow pop-ups for this site or try again.");
-      return;
     }
-    if (checkoutTab) {
-      try {
-        checkoutTab.close();
-      } catch (e1) {}
-    }
-    /* Fallback to static links if backend checkout is unavailable. */
-    url = useSek ? track.buyUrlSek : track.buyUrlUsd;
     if (!url || !/^https?:\/\//i.test(url)) {
       alert("Payment link is not available for this track.");
       return;
     }
-    if (serverPricing && serverPricing.test_mode) {
-      alert("TEST mode is enabled, but backend checkout endpoint did not return a URL. Fallback link may use live mode.");
-    }
     if (!openCheckoutUrl(url)) {
-      alert("Could not open payment page. Allow pop-ups for this site.");
+      alert("Could not open checkout. Allow pop-ups for this site or try again.");
     }
   }
 
@@ -1441,37 +1444,22 @@
     }
   }
 
+  var freeDownloadStarted = false;
+
   async function handleFreeDownload() {
+    if (freeDownloadStarted) return;
     var status = document.getElementById("free-status");
     status.textContent = "Starting download…";
-    /* Синхронно в клике — иначе popup-blocker. */
+    /* Одна выдача: только /free-track-file (без второго fetch + повторного окна). */
     var directUrl = API_BASE + "/free-track-file";
+    freeDownloadStarted = true;
     if (openUrlInNewTabOrSameTab(directUrl, status)) {
+      setTimeout(function () {
+        freeDownloadStarted = false;
+      }, 5000);
       return;
     }
-    setLoading(true);
-    try {
-      var r = await fetch(API_BASE + "/free-track", { method: "GET", mode: "cors" });
-      if (r.ok) {
-        var data = await r.json().catch(function () {
-          return null;
-        });
-        if (data && data.url) {
-          setLoading(false);
-          if (openUrlInNewTabOrSameTab(data.url, status)) return;
-        }
-      }
-    } catch (e) {}
-    setLoading(false);
-    var fallback = assetUrl("songs/Divine sound Super Feng Shui from God.mp3");
-    try {
-      var head = await fetch(fallback, { method: "HEAD", mode: "cors" });
-      if (head.ok) {
-        triggerDownload(fallback, "Divine sound Super Feng Shui from God.mp3");
-        status.textContent = "Download started from this site (backup file).";
-        return;
-      }
-    } catch (e2) {}
+    freeDownloadStarted = false;
     status.innerHTML =
       'Download could not start. Allow pop-ups for this site, or use the <a href="#free" style="color:var(--gold);">Telegram bot</a> for the free gift.';
   }
@@ -1524,15 +1512,7 @@
         actions.style.display = "flex";
         msg.textContent =
           "Tap “Open MP3 in new tab” or “Download again” — your browser will open Railway and stream the MP3 (no extra login). Thank you! 🙏";
-        /* Опционально: второй путь через fetch+скачивание, если CORS на Railway настроен. */
-        (async function () {
-          var jsonUrl = await tryFetchPurchaseDownload(tid, sessionId);
-          if (jsonUrl) {
-            successDownloadUrl = jsonUrl;
-            showSuccessDirectLink(jsonUrl);
-            triggerDownload(jsonUrl, "Music-Acupuncture-track.mp3");
-          }
-        })();
+        /* Без автоматического triggerDownload — иначе браузер качает MP3 дважды. */
       } else {
         actions.style.display = "flex";
         msg.textContent =

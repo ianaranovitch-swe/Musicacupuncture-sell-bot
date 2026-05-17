@@ -296,6 +296,10 @@ def test_miniapp_pricing_get_and_cors(mocker):
 def test_miniapp_pricing_test_mode_response(mocker):
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://t.example")
     mocker.patch("music_sales.config.test_mode_active", return_value=True)
+    mocker.patch(
+        "music_sales.config.resolved_test_payment_link",
+        return_value="https://buy.stripe.com/test_abc",
+    )
     mocker.patch("music_sales.server._miniapp_track_durations_payload", return_value=[])
     from music_sales.server import create_app
 
@@ -311,6 +315,7 @@ def test_miniapp_pricing_test_mode_response(mocker):
     assert body.get("test_mode") is True
     assert body.get("usd_display") == "$1"
     assert "kr" in (body.get("sek_display") or "").lower()
+    assert body.get("test_payment_link") == "https://buy.stripe.com/test_abc"
     assert body.get("track_durations") == []
 
 

@@ -10,10 +10,24 @@ def test_mode_active() -> bool:
     """
     Режим тестовых цен и ссылок (читаем os.environ при каждом вызове — как CORS, чтобы тесты и Railway подхватывали без перезагрузки модуля).
 
-    В .env: TEST_MODE=true | 1 | yes | on
+    В .env / Railway: TEST_MODE=true | 1 | yes | on — тест; false или пусто — live.
     """
     v = (os.environ.get("TEST_MODE") or "").strip().lower()
     return v in ("1", "true", "yes", "on")
+
+
+def resolved_test_payment_link() -> str | None:
+    """
+    Один Stripe Payment Link для всех платных треков в TEST_MODE (fallback сайта/Mini App, tracks.py).
+    Приоритет: TEST_PAYMENT_LINK → TEST_PAYMENT_LINK_USD.
+    """
+    if not test_mode_active():
+        return None
+    link = (TEST_PAYMENT_LINK or "").strip()
+    if link:
+        return link
+    usd = (TEST_PAYMENT_LINK_USD or "").strip()
+    return usd or None
 
 
 BOT_TOKEN = _env("BOT_TOKEN")
