@@ -558,6 +558,7 @@ def test_free_track_file_falls_back_to_telegram_when_drive_fails(tmp_path, mocke
         clear=False,
     )
     mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
     mocker.patch(
         "music_sales.server.iter_drive_file_chunks",
         return_value=(None, "drive_http_403"),
@@ -764,6 +765,7 @@ def test_website_download_file_streams_via_google_drive_when_configured(mocker, 
         }
     }
     mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
     mocker.patch(
         "music_sales.server.drive_file_metadata",
         return_value=({"size": "8", "name": "track.mp3"}, None),
@@ -793,6 +795,104 @@ def test_website_download_file_streams_via_google_drive_when_configured(mocker, 
     assert resp.status_code == 200
     assert resp.data == b"gdrive!"
     assert "audio/mpeg" in (resp.headers.get("Content-Type") or "")
+
+
+def test_website_download_file_shows_sa_email_when_credentials_not_loaded(mocker, tmp_path):
+    """GOOGLE_SERVICE_ACCOUNT_JSON задан, ключ не грузится — в hint всё равно client_email."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    sa_email = "bot-hint@proj.iam.gserviceaccount.com"
+    inline = json.dumps(
+        {
+            "type": "service_account",
+            "private_key": "broken",
+            "client_email": sa_email,
+        }
+    )
+    catalog_gd = {
+        "song1": {
+            "name": "Track",
+            "price_usd": 16,
+            "file": "songs/song1.mp3",
+            "google_drive_file_id": "gdrive_abc",
+        }
+    }
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", inline)
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=False)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_gd,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert body and sa_email in (body.get("hint") or "")
+
+
+def test_website_download_file_returns_drive_error_when_drive_fails_with_gdrive_id(mocker, tmp_path):
+    """Drive 403 при заданном google_drive_file_id — не Telegram (файлы >20 MB)."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    catalog_gd = {
+        "song1": {
+            "name": "Track",
+            "price_usd": 16,
+            "file": "songs/song1.mp3",
+            "google_drive_file_id": "gdrive_fail",
+        }
+    }
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"song1": "tg_file_id_small"})},
+        clear=False,
+    )
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
+    mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(None, "drive_http_403"),
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_gd,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 502
+    body = resp.get_json()
+    assert body and "Google Drive" in (body.get("error") or "")
 
 
 def test_website_download_file_streams_via_pcloud_when_configured(mocker, tmp_path):

@@ -101,6 +101,23 @@ def test_synthetic_song_row_for_song_id(monkeypatch, tmp_path):
     assert "Estrogen" in row["name"]
 
 
+def test_enrich_song_row_adds_google_drive_id_from_tracks(monkeypatch, tmp_path):
+    import tracks
+
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    songs = tmp_path / "songs"
+    songs.mkdir()
+    stem = "Divine sound NO Alcohol from God"
+    (songs / f"{stem}.mp3").write_bytes(b"x")
+    from music_sales.catalog import _song_id_from_stem, discover_songs, enrich_song_row_delivery_ids
+
+    sid = _song_id_from_stem(stem)
+    row = discover_songs()[sid]
+    assert "google_drive_file_id" not in row
+    merged = enrich_song_row_delivery_ids(row, sid)
+    assert merged.get("google_drive_file_id") == tracks._BUILTIN_GOOGLE_DRIVE_IDS[10]
+
+
 def test_synthetic_song_row_includes_google_drive_file_id_from_tracks(monkeypatch, tmp_path):
     import tracks
 

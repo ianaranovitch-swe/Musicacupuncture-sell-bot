@@ -154,8 +154,10 @@ def health_command_allowed_user_ids() -> set[int]:
     return out
 
 
-# Google Drive: путь к JSON ключу Service Account (выдача MP3 на сайте >20 MB, приоритет над Telegram).
+# Google Drive: путь к JSON ключу Service Account или весь JSON одной строкой (выдача MP3 на сайте >20 MB).
 GOOGLE_SERVICE_ACCOUNT_JSON = _env("GOOGLE_SERVICE_ACCOUNT_JSON")
+# Опционально: {"Divine sound Heart from God": "1abc…"} — перекрывает tracks.py (удобно на Railway).
+GDRIVE_IDS_JSON = _env("GDRIVE_IDS_JSON")
 
 # Опционально: pCloud fileid для выдачи MP3 на сайте после Stripe (файлы >20 MB; см. PCLOUD_AUTH_TOKEN в .env).
 PCLOUD_AUTH_TOKEN = _env("PCLOUD_AUTH_TOKEN")

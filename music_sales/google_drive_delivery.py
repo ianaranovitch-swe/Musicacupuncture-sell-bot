@@ -22,7 +22,7 @@ _drive_service: Any | None = None
 
 def _credentials_from_env() -> Any | None:
     """
-    Service Account: путь к JSON-файлу или сам JSON одной строкой (удобно для Railway Variables).
+    Service Account: путь к JSON-файлу или весь JSON одной строкой (Railway Variables).
     """
     raw = (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip()
     if not raw:
@@ -68,12 +68,55 @@ def _credentials_from_env() -> Any | None:
         return None
 
 
-def service_account_client_email() -> str | None:
-    """Email для Share в Google Drive (подсказка в логах при 403)."""
-    creds = _credentials_from_env()
-    if not creds:
+def drive_credentials_available() -> bool:
+    """Ключ загружается — можно вызывать Drive API (иначе сразу fallback на Telegram)."""
+    return _credentials_from_env() is not None
+
+
+def _client_email_from_service_account_info(info: dict[str, Any]) -> str | None:
+    email = str(info.get("client_email") or "").strip()
+    return email or None
+
+
+def _client_email_from_env_raw() -> str | None:
+    """
+    client_email из JSON в env или из файла — даже если Credentials не собрались.
+
+    Нужно для подсказок пользователю (Share в Drive), когда ключ битый или файл не найден.
+    """
+    raw = (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip()
+    if not raw:
         return None
-    return str(getattr(creds, "service_account_email", None) or "").strip() or None
+
+    if raw.startswith("{"):
+        try:
+            info = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return _client_email_from_service_account_info(info) if isinstance(info, dict) else None
+
+    p = Path(raw)
+    if not p.is_absolute():
+        from music_sales.catalog import project_root
+
+        p = project_root() / raw
+    if not p.is_file():
+        return None
+    try:
+        info = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return _client_email_from_service_account_info(info) if isinstance(info, dict) else None
+
+
+def service_account_client_email() -> str | None:
+    """Email для Share в Google Drive (подсказка в логах и JSON-ошибках)."""
+    creds = _credentials_from_env()
+    if creds:
+        email = str(getattr(creds, "service_account_email", None) or "").strip()
+        if email:
+            return email
+    return _client_email_from_env_raw()
 
 
 def get_drive_service() -> Any | None:

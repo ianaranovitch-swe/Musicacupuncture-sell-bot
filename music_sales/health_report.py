@@ -18,7 +18,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from music_sales import config
-from music_sales.catalog import discover_songs, free_bonus_audio_path, project_root, songs_dir
+from music_sales.catalog import discover_songs, enrich_song_row_delivery_ids, free_bonus_audio_path, project_root, songs_dir
+from music_sales.google_drive_delivery import drive_credentials_available, drive_file_metadata, service_account_client_email
 from tracks import TRACKS
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,46 @@ def _cors_configured() -> Tuple[bool, str]:
     if not raw:
         return False, "MINIAPP_CORS_ORIGINS empty (Mini App checkout may fail CORS)"
     return True, f"CORS origins configured ({len(raw.split(','))} entries)"
+
+
+def _google_drive_delivery_ok() -> Tuple[bool, str]:
+    """Ключ SA загружается и один тестовый file_id из tracks отвечает метаданными."""
+    raw = (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip()
+    if not raw:
+        return False, "GOOGLE_SERVICE_ACCOUNT_JSON not set (website MP3 >20 MB need Drive)"
+    if not drive_credentials_available():
+        return (
+            False,
+            "GOOGLE_SERVICE_ACCOUNT_JSON set but not loaded — use full JSON in Railway, not secrets/ path",
+        )
+    try:
+        from tracks import _BUILTIN_GOOGLE_DRIVE_IDS
+
+        fid = str(_BUILTIN_GOOGLE_DRIVE_IDS.get(6) or "").strip()
+        if not fid:
+            return False, "No builtin Drive file id for test"
+        meta, err = drive_file_metadata(fid)
+        if meta:
+            sa = service_account_client_email()
+            extra = f" SA email: {sa}" if sa else ""
+            return True, f"Drive metadata OK for Kidney sample{extra}"
+        sa = service_account_client_email()
+        share = f" Share folder with {sa} (Viewer)." if sa else ""
+        return False, f"Drive metadata failed: {err}{share}"
+    except Exception as e:
+        return False, f"Drive check error: {e!s}"[:200]
+
+
+def _website_delivery_ids_ok() -> Tuple[bool, str]:
+    """Платный трек из discover_songs получает google_drive_file_id из tracks.py."""
+    songs = discover_songs()
+    if not songs:
+        return True, "discover_songs empty (no MP3 on disk) — synthetic rows used"
+    sid = next(iter(songs))
+    row = enrich_song_row_delivery_ids(songs[sid], sid)
+    if str(row.get("google_drive_file_id") or "").strip():
+        return True, f"enrich_song_row OK (example {sid})"
+    return False, f"Missing google_drive_file_id after enrich for {sid}"
 
 
 def _file_ids_json_ok() -> Tuple[bool, str]:
@@ -178,8 +219,12 @@ def build_health_report() -> Dict[str, Any]:
     free_mp3_on_disk = bonus_path.is_file()
     free_mp3_rel = _free_track_bonus_mp3_relative(root)
     free_site_ok, free_site_msg = _free_track_website_ok()
+    drive_ok, drive_msg = _google_drive_delivery_ok()
+    enrich_ok, enrich_msg = _website_delivery_ids_ok()
 
     webhook_secret_set = bool((config.STRIPE_WEBHOOK_SECRET or "").strip())
+    google_sa_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+    gdrive_ids_set = bool((config.GDRIVE_IDS_JSON or os.environ.get("GDRIVE_IDS_JSON") or "").strip())
     mini_secret_set = bool((config.MINIAPP_CHECKOUT_SECRET or "").strip())
     pay_token_set = bool((config.PAYMENTS_PROVIDER_TOKEN or "").strip())
     file_ids_set = bool((os.environ.get("FILE_IDS_JSON") or "").strip())
@@ -211,6 +256,9 @@ def build_health_report() -> Dict[str, Any]:
             "MINIAPP_CHECKOUT_SECRET_set": mini_secret_set,
             "PAYMENTS_PROVIDER_TOKEN_set": pay_token_set,
             "FILE_IDS_JSON_set": file_ids_set,
+            "GOOGLE_SERVICE_ACCOUNT_JSON_set": google_sa_set,
+            "GDRIVE_IDS_JSON_set": gdrive_ids_set,
+            "GOOGLE_DRIVE_credentials_loaded": drive_credentials_available() if google_sa_set else False,
             "BACKEND_URL_host": urlparse((config.BACKEND_URL or "http://localhost").strip() or "http://localhost").netloc
             or "(empty)",
             "DOMAIN_host": urlparse((config.DOMAIN or "http://localhost").strip() or "http://localhost").netloc
@@ -223,6 +271,8 @@ def build_health_report() -> Dict[str, Any]:
             "miniapp_cors": {"ok": cors_ok, "detail": cors_msg},
             "file_ids_json": {"ok": file_ids_ok, "detail": file_ids_msg},
             "free_track_website": {"ok": free_site_ok, "detail": free_site_msg},
+            "google_drive": {"ok": drive_ok, "detail": drive_msg},
+            "website_drive_ids": {"ok": enrich_ok, "detail": enrich_msg},
         },
         "ready": bool(
             len(missing_audio) == 0

@@ -31,6 +31,39 @@ def test_iter_drive_file_chunks_yields_bytes(mocker, tmp_path):
     assert b"".join(list(it)) == b"abcdef"
 
 
+def test_client_email_from_env_when_credentials_fail_to_load(mocker):
+    """Битый private_key — Credentials None, но client_email всё равно в подсказке."""
+    inline = json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "p",
+            "private_key": "not-a-valid-key",
+            "client_email": "hint-me@my-project.iam.gserviceaccount.com",
+            "client_id": "1",
+        }
+    )
+    mocker.patch("music_sales.google_drive_delivery.config.GOOGLE_SERVICE_ACCOUNT_JSON", inline)
+    with patch("google.oauth2.service_account.Credentials.from_service_account_info", side_effect=ValueError("bad key")):
+        from music_sales.google_drive_delivery import (
+            drive_credentials_available,
+            service_account_client_email,
+        )
+
+        assert drive_credentials_available() is False
+        assert service_account_client_email() == "hint-me@my-project.iam.gserviceaccount.com"
+
+
+def test_client_email_from_missing_file_path(mocker, tmp_path):
+    mocker.patch(
+        "music_sales.google_drive_delivery.config.GOOGLE_SERVICE_ACCOUNT_JSON",
+        "secrets/missing-sa.json",
+    )
+    from music_sales.google_drive_delivery import drive_credentials_available, service_account_client_email
+
+    assert drive_credentials_available() is False
+    assert service_account_client_email() is None
+
+
 def test_credentials_from_inline_json(mocker):
     """Railway Variables: GOOGLE_SERVICE_ACCOUNT_JSON как одна строка JSON."""
     inline = json.dumps(
@@ -45,9 +78,9 @@ def test_credentials_from_inline_json(mocker):
     )
     mocker.patch("music_sales.google_drive_delivery.config.GOOGLE_SERVICE_ACCOUNT_JSON", inline)
     with patch("google.oauth2.service_account.Credentials.from_service_account_info") as mock_info:
-        from music_sales.google_drive_delivery import _credentials_from_env
+        from music_sales.google_drive_delivery import drive_credentials_available
 
-        _credentials_from_env()
+        assert drive_credentials_available() is True
     mock_info.assert_called_once()
 
 

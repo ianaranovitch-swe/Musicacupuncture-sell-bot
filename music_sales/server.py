@@ -18,6 +18,7 @@ from flask import Flask, Response, jsonify, redirect, request, send_from_directo
 from music_sales import config
 from music_sales.catalog import (
     discover_songs,
+    enrich_song_row_delivery_ids,
     free_bonus_audio_path,
     project_root,
     resolve_song_id_by_audio_stem,
@@ -31,7 +32,12 @@ from music_sales.file_id_delivery import (
     load_file_ids_dict,
     resolve_telegram_file_download_url,
 )
-from music_sales.google_drive_delivery import drive_file_metadata, iter_drive_file_chunks
+from music_sales.google_drive_delivery import (
+    drive_credentials_available,
+    drive_file_metadata,
+    iter_drive_file_chunks,
+    service_account_client_email,
+)
 from music_sales.pcloud_delivery import resolve_pcloud_direct_download_url
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
@@ -268,15 +274,47 @@ def _deliver_mp3_for_website_song(
     attachment_filename: str,
     log_prefix: str,
     use_head: bool,
+    telegram_fallback_on_drive_issue: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """
-    Выдача MP3 на сайт: Google Drive → pCloud → Telegram.
+    Выдача MP3 на сайт после Stripe (/website/download-file).
 
-    Если Drive настроен, но скачивание не удалось (403, нет Share, битый ключ) —
-    не обрываем выдачу: пробуем Telegram (как в боте).
+    Порядок: Google Drive (Service Account, стрим API — файлы 37–49 MB, без лимита Telegram 20 MB)
+    → pCloud → Telegram (только мелкие файлы / fallback).
+
+    НЕ редирект на drive.google.com/uc?export=download: приватные файлы так не отдаются,
+    нужен GOOGLE_SERVICE_ACCOUNT_JSON + Share папки на client_email (Viewer).
+    ID файла: tracks.py / GDRIVE_IDS_JSON (см. music_sales/gdrive_ids.py).
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
-    if gdrive_id and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+    sa_env_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+    drive_creds_ok = drive_credentials_available() if sa_env_set else False
+    drive_failed = False
+
+    logger.info(
+        "%s: gdrive_id=%s sa_env=%s drive_creds_ok=%s",
+        log_prefix,
+        f"…{gdrive_id[-8:]}" if len(gdrive_id) > 8 else (gdrive_id or "(none)"),
+        sa_env_set,
+        drive_creds_ok,
+    )
+
+    if gdrive_id and sa_env_set and not drive_creds_ok:
+        sa = service_account_client_email()
+        hint = (
+            "GOOGLE_SERVICE_ACCOUNT_JSON is set but the key did not load. "
+            "On Railway paste the full service account JSON as the variable value "
+            "(a path like secrets/credentials.json does not work — that folder is not in the deploy)."
+        )
+        if sa:
+            hint += f" When fixed, share Drive with {sa} (Viewer)."
+        if telegram_fallback_on_drive_issue:
+            logger.warning("%s: %s — пробуем Telegram", log_prefix, hint)
+        else:
+            logger.error("%s: %s", log_prefix, hint)
+            return jsonify({"error": "Google Drive credentials not loaded", "hint": hint}), 503
+
+    if gdrive_id and sa_env_set and drive_creds_ok:
         if use_head:
             drive_res = _head_mp3_from_google_drive(
                 gdrive_id,
@@ -291,11 +329,12 @@ def _deliver_mp3_for_website_song(
             )
         if not isinstance(drive_res, tuple):
             return drive_res
+        drive_failed = True
         logger.warning(
-            "%s: Google Drive не сработал — пробуем Telegram / pCloud (см. логи Drive выше)",
+            "%s: Google Drive не сработал — пробуем pCloud / Telegram (см. логи Drive выше)",
             log_prefix,
         )
-    elif gdrive_id and not (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+    elif gdrive_id and not sa_env_set:
         logger.warning(
             "%s: google_drive_file_id задан, но GOOGLE_SERVICE_ACCOUNT_JSON пуст — пробуем запасные источники",
             log_prefix,
@@ -322,6 +361,16 @@ def _deliver_mp3_for_website_song(
             upstream_label="pCloud CDN",
         )
 
+    if gdrive_id and drive_failed and not telegram_fallback_on_drive_issue:
+        sa = service_account_client_email()
+        hint = (
+            "Google Drive could not serve this file. Share the MP3 folder with the service account "
+            "(Viewer) and check the file ID in tracks.py matches your Drive."
+        )
+        if sa:
+            hint += f" Service account email: {sa}."
+        return jsonify({"error": "Could not download from Google Drive", "hint": hint}), 502
+
     file_ids = load_file_ids_dict()
     tg_fid = file_id_for_song(song, file_ids)
     if not tg_fid:
@@ -332,8 +381,31 @@ def _deliver_mp3_for_website_song(
         return jsonify({"error": "Download is not available"}), 500
     tok = config.BOT_TOKEN.strip()
     if use_head:
-        return _head_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
-    return _stream_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
+        tg_res = _head_mp3_from_telegram(
+            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+        )
+    else:
+        tg_res = _stream_mp3_from_telegram(
+            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+        )
+    if isinstance(tg_res, tuple) and gdrive_id:
+        try:
+            data = tg_res[0].get_json() or {}
+        except Exception:
+            data = {}
+        hint = str((data or {}).get("hint") or "")
+        if "20 MB" in hint:
+            sa = service_account_client_email()
+            extra = (
+                " Fix Google Drive on Railway: set GOOGLE_SERVICE_ACCOUNT_JSON "
+                "(file path or full JSON) and share the MP3 folder with the service account"
+            )
+            if sa:
+                extra += f" ({sa}, Viewer)."
+            else:
+                extra += "."
+            return jsonify({**(data or {}), "hint": hint + extra}), tg_res[1]
+    return tg_res
 
 
 def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
@@ -493,12 +565,12 @@ def create_app(
         return songs_catalog if songs_catalog is not None else discover_songs()
 
     def _resolved_song_row(song_id: str) -> dict[str, Any] | None:
-        """Строка трека: тестовый songs_catalog, иначе discover_songs() + синтетика из tracks.py (Railway без MP3)."""
+        """Строка трека: discover_songs() + ID выдачи из tracks.py; без MP3 на диске — только synthetic."""
         if songs_catalog is not None:
             return songs_catalog.get(song_id)
         row = discover_songs().get(song_id)
         if row:
-            return row
+            return enrich_song_row_delivery_ids(row, song_id)
         return synthetic_song_row_for_song_id(song_id)
     domain = domain or config.DOMAIN
 
@@ -996,7 +1068,8 @@ def create_app(
         exp = int(time.time()) + 300
         sig = _website_download_sign(song_id, exp)
         qs = urlencode({"song_id": song_id, "exp": exp, "sig": sig})
-        base = (request.url_root or "").rstrip("/") or domain
+        # Публичный URL из DOMAIN/BACKEND_URL, а не внутренний hostname Railway (request.url_root).
+        base = _stripe_public_origin().rstrip("/") or (request.url_root or "").rstrip("/") or (domain or "").rstrip("/")
         return f"{base}/website/download-file?{qs}"
 
     @app.route("/website/download-redirect", methods=["GET"])
@@ -1027,9 +1100,10 @@ def create_app(
     @app.route("/website/download-file", methods=["GET", "HEAD", "OPTIONS"])
     def website_download_file() -> Any:
         """
-        Отдаём MP3 по короткоживущей подписи.
+        Отдаём MP3 по подписи после успешной оплаты Stripe (редирект с /website/download-redirect).
 
-        Приоритет: Google Drive (google_drive_file_id) → pCloud → Telegram file_id.
+        Цепочка на сайте: Stripe success → /website/download-redirect → сюда (стрим audio/mpeg).
+        Источник: Google Drive API (GDRIVE_IDS_JSON + GOOGLE_SERVICE_ACCOUNT_JSON), не Telegram getFile для больших MP3.
         """
         if request.method == "OPTIONS":
             return "", 204
@@ -1051,6 +1125,12 @@ def create_app(
         song = _resolved_song_row(song_id)
         if not song:
             return jsonify({"error": "Unknown song"}), 404
+
+        from music_sales.gdrive_ids import google_drive_file_id_for_song
+
+        gid = google_drive_file_id_for_song(song)
+        if gid:
+            song = {**song, "google_drive_file_id": gid}
 
         attachment = _safe_mp3_attachment_filename(str(song.get("name") or song_id))
         res = _deliver_mp3_for_website_song(
@@ -1094,7 +1174,7 @@ def create_app(
         stem = free_bonus_audio_path(root_path()).stem
         gdrive = _free_bonus_google_drive_file_id()
         tg_fid = _free_bonus_telegram_file_id()
-        has_drive = bool(gdrive and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+        has_drive = bool(gdrive and drive_credentials_available())
         if not has_drive and not tg_fid:
             logger.warning("free-track: нет google_drive_file_id и FILE_IDS_JSON для stem=%r", stem)
             return jsonify({"error": "Free track is not configured"}), 503
@@ -1116,7 +1196,11 @@ def create_app(
             "name": stem,
             "file": f"songs/{stem}.mp3",
         }
-        gid = _free_bonus_google_drive_file_id()
+        from music_sales.gdrive_ids import google_drive_file_id_for_song, load_gdrive_ids_dict
+
+        gids = load_gdrive_ids_dict()
+        stem_row = {"name": stem, "file": f"songs/{stem}.mp3"}
+        gid = _free_bonus_google_drive_file_id() or google_drive_file_id_for_song(stem_row, gids)
         if gid:
             song_row["google_drive_file_id"] = gid
         tg = _free_bonus_telegram_file_id()
@@ -1129,6 +1213,7 @@ def create_app(
             attachment_filename=attachment,
             log_prefix="free-track-file",
             use_head=request.method == "HEAD",
+            telegram_fallback_on_drive_issue=True,
         )
         if isinstance(res, tuple):
             return res[0], res[1]
