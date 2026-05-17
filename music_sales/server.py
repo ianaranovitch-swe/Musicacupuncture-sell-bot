@@ -1461,6 +1461,19 @@ def create_app(
 
         return "", 200
 
+    @app.route("/api/testimonials", methods=["GET", "OPTIONS"])
+    def api_testimonials() -> Any:
+        """Публичный JSON отзывов для website.html (только visible=True)."""
+        if request.method == "OPTIONS":
+            return "", 204
+        try:
+            from music_sales.testimonials_store import load_visible_testimonials
+
+            return jsonify({"testimonials": load_visible_testimonials()})
+        except Exception as e:
+            logger.exception("GET /api/testimonials failed")
+            return jsonify({"error": str(e), "testimonials": []}), 500
+
     @app.route("/health")
     def health_json() -> Any:
         """JSON: файлы songs/covers, Stripe, backend, Mini App / CORS (без секретов)."""

@@ -1,12 +1,27 @@
 """
 Тексты «About Michael» для бота и статических страниц (английский UI).
-Фото: assets/about-michael.png в корне репозитория.
+Фото: assets/about-michael.png и assets/about-michael-2.png в корне репозитория.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 # Относительно корня репозитория (рядом с miniapp.html).
 ABOUT_MICHAEL_PHOTO_REL = "assets/about-michael.png"
+ABOUT_MICHAEL_PHOTO_2_REL = "assets/about-michael-2.png"
+ABOUT_MICHAEL_PHOTO_RELS: tuple[str, ...] = (ABOUT_MICHAEL_PHOTO_REL, ABOUT_MICHAEL_PHOTO_2_REL)
+
+
+def existing_about_michael_photos(root: Path) -> list[Path]:
+    """Список файлов портретов, которые реально лежат на диске (для Telegram и деплоя)."""
+    out: list[Path] = []
+    for rel in ABOUT_MICHAEL_PHOTO_RELS:
+        p = root / rel
+        if p.is_file():
+            out.append(p)
+    return out
+
 
 # Полный текст для сообщения в Telegram и для <main> на about.html
 ABOUT_MICHAEL_BODY = """About Michael
@@ -24,7 +39,7 @@ Welcome to discover MusicAcupuncture®.
 — Michael B. Johnsson
 Founder & President of MusicAcupuncture®"""
 
-# Короткая подпись к фото (лимит Telegram caption ~1024 символа; у нас запас)
+# Короткая подпись к первому фото в альбоме (лимит Telegram caption ~1024 символа)
 ABOUT_MICHAEL_PHOTO_CAPTION = (
     "Michael B. Johnsson — Founder & President of MusicAcupuncture®. "
     "Read the full biography in the message below or on the website."

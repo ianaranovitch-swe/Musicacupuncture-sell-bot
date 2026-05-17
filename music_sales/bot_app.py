@@ -19,6 +19,7 @@ from telegram.ext import (
 from music_sales import config
 from music_sales.admin_panel import build_admin_conversation_handler
 from music_sales.bot_handlers import FREE_TRACK_CB, about_command, help_command, send_free_track, start
+from music_sales.testimonials_bot import reviews_callback
 from music_sales.buy_payments import pre_checkout, successful_payment
 from music_sales.health_report import cmd_health
 from music_sales.logging_setup import setup_logging
@@ -147,6 +148,12 @@ def _register_handlers(application) -> None:
     application.add_handler(CommandHandler("health", cmd_health))
 
     application.add_handler(CallbackQueryHandler(send_free_track, pattern=f"^{FREE_TRACK_CB}$"))
+    application.add_handler(
+        CallbackQueryHandler(
+            reviews_callback,
+            pattern=r"^reviews:",
+        )
+    )
     application.add_handler(PreCheckoutQueryHandler(pre_checkout))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
     application.add_error_handler(_error_handler)

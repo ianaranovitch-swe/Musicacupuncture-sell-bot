@@ -7,6 +7,7 @@ from pathlib import Path
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     MenuButtonWebApp,
     Update,
     User,
@@ -19,12 +20,13 @@ from music_sales import config
 from music_sales.about_michael import (
     ABOUT_MICHAEL_BODY,
     ABOUT_MICHAEL_PHOTO_CAPTION,
-    ABOUT_MICHAEL_PHOTO_REL,
+    existing_about_michael_photos,
 )
 from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
 from music_sales.owner_notify import notify_owner_async
 from music_sales.sales_log import append_free_download_event
+from music_sales.testimonials_bot import main_menu_reviews_button_row, random_start_testimonial_blurb
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +71,11 @@ def _about_url_button_row() -> list[InlineKeyboardButton] | None:
 
 
 def _free_track_markup() -> InlineKeyboardMarkup:
-    """Кнопка выдачи бесплатного трека + опционально About (тексты UI — на английском)."""
-    rows: list[list[InlineKeyboardButton]] = [[InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)]]
+    """Главное меню /start: подарок, отзывы, About."""
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)],
+        main_menu_reviews_button_row(),
+    ]
     about_row = _about_url_button_row()
     if about_row:
         rows.append(about_row)
@@ -240,6 +245,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Experience the power of Music Acupuncture.",
         reply_markup=_free_track_markup(),
     )
+    blurb, blurb_markup = random_start_testimonial_blurb()
+    if blurb:
+        await update.message.reply_text(blurb, reply_markup=blurb_markup)
     await _send_miniapp_store_opener_if_configured(update, context)
     user = update.effective_user
     if user is not None:
@@ -251,36 +259,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT_TYPE, photo_paths: list[Path]) -> None:
+    """Одно фото или альбом (до 10) — подпись только у первого снимка."""
+    if len(photo_paths) == 1:
+        with photo_paths[0].open("rb") as photo:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=ABOUT_MICHAEL_PHOTO_CAPTION,
+            )
+        return
+
+    handles: list = []
+    media: list[InputMediaPhoto] = []
+    try:
+        for i, path in enumerate(photo_paths):
+            fh = path.open("rb")
+            handles.append(fh)
+            cap = ABOUT_MICHAEL_PHOTO_CAPTION if i == 0 else None
+            media.append(InputMediaPhoto(media=fh, caption=cap))
+        await context.bot.send_media_group(chat_id=chat_id, media=media)
+    finally:
+        for fh in handles:
+            fh.close()
+
+
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /about: фото + полный текст; при HTTPS — кнопка на страницу about.html."""
+    """Команда /about: портрет(ы) + полный текст; при HTTPS — кнопка на страницу about.html."""
     if update.message is None:
         return
     chat_id = update.message.chat_id
     root = _repo_root()
-    photo_path = root / ABOUT_MICHAEL_PHOTO_REL
+    photo_paths = existing_about_michael_photos(root)
     about_row = _about_url_button_row()
     markup = InlineKeyboardMarkup([about_row]) if about_row else None
     try:
-        if photo_path.is_file():
-            with photo_path.open("rb") as photo:
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption=ABOUT_MICHAEL_PHOTO_CAPTION,
-                    reply_markup=markup,
-                )
+        if photo_paths:
+            await _send_about_michael_photos(chat_id, context, photo_paths)
         else:
             await update.message.reply_text(
-                "Photo file is not deployed yet. Ask admin to add assets/about-michael.png to the server.",
-                reply_markup=markup,
+                "Photo files are not deployed yet. Ask admin to add assets/about-michael.png "
+                "(and about-michael-2.png) to the server.",
             )
     except Exception:
-        logger.exception("about_command: send_photo failed")
-        await update.message.reply_text(
-            "Could not send the portrait image. Full biography below.",
-            reply_markup=markup,
-        )
-    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY)
+        logger.exception("about_command: send photos failed")
+        await update.message.reply_text("Could not send the portrait images. Full biography below.")
+    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY, reply_markup=markup)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -294,6 +318,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "Commands:",
         "• /start — open the Music Store Mini App",
         "• /about — founder biography (Michael B. Johnsson)",
+        "• ⭐ Customer Reviews — on /start (browse all reviews)",
         "• /help — show this help message",
         "• /health — owner/developer diagnostics only",
         "",

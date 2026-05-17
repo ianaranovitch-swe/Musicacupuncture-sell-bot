@@ -17,9 +17,9 @@ async def test_start_replies_with_config_hint_when_miniapp_not_set(mocker):
 
     await start(update, context)
 
-    assert update.message.reply_text.await_count == 2
-    second = update.message.reply_text.await_args_list[1]
-    assert "Music Store is not configured yet" in (second.args[0] or "")
+    assert update.message.reply_text.await_count == 3
+    last = update.message.reply_text.await_args_list[-1]
+    assert "Music Store is not configured yet" in (last.args[0] or "")
 
 
 @pytest.mark.asyncio
@@ -37,12 +37,12 @@ async def test_start_sends_store_opener_only_when_miniapp_url_set(mocker):
 
     await start(update, context)
 
-    assert update.message.reply_text.await_count == 2
-    second = update.message.reply_text.await_args_list[1]
-    rt_kwargs = second.kwargs
+    assert update.message.reply_text.await_count == 3
+    store_msg = update.message.reply_text.await_args_list[-1]
+    rt_kwargs = store_msg.kwargs
     assert "Music Store" in rt_kwargs["reply_markup"].inline_keyboard[0][0].text
     assert rt_kwargs["reply_markup"].inline_keyboard[0][0].web_app is not None
-    assert "menu button" in (second.args[0] or "").lower()
+    assert "menu button" in (store_msg.args[0] or "").lower()
 
 
 @pytest.mark.asyncio
@@ -63,6 +63,7 @@ async def test_start_shows_free_gift_button_first(mocker):
     first_call = update.message.reply_text.await_args_list[0]
     markup = first_call.kwargs["reply_markup"]
     assert markup.inline_keyboard[0][0].callback_data == FREE_TRACK_CB
+    assert markup.inline_keyboard[1][0].text == "⭐ Customer Reviews"
     assert FREE_TRACK_TITLE in (first_call.args[0] or "")
 
 

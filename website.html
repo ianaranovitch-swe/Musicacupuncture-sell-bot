@@ -270,11 +270,18 @@
       max-width: 640px;
       margin: 0 auto;
     }
+    .about-founder-photos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
     .about-founder-photo {
       width: 100%;
       max-width: 420px;
+      flex: 1 1 280px;
       display: block;
-      margin: 0 auto 24px;
       border-radius: 16px;
       border: 2px solid var(--card-border);
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
@@ -285,6 +292,115 @@
       line-height: 1.65;
       color: var(--text);
       margin: 0 0 1em;
+    }
+    /* --- Testimonials carousel --- */
+    #reviews {
+      padding: 48px 0 32px;
+    }
+    .testimonials-counter {
+      text-align: center;
+      color: var(--gold);
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin: 0 0 20px;
+    }
+    .testimonials-viewport {
+      overflow: hidden;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .testimonials-track {
+      display: flex;
+      transition: transform 0.45s ease;
+      will-change: transform;
+    }
+    .testimonials-page {
+      flex: 0 0 100%;
+      display: flex;
+      gap: 16px;
+      box-sizing: border-box;
+      padding: 0 4px;
+    }
+    .testimonials-page .testimonial-card {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 0;
+    }
+    .testimonial-card {
+      flex: 0 0 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+    }
+    @media (min-width: 900px) {
+      .testimonial-card {
+        flex: 0 0 33.333%;
+      }
+    }
+    .testimonial-inner {
+      background: rgba(26, 5, 51, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      min-height: 220px;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+    }
+    .testimonial-stars {
+      color: var(--gold);
+      font-size: 1rem;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+    .testimonial-quote {
+      font-style: italic;
+      line-height: 1.6;
+      font-size: 0.92rem;
+      margin: 0 0 16px;
+      color: var(--text);
+    }
+    .testimonial-author {
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin: 0;
+    }
+    .testimonial-track {
+      color: var(--gold);
+      font-size: 0.82rem;
+      margin: 6px 0 0;
+    }
+    .testimonials-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+    .testimonials-dots button {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid var(--gold);
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    .testimonials-dots button.active {
+      background: var(--gold);
+    }
+    .modal-testimonial {
+      margin: 16px 0 0;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.25);
+      display: none;
+    }
+    .modal-testimonial.visible {
+      display: block;
+    }
+    .modal-testimonial h3 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: var(--gold);
     }
     .about-signature {
       margin-top: 1.5rem;
@@ -612,6 +728,7 @@
         <a href="#home">Home</a>
         <a href="#free">Free Track</a>
         <a href="#shop">Shop</a>
+        <a href="#reviews">Reviews</a>
         <a href="#about-michael">About Michael</a>
       </nav>
       <div class="currency-switch" aria-label="Currency">
@@ -680,12 +797,26 @@
       <div class="catalog-grid" id="catalog-grid"></div>
     </section>
 
+    <!-- ========== Testimonials ========== -->
+    <section id="reviews" class="fade-in-up">
+      <h2 class="section-title">⭐ What Our Customers Say</h2>
+      <p class="section-sub">Real experiences from real people</p>
+      <p class="testimonials-counter" id="testimonials-counter">Join 500+ satisfied customers</p>
+      <div class="testimonials-viewport">
+        <div class="testimonials-track" id="testimonials-track" aria-live="polite"></div>
+      </div>
+      <div class="testimonials-dots" id="testimonials-dots" role="tablist" aria-label="Review slides"></div>
+    </section>
+
     <!-- ========== About Michael (founder) ========== -->
     <section id="about-michael" class="fade-in-up">
       <h2 class="section-title">About Michael</h2>
       <p class="section-sub">Founder &amp; President of MusicAcupuncture®</p>
       <div class="about-block about-founder-block">
-        <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson" />
+        <div class="about-founder-photos">
+          <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson" />
+          <img class="about-founder-photo" id="about-founder-photo-2" src="" alt="Michael B. Johnsson outdoors" />
+        </div>
         <div class="about-founder-prose">
           <p>
             <strong>Music Acupuncture®</strong> is a healing music concept that combines therapeutic sound with intention —
@@ -718,6 +849,7 @@
       <p>
         <a href="#shop">Shop</a>
         <a href="#free">Free Track</a>
+        <a href="#reviews">Reviews</a>
         <a href="#about-michael">About Michael</a>
       </p>
       <p style="margin-top: 12px; font-size: 0.75rem;">
@@ -733,6 +865,13 @@
       <h2 class="modal-title" id="modal-title"></h2>
       <p class="modal-duration" id="modal-duration" style="display: none;"></p>
       <p class="modal-desc" id="modal-desc"></p>
+      <div class="modal-testimonial" id="modal-testimonial" aria-hidden="true">
+        <h3>⭐ What customers say about this track:</h3>
+        <p class="testimonial-stars" id="modal-testimonial-stars"></p>
+        <p class="testimonial-quote" id="modal-testimonial-quote"></p>
+        <p class="testimonial-author" id="modal-testimonial-author"></p>
+        <p class="testimonial-track" id="modal-testimonial-track"></p>
+      </div>
       <p class="modal-price" id="modal-price"></p>
       <div class="modal-actions">
         <button type="button" class="btn-gold" id="modal-buy-stripe">💳 Buy with Stripe</button>
@@ -815,11 +954,147 @@
   let successTrackId = "";
   let successSessionId = "";
   let successDownloadUrl = "";
+  let siteTestimonials = [];
+  let testimonialsSlide = 0;
+  let testimonialsTimer = null;
 
   function escapeHtml(s) {
     const d = document.createElement("div");
     d.textContent = s == null ? "" : String(s);
     return d.innerHTML;
+  }
+
+  function normTrackKey(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/-/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function findTestimonialForTrack(fullTitle) {
+    var key = normTrackKey(fullTitle);
+    for (var i = 0; i < siteTestimonials.length; i++) {
+      if (normTrackKey(siteTestimonials[i].track) === key) return siteTestimonials[i];
+    }
+    return null;
+  }
+
+  function starsHtml(rating) {
+    var n = Math.max(0, Math.min(5, parseInt(rating, 10) || 5));
+    var out = "";
+    for (var i = 0; i < n; i++) out += "⭐";
+    return out;
+  }
+
+  function renderTestimonialCard(t) {
+    return (
+      '<article class="testimonial-card"><div class="testimonial-inner">' +
+      '<div class="testimonial-stars">' +
+      starsHtml(t.rating) +
+      "</div>" +
+      '<p class="testimonial-quote">"' +
+      escapeHtml(t.text) +
+      '"</p>' +
+      '<p class="testimonial-author">' +
+      escapeHtml(t.name) +
+      ", " +
+      escapeHtml(t.city) +
+      "</p>" +
+      '<p class="testimonial-track">🎵 ' +
+      escapeHtml(t.track) +
+      "</p>" +
+      "</div></article>"
+    );
+  }
+
+  function testimonialsPerView() {
+    return window.innerWidth >= 900 ? 3 : 1;
+  }
+
+  function buildTestimonialPages() {
+    var per = testimonialsPerView();
+    var pages = [];
+    for (var i = 0; i < siteTestimonials.length; i += per) {
+      pages.push(siteTestimonials.slice(i, i + per));
+    }
+    return pages;
+  }
+
+  function updateTestimonialsDots(pageCount) {
+    var dots = document.getElementById("testimonials-dots");
+    if (!dots) return;
+    dots.innerHTML = "";
+    for (var i = 0; i < pageCount; i++) {
+      (function (idx) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", "Review slide " + (idx + 1));
+        if (idx === testimonialsSlide) b.classList.add("active");
+        b.addEventListener("click", function () {
+          testimonialsSlide = idx;
+          renderTestimonialsCarousel();
+          restartTestimonialsAutoplay();
+        });
+        dots.appendChild(b);
+      })(i);
+    }
+  }
+
+  function renderTestimonialsCarousel() {
+    var track = document.getElementById("testimonials-track");
+    if (!track || !siteTestimonials.length) return;
+    var pages = buildTestimonialPages();
+    if (!pages.length) return;
+    if (testimonialsSlide >= pages.length) testimonialsSlide = 0;
+    track.innerHTML = pages
+      .map(function (page) {
+        return '<div class="testimonials-page">' + page.map(renderTestimonialCard).join("") + "</div>";
+      })
+      .join("");
+    track.style.transform = "translateX(-" + testimonialsSlide * 100 + "%)";
+    updateTestimonialsDots(pages.length);
+  }
+
+  function restartTestimonialsAutoplay() {
+    if (testimonialsTimer) clearInterval(testimonialsTimer);
+    testimonialsTimer = setInterval(function () {
+      var pages = buildTestimonialPages();
+      if (!pages.length) return;
+      testimonialsSlide = (testimonialsSlide + 1) % pages.length;
+      renderTestimonialsCarousel();
+    }, 5000);
+  }
+
+  async function loadTestimonials() {
+    try {
+      var r = await fetch(API_BASE + "/api/testimonials", { mode: "cors" });
+      if (r.ok) {
+        var data = await r.json();
+        if (data && data.testimonials && data.testimonials.length) {
+          siteTestimonials = data.testimonials;
+        }
+      }
+    } catch (e) {}
+    renderTestimonialsCarousel();
+    restartTestimonialsAutoplay();
+  }
+
+  function showModalTestimonial(track) {
+    var box = document.getElementById("modal-testimonial");
+    if (!box) return;
+    var t = findTestimonialForTrack(track.fullTitle);
+    if (!t) {
+      box.classList.remove("visible");
+      box.setAttribute("aria-hidden", "true");
+      return;
+    }
+    document.getElementById("modal-testimonial-stars").textContent = starsHtml(t.rating);
+    document.getElementById("modal-testimonial-quote").textContent = '"' + t.text + '"';
+    document.getElementById("modal-testimonial-author").textContent = t.name + ", " + t.city;
+    document.getElementById("modal-testimonial-track").textContent = "🎵 " + t.track;
+    box.classList.add("visible");
+    box.setAttribute("aria-hidden", "false");
   }
 
   function formatPriceDisplay() {
@@ -1006,6 +1281,7 @@
       durEl.style.display = "none";
     }
     document.getElementById("modal-desc").textContent = track.description;
+    showModalTestimonial(track);
     document.getElementById("modal-price").textContent = track.isFree ? "🎁 FREE" : formatPriceDisplay();
 
     var stripeBtn = document.getElementById("modal-buy-stripe");
@@ -1335,6 +1611,8 @@
   function initAboutFounderPhoto() {
     var el = document.getElementById("about-founder-photo");
     if (el) el.src = assetUrl("assets/about-michael.png");
+    var el2 = document.getElementById("about-founder-photo-2");
+    if (el2) el2.src = assetUrl("assets/about-michael-2.png");
   }
 
   /* ---------- Nav mobile ---------- */
@@ -1387,6 +1665,10 @@
   initAboutFounderPhoto();
   initSuccessPage();
   loadPricing();
+  loadTestimonials();
+  window.addEventListener("resize", function () {
+    renderTestimonialsCarousel();
+  });
 
   /* Expose for debugging */
   window.__MA_SITE__ = { TRACKS: TRACKS, API_BASE: API_BASE, SITE_BASE: SITE_BASE };

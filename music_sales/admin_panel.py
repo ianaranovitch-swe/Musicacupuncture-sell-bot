@@ -211,6 +211,7 @@ def _main_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("🗑️ Delete Track", callback_data="adm:delm")],
             [InlineKeyboardButton("📊 Sales Statistics", callback_data="adm:stats")],
             [InlineKeyboardButton("🧾 Show FILE_IDS_JSON", callback_data="adm:fileids")],
+            [InlineKeyboardButton("⭐ Manage Reviews", callback_data="adm:reviews")],
             [InlineKeyboardButton("❌ Close Admin", callback_data="adm:close")],
         ]
     )
@@ -274,6 +275,17 @@ async def admin_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data == "adm:menu":
         await q.message.reply_text("Admin menu:", reply_markup=_main_menu_kb())
         return ST_MAIN
+
+    if data == "adm:reviews":
+        from music_sales.testimonials_admin import show_reviews_admin_menu
+
+        await show_reviews_admin_menu(q.message, uid or 0)
+        return ST_MAIN
+
+    if data.startswith("adm:rv:"):
+        from music_sales.testimonials_admin import testimonials_admin_callback
+
+        return await testimonials_admin_callback(update, context)
 
     if data == "adm:add":
         _log(uid or 0, "add_track_start")
@@ -991,12 +1003,24 @@ async def edit_upload_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ST_MAIN
 
 
+async def _admin_main_text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Текст в ST_MAIN: мастер отзывов (rv_step) или игнор."""
+    if context.user_data.get("rv_step"):
+        from music_sales.testimonials_admin import testimonials_admin_message
+
+        return await testimonials_admin_message(update, context)
+    return ST_MAIN
+
+
 def build_admin_conversation_handler() -> ConversationHandler:
     """Собираем ConversationHandler (подключается в bot.py)."""
     return ConversationHandler(
         entry_points=[CommandHandler("admin", admin_start)],
         states={
-            ST_MAIN: [CallbackQueryHandler(admin_main_callback, pattern=r"^adm:")],
+            ST_MAIN: [
+                CallbackQueryHandler(admin_main_callback, pattern=r"^adm:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, _admin_main_text_router),
+            ],
             ST_ADD_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_title)],
             ST_ADD_DESC: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_desc)],
             ST_ADD_USD: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_usd)],
