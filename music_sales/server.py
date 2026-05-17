@@ -276,9 +276,14 @@ def _deliver_mp3_for_website_song(
     use_head: bool,
 ) -> Union[Response, Tuple[Any, int]]:
     """
-    Выдача MP3 на сайт: Google Drive → pCloud → Telegram.
+    Выдача MP3 на сайт после Stripe (/website/download-file).
 
-    Если Drive настроен, но API отказал — не обрываем выдачу, пробуем запасные источники.
+    Порядок: Google Drive (Service Account, стрим API — файлы 37–49 MB, без лимита Telegram 20 MB)
+    → pCloud → Telegram (только мелкие файлы / fallback).
+
+    НЕ редирект на drive.google.com/uc?export=download: приватные файлы так не отдаются,
+    нужен GOOGLE_SERVICE_ACCOUNT_JSON + Share папки на client_email (Viewer).
+    ID файла: tracks.py / GDRIVE_IDS_JSON (см. music_sales/gdrive_ids.py).
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
     sa_env_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
@@ -1091,9 +1096,10 @@ def create_app(
     @app.route("/website/download-file", methods=["GET", "HEAD", "OPTIONS"])
     def website_download_file() -> Any:
         """
-        Отдаём MP3 по короткоживущей подписи.
+        Отдаём MP3 по подписи после успешной оплаты Stripe (редирект с /website/download-redirect).
 
-        Приоритет: Google Drive (google_drive_file_id) → pCloud → Telegram file_id.
+        Цепочка на сайте: Stripe success → /website/download-redirect → сюда (стрим audio/mpeg).
+        Источник: Google Drive API (GDRIVE_IDS_JSON + GOOGLE_SERVICE_ACCOUNT_JSON), не Telegram getFile для больших MP3.
         """
         if request.method == "OPTIONS":
             return "", 204
@@ -1115,6 +1121,12 @@ def create_app(
         song = _resolved_song_row(song_id)
         if not song:
             return jsonify({"error": "Unknown song"}), 404
+
+        from music_sales.gdrive_ids import google_drive_file_id_for_song
+
+        gid = google_drive_file_id_for_song(song)
+        if gid:
+            song = {**song, "google_drive_file_id": gid}
 
         attachment = _safe_mp3_attachment_filename(str(song.get("name") or song_id))
         res = _deliver_mp3_for_website_song(
@@ -1180,7 +1192,11 @@ def create_app(
             "name": stem,
             "file": f"songs/{stem}.mp3",
         }
-        gid = _free_bonus_google_drive_file_id()
+        from music_sales.gdrive_ids import google_drive_file_id_for_song, load_gdrive_ids_dict
+
+        gids = load_gdrive_ids_dict()
+        stem_row = {"name": stem, "file": f"songs/{stem}.mp3"}
+        gid = _free_bonus_google_drive_file_id() or google_drive_file_id_for_song(stem_row, gids)
         if gid:
             song_row["google_drive_file_id"] = gid
         tg = _free_bonus_telegram_file_id()

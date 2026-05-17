@@ -160,6 +160,11 @@ def synthetic_song_row_for_song_id(song_id: str) -> dict[str, Any] | None:
         pid = t.get("pcloud_fileid")
         if pid is not None and str(pid).strip():
             row["pcloud_fileid"] = str(pid).strip()
+        from music_sales.gdrive_ids import google_drive_file_id_for_song
+
+        gid2 = google_drive_file_id_for_song(row)
+        if gid2:
+            row["google_drive_file_id"] = gid2
         return row
     return None
 
@@ -223,20 +228,25 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
 
 def enrich_song_row_delivery_ids(row: dict[str, Any], song_id: str) -> dict[str, Any]:
     """
-    discover_songs() видит только файлы на диске — без google_drive_file_id из tracks.py.
+    discover_songs() видит только файлы на диске (часто Git LFS-указатели, не настоящие MP3).
 
-    На Railway в songs/ часто лежат MP3 → платные треки шли в Telegram (>20 MB). Подмешиваем ID из tracks.
-    """
+    Подмешиваем google_drive_file_id / pCloud из tracks.py, GDRIVE_IDS_JSON и synthetic.
+  """
+    from music_sales.gdrive_ids import google_drive_file_id_for_song, load_gdrive_ids_dict
+
     synth = synthetic_song_row_for_song_id(song_id)
-    if not synth:
-        return row
     out = dict(row)
-    for key in ("google_drive_file_id", "pcloud_fileid"):
-        if str(out.get(key) or "").strip():
-            continue
-        val = synth.get(key)
-        if val is not None and str(val).strip():
-            out[key] = str(val).strip()
+    if synth:
+        # pCloud только из tracks; Drive ID — ниже из GDRIVE_IDS_JSON + tracks (env перекрывает tracks).
+        if not str(out.get("pcloud_fileid") or "").strip():
+            pid = synth.get("pcloud_fileid")
+            if pid is not None and str(pid).strip():
+                out["pcloud_fileid"] = str(pid).strip()
+
+    gids = load_gdrive_ids_dict()
+    gid = google_drive_file_id_for_song(out, gids)
+    if gid:
+        out["google_drive_file_id"] = gid
     return out
 
 

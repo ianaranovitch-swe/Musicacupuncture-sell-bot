@@ -224,6 +224,7 @@ def build_health_report() -> Dict[str, Any]:
 
     webhook_secret_set = bool((config.STRIPE_WEBHOOK_SECRET or "").strip())
     google_sa_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+    gdrive_ids_set = bool((config.GDRIVE_IDS_JSON or os.environ.get("GDRIVE_IDS_JSON") or "").strip())
     mini_secret_set = bool((config.MINIAPP_CHECKOUT_SECRET or "").strip())
     pay_token_set = bool((config.PAYMENTS_PROVIDER_TOKEN or "").strip())
     file_ids_set = bool((os.environ.get("FILE_IDS_JSON") or "").strip())
@@ -256,6 +257,7 @@ def build_health_report() -> Dict[str, Any]:
             "PAYMENTS_PROVIDER_TOKEN_set": pay_token_set,
             "FILE_IDS_JSON_set": file_ids_set,
             "GOOGLE_SERVICE_ACCOUNT_JSON_set": google_sa_set,
+            "GDRIVE_IDS_JSON_set": gdrive_ids_set,
             "GOOGLE_DRIVE_credentials_loaded": drive_credentials_available() if google_sa_set else False,
             "BACKEND_URL_host": urlparse((config.BACKEND_URL or "http://localhost").strip() or "http://localhost").netloc
             or "(empty)",
