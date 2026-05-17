@@ -282,9 +282,30 @@ def _deliver_mp3_for_website_song(
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
     sa_env_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+    drive_creds_ok = drive_credentials_available() if sa_env_set else False
     drive_failed = False
 
-    if gdrive_id and sa_env_set and drive_credentials_available():
+    logger.info(
+        "%s: gdrive_id=%s sa_env=%s drive_creds_ok=%s",
+        log_prefix,
+        f"…{gdrive_id[-8:]}" if len(gdrive_id) > 8 else (gdrive_id or "(none)"),
+        sa_env_set,
+        drive_creds_ok,
+    )
+
+    if gdrive_id and sa_env_set and not drive_creds_ok:
+        sa = service_account_client_email()
+        hint = (
+            "GOOGLE_SERVICE_ACCOUNT_JSON is set but the key did not load. "
+            "On Railway paste the full service account JSON as the variable value "
+            "(a path like secrets/credentials.json does not work — that folder is not in the deploy)."
+        )
+        if sa:
+            hint += f" When fixed, share Drive with {sa} (Viewer)."
+        logger.error("%s: %s", log_prefix, hint)
+        return jsonify({"error": "Google Drive credentials not loaded", "hint": hint}), 503
+
+    if gdrive_id and sa_env_set and drive_creds_ok:
         if use_head:
             drive_res = _head_mp3_from_google_drive(
                 gdrive_id,
@@ -302,12 +323,6 @@ def _deliver_mp3_for_website_song(
         drive_failed = True
         logger.warning(
             "%s: Google Drive не сработал — пробуем pCloud / Telegram (см. логи Drive выше)",
-            log_prefix,
-        )
-    elif gdrive_id and sa_env_set and not drive_credentials_available():
-        logger.error(
-            "%s: GOOGLE_SERVICE_ACCOUNT_JSON задан, но ключ не загрузился "
-            "(путь к файлу или JSON в Railway Variables)",
             log_prefix,
         )
     elif gdrive_id and not sa_env_set:
@@ -1143,7 +1158,7 @@ def create_app(
         stem = free_bonus_audio_path(root_path()).stem
         gdrive = _free_bonus_google_drive_file_id()
         tg_fid = _free_bonus_telegram_file_id()
-        has_drive = bool(gdrive and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+        has_drive = bool(gdrive and drive_credentials_available())
         if not has_drive and not tg_fid:
             logger.warning("free-track: нет google_drive_file_id и FILE_IDS_JSON для stem=%r", stem)
             return jsonify({"error": "Free track is not configured"}), 503
