@@ -35,24 +35,24 @@ def _test_payment_link_for_all_tracks() -> str | None:
 
 # Google Drive file IDs для website / Stripe download (все 18 MP3, включая бесплатный id 18).
 _BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
-    1: "1v4Tv0LGcgvlHEYDq4gTapVYnlbt5560O",
-    2: "1zwat55udeiJD5aEIpQ3YLJKGTYuKHGJI",
-    3: "12B0RmB4ViwJIi916Aowy32t7T5hTvqqi",
-    4: "1BH6Y2Ad8UrUrCrQoXW-eAl7f32QAaVFu",
-    5: "1Gpk8D-gfs6O2IoKthEVJ-Aj1KPwWNdIB",
-    6: "1hdM8b5UnImkSJAxfymO4pKeDneWlnuii",
-    7: "10mqVlA0bvt9SUTcwHIoJNzHujK-7-Bh6",
-    8: "1BeBfmzXkEJh4svFHNHzsFopUnzIs-eff",
-    9: "18lVS9P7ZbEKxAr1qta4WHeDr9lr5mtbt",
-    10: "1YK5IrCmThG9np6xVurr3EWa5vSaEUDyW",
-    11: "1v3r70B0mr7i_fJZltQS3LpRaJSChskjd",
-    12: "14J_-gDqrmhbAy--Z-2_5wuMqzNfVd1ur",
-    13: "10jWeAvLxS69qqZ7oyVcHorCuqTUe2FpV",
-    14: "1l9EjCgfLZ0910LsVRZzpmwy9bJDTsEN8",
-    15: "1v3kf1uH4kAva5WQZgmTVWNDk_QHCDpYZ",
-    16: "1nqBnWYr8EcJhVJTSP2BMQirx5gXie-2A",
-    17: "10GwbO5VBYUnvsCiLHDTKKDAFR_d-uVU7",
-    18: "1Ic-8UEK9o9B7X0f1Ve0r0fTxpg08iG84",
+    1: "1ETZn4Bg2n0ReiJ4cllzpI4jF_-OjOJro",  # Crownchakra-Browchakra-Throatchakra
+    2: "1poBC_dqm7fq-z2eSvnOp1tT9_EqMp11L",  # Estrogen
+    3: "18U7aD6pFXjHGW5OR_FqUYF-MM9L8ewKa",  # Heart
+    4: "180WzETIvoonJoRY8IW-take53bu07vk-",  # Heartchakra and Diaphragmchakra
+    5: "1769vIKWLaLkNyafZFL6CqMqF9ZSOje1G",  # Immunedefence
+    6: "1_horgcKeFR5TlmVkylgT5O9nwUCbyZ-Y",  # Kidney
+    7: "1BGpC9i8fONZpk9nrRoe73XrADO5xHjM8",  # Liver
+    8: "1mFVhJ7gUcvBTBPqAFgcIdOhXB6iSgA8K",  # Lungs
+    9: "17HLadREh9qfzwWHM9ep-LUv3s9-6C590",  # Minerals
+    10: "1XsBadTOeWQJJdUVZ4R30uFiZMDG92YXg",  # NO Alcohol
+    11: "11mGugzc2TktuDqHB6GTaxykgypt6TopB",  # NO Smoking
+    12: "1X7Sq4D43rM4or6G65yBTKR_1sGOCCioK",  # Rootchakra
+    13: "1YYttkfbwA3NgHl7-ibMHj1MMjd02hor-",  # Sacralchakra and Navelchakra
+    14: "12FiyEH4r56yKlJrrMAYaQWIje-glcOYP",  # Solarplexuschakra and Spleenchakra
+    15: "1qQpWoyUX5AjNdiC3sCPO47CSJkGvrtqx",  # Testosteron
+    16: "1uGRdHrJzUFJI-Mb4gzKpLpUwfJ5LOoKq",  # Vitamins
+    17: "174L-LFU3Jfc0T3_saEmzW6kv2uvPQ6VY",  # Sleep Best Silver Power
+    18: "1bzaqbQtVxGgTIEa59w_YyHw4BS_dPxlm",  # Super Feng Shui (free)
 }
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
