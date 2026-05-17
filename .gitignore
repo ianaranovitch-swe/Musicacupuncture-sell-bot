@@ -17,6 +17,7 @@ node_modules/
 Bot-Info.txt
 logs/
 secrets/
+secrets/credentials.json
 *.pem
 *.key
 credentials.json
