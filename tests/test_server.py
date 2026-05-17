@@ -718,6 +718,7 @@ def test_website_download_file_streams_via_google_drive_when_configured(mocker, 
         }
     }
     mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
     mocker.patch(
         "music_sales.server.drive_file_metadata",
         return_value=({"size": "8", "name": "track.mp3"}, None),
@@ -747,6 +748,74 @@ def test_website_download_file_streams_via_google_drive_when_configured(mocker, 
     assert resp.status_code == 200
     assert resp.data == b"gdrive!"
     assert "audio/mpeg" in (resp.headers.get("Content-Type") or "")
+
+
+def test_website_download_file_falls_back_to_telegram_when_drive_fails(mocker, tmp_path):
+    """Drive 403/ошибка → Telegram (для файлов <20 MB)."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    catalog_gd = {
+        "song1": {
+            "name": "Track",
+            "price_usd": 16,
+            "file": "songs/song1.mp3",
+            "google_drive_file_id": "gdrive_fail",
+        }
+    }
+    mocker.patch.dict(
+        os.environ,
+        {"FILE_IDS_JSON": json.dumps({"song1": "tg_file_id_small"})},
+        clear=False,
+    )
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
+    mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(None, "drive_http_403"),
+    )
+    mocker.patch(
+        "music_sales.server.resolve_telegram_file_download_url",
+        return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
+    )
+
+    class _FakeUpstream:
+        status_code = 200
+        headers = {"Content-Length": "4"}
+        closed = False
+
+        def iter_content(self, chunk_size=None):
+            yield b"tgok"
+
+        def close(self):
+            self.closed = True
+
+    fake_up = _FakeUpstream()
+    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_gd,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "song1"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert resp.data == b"tgok"
+    assert fake_up.closed
 
 
 def test_website_download_file_streams_via_pcloud_when_configured(mocker, tmp_path):

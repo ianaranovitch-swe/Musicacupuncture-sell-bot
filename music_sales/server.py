@@ -31,7 +31,12 @@ from music_sales.file_id_delivery import (
     load_file_ids_dict,
     resolve_telegram_file_download_url,
 )
-from music_sales.google_drive_delivery import drive_file_metadata, iter_drive_file_chunks
+from music_sales.google_drive_delivery import (
+    drive_credentials_available,
+    drive_file_metadata,
+    iter_drive_file_chunks,
+    service_account_client_email,
+)
 from music_sales.pcloud_delivery import resolve_pcloud_direct_download_url
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 
@@ -270,23 +275,39 @@ def _deliver_mp3_for_website_song(
     use_head: bool,
 ) -> Union[Response, Tuple[Any, int]]:
     """
-    Выдача MP3 на сайт: Google Drive → pCloud → Telegram (первый настроенный источник).
+    Выдача MP3 на сайт: Google Drive → pCloud → Telegram.
+
+    Если Drive настроен, но API отказал — не обрываем выдачу, пробуем запасные источники.
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
-    if gdrive_id and (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+    sa_env_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+
+    if gdrive_id and sa_env_set and drive_credentials_available():
         if use_head:
-            return _head_mp3_from_google_drive(
+            drive_res = _head_mp3_from_google_drive(
                 gdrive_id,
                 attachment_filename=attachment_filename,
                 log_prefix=f"{log_prefix} (Drive)",
             )
-        return _stream_mp3_from_google_drive(
-            gdrive_id,
-            attachment_filename=attachment_filename,
-            log_prefix=f"{log_prefix} (Drive)",
+        else:
+            drive_res = _stream_mp3_from_google_drive(
+                gdrive_id,
+                attachment_filename=attachment_filename,
+                log_prefix=f"{log_prefix} (Drive)",
+            )
+        if not isinstance(drive_res, tuple):
+            return drive_res
+        logger.warning(
+            "%s: Google Drive не сработал — пробуем pCloud / Telegram (см. логи Drive выше)",
+            log_prefix,
         )
-
-    if gdrive_id and not (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip():
+    elif gdrive_id and sa_env_set and not drive_credentials_available():
+        logger.error(
+            "%s: GOOGLE_SERVICE_ACCOUNT_JSON задан, но ключ не загрузился "
+            "(путь к файлу или JSON в Railway Variables)",
+            log_prefix,
+        )
+    elif gdrive_id and not sa_env_set:
         logger.warning(
             "%s: google_drive_file_id задан, но GOOGLE_SERVICE_ACCOUNT_JSON пуст — пробуем запасные источники",
             log_prefix,
@@ -323,8 +344,31 @@ def _deliver_mp3_for_website_song(
         return jsonify({"error": "Download is not available"}), 500
     tok = config.BOT_TOKEN.strip()
     if use_head:
-        return _head_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
-    return _stream_mp3_from_telegram(tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix)
+        tg_res = _head_mp3_from_telegram(
+            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+        )
+    else:
+        tg_res = _stream_mp3_from_telegram(
+            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+        )
+    if isinstance(tg_res, tuple) and gdrive_id:
+        try:
+            data = tg_res[0].get_json() or {}
+        except Exception:
+            data = {}
+        hint = str((data or {}).get("hint") or "")
+        if "20 MB" in hint:
+            sa = service_account_client_email()
+            extra = (
+                " Fix Google Drive on Railway: set GOOGLE_SERVICE_ACCOUNT_JSON "
+                "(file path or full JSON) and share the MP3 folder with the service account"
+            )
+            if sa:
+                extra += f" ({sa}, Viewer)."
+            else:
+                extra += "."
+            return jsonify({**(data or {}), "hint": hint + extra}), tg_res[1]
+    return tg_res
 
 
 def _stripe_metadata_as_plain_dict(raw: Any) -> dict[str, Any]:
