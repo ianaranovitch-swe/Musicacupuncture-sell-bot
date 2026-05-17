@@ -750,8 +750,8 @@ def test_website_download_file_streams_via_google_drive_when_configured(mocker, 
     assert "audio/mpeg" in (resp.headers.get("Content-Type") or "")
 
 
-def test_website_download_file_falls_back_to_telegram_when_drive_fails(mocker, tmp_path):
-    """Drive 403/ошибка → Telegram (для файлов <20 MB)."""
+def test_website_download_file_returns_drive_error_when_drive_fails_with_gdrive_id(mocker, tmp_path):
+    """Drive 403 при заданном google_drive_file_id — не Telegram (файлы >20 MB)."""
     import hashlib
     import hmac
     import time
@@ -777,25 +777,6 @@ def test_website_download_file_falls_back_to_telegram_when_drive_fails(mocker, t
         "music_sales.server.iter_drive_file_chunks",
         return_value=(None, "drive_http_403"),
     )
-    mocker.patch(
-        "music_sales.server.resolve_telegram_file_download_url",
-        return_value=("https://api.telegram.org/file/botFAKE/music/test.mp3", None),
-    )
-
-    class _FakeUpstream:
-        status_code = 200
-        headers = {"Content-Length": "4"}
-        closed = False
-
-        def iter_content(self, chunk_size=None):
-            yield b"tgok"
-
-        def close(self):
-            self.closed = True
-
-    fake_up = _FakeUpstream()
-    mocker.patch("music_sales.server.requests.get", return_value=fake_up)
-
     from music_sales.server import create_app
 
     app = create_app(
@@ -813,9 +794,9 @@ def test_website_download_file_falls_back_to_telegram_when_drive_fails(mocker, t
         f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
         follow_redirects=False,
     )
-    assert resp.status_code == 200
-    assert resp.data == b"tgok"
-    assert fake_up.closed
+    assert resp.status_code == 502
+    body = resp.get_json()
+    assert body and "Google Drive" in (body.get("error") or "")
 
 
 def test_website_download_file_streams_via_pcloud_when_configured(mocker, tmp_path):

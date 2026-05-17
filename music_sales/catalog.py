@@ -221,6 +221,25 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
     return out
 
 
+def enrich_song_row_delivery_ids(row: dict[str, Any], song_id: str) -> dict[str, Any]:
+    """
+    discover_songs() видит только файлы на диске — без google_drive_file_id из tracks.py.
+
+    На Railway в songs/ часто лежат MP3 → платные треки шли в Telegram (>20 MB). Подмешиваем ID из tracks.
+    """
+    synth = synthetic_song_row_for_song_id(song_id)
+    if not synth:
+        return row
+    out = dict(row)
+    for key in ("google_drive_file_id", "pcloud_fileid"):
+        if str(out.get(key) or "").strip():
+            continue
+        val = synth.get(key)
+        if val is not None and str(val).strip():
+            out[key] = str(val).strip()
+    return out
+
+
 def free_bonus_audio_path(base: Path | None = None) -> Path:
     """
     Путь к бесплатному бонус-треку на диске (тот же файл, что у бота по file_id).

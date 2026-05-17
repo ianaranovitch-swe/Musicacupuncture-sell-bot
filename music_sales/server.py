@@ -18,6 +18,7 @@ from flask import Flask, Response, jsonify, redirect, request, send_from_directo
 from music_sales import config
 from music_sales.catalog import (
     discover_songs,
+    enrich_song_row_delivery_ids,
     free_bonus_audio_path,
     project_root,
     resolve_song_id_by_audio_stem,
@@ -281,6 +282,7 @@ def _deliver_mp3_for_website_song(
     """
     gdrive_id = str(song.get("google_drive_file_id") or "").strip()
     sa_env_set = bool((config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip())
+    drive_failed = False
 
     if gdrive_id and sa_env_set and drive_credentials_available():
         if use_head:
@@ -297,6 +299,7 @@ def _deliver_mp3_for_website_song(
             )
         if not isinstance(drive_res, tuple):
             return drive_res
+        drive_failed = True
         logger.warning(
             "%s: Google Drive не сработал — пробуем pCloud / Telegram (см. логи Drive выше)",
             log_prefix,
@@ -333,6 +336,16 @@ def _deliver_mp3_for_website_song(
             log_prefix=f"{log_prefix} (pCloud)",
             upstream_label="pCloud CDN",
         )
+
+    if gdrive_id and drive_failed:
+        sa = service_account_client_email()
+        hint = (
+            "Google Drive could not serve this file. Share the MP3 folder with the service account "
+            "(Viewer) and check the file ID in tracks.py matches your Drive."
+        )
+        if sa:
+            hint += f" Service account email: {sa}."
+        return jsonify({"error": "Could not download from Google Drive", "hint": hint}), 502
 
     file_ids = load_file_ids_dict()
     tg_fid = file_id_for_song(song, file_ids)
@@ -528,12 +541,12 @@ def create_app(
         return songs_catalog if songs_catalog is not None else discover_songs()
 
     def _resolved_song_row(song_id: str) -> dict[str, Any] | None:
-        """Строка трека: тестовый songs_catalog, иначе discover_songs() + синтетика из tracks.py (Railway без MP3)."""
+        """Строка трека: discover_songs() + ID выдачи из tracks.py; без MP3 на диске — только synthetic."""
         if songs_catalog is not None:
             return songs_catalog.get(song_id)
         row = discover_songs().get(song_id)
         if row:
-            return row
+            return enrich_song_row_delivery_ids(row, song_id)
         return synthetic_song_row_for_song_id(song_id)
     domain = domain or config.DOMAIN
 
@@ -1031,7 +1044,8 @@ def create_app(
         exp = int(time.time()) + 300
         sig = _website_download_sign(song_id, exp)
         qs = urlencode({"song_id": song_id, "exp": exp, "sig": sig})
-        base = (request.url_root or "").rstrip("/") or domain
+        # Публичный URL из DOMAIN/BACKEND_URL, а не внутренний hostname Railway (request.url_root).
+        base = _stripe_public_origin().rstrip("/") or (request.url_root or "").rstrip("/") or (domain or "").rstrip("/")
         return f"{base}/website/download-file?{qs}"
 
     @app.route("/website/download-redirect", methods=["GET"])
