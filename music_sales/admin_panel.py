@@ -31,7 +31,12 @@ from music_sales import config
 from music_sales.admin_log import append_admin_log
 from music_sales.catalog import project_root
 from music_sales.file_id_delivery import _file_ids_json_path, load_file_ids_dict, load_file_ids_from_disk
-from music_sales.sales_log import read_sales_entries
+from music_sales.sales_log import (
+    FREE_GIFT_TRACK_TITLE,
+    count_free_gift_downloads,
+    free_gift_counting_started_label,
+    read_sales_entries,
+)
 from music_sales.stripe_track_products import create_product_and_payment_links, merge_file_id_json
 from music_sales.tracks_admin_persist import (
     append_extra_track,
@@ -519,7 +524,8 @@ async def _send_sales_stats(msg, uid: int) -> int:
 
     # Берём только продажи (бесплатные выдачи считаются отдельно).
     sales = [e for e in entries if str(e.get("event_type") or "sale") == "sale"]
-    free_downloads = sum(1 for e in entries if str(e.get("event_type") or "") == "free_download")
+    free_downloads = count_free_gift_downloads(entries)
+    free_since = free_gift_counting_started_label(entries)
 
     def _entry_dt(e: dict[str, Any]) -> datetime:
         raw = str(e.get("ts") or "").strip()
@@ -621,8 +627,10 @@ async def _send_sales_stats(msg, uid: int) -> int:
         f"{top_lines}\n\n"
         "📈 LAST 7 DAYS:\n"
         f"{last7_lines}\n\n"
-        "🎁 FREE DOWNLOADS:\n"
-        f"Total free tracks sent: {free_downloads}"
+        "🎁 FREE DOWNLOADS (Super Feng Shui):\n"
+        f"• All time: {free_downloads} downloads\n"
+        f"• Track: {FREE_GIFT_TRACK_TITLE}\n"
+        f"• Counting since: {free_since}"
     )
     _log(uid, "view_stats")
     await msg.reply_text(text[:4000], reply_markup=_main_menu_kb())

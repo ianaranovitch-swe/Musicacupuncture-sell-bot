@@ -1,23 +1,29 @@
 """
 Журнал продаж и бесплатных выдач для /admin → «Статистика».
 
-Поддержка Railway:
-- при старте можно загрузить JSON из SALES_LOG_JSON;
-- после каждой записи файл sales_log.json обновляется;
-- текущий JSON также кладётся в os.environ["SALES_LOG_JSON"] (в пределах процесса).
+Поддержка Railway (эфемерный диск):
+- при старте bootstrap_sales_log() объединяет sales_log.json и SALES_LOG_JSON;
+- после каждой записи файл и os.environ["SALES_LOG_JSON"] обновляются;
+- опционально ENABLE_SALES_LOG_RAILWAY_SYNC=1 пишет JSON в Variables Railway.
 """
 
 from __future__ import annotations
 
-import os
 import json
+import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 from urllib import request as urlrequest
 from urllib.error import URLError
-from typing import Any
 
 from music_sales.catalog import project_root
+
+logger = logging.getLogger(__name__)
+
+# Бесплатный подарок в боте (Super Feng Shui) — отдельная метрика в статистике.
+FREE_GIFT_TRACK_TITLE = "Divine sound Super Feng Shui from God"
 
 
 def _sales_path() -> Path:
@@ -36,25 +42,82 @@ def _load_sales_from_env() -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-def _read_entries() -> list[dict[str, Any]]:
-    """Основной источник — файл; если файла нет, берём env SALES_LOG_JSON."""
+def _read_entries_from_file() -> list[dict[str, Any]]:
     path = _sales_path()
-    if path.is_file():
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(raw, list):
-                return raw
-        except (json.JSONDecodeError, OSError):
-            pass
-    return _load_sales_from_env()
+    if not path.is_file():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(raw, list):
+            return raw
+    except (json.JSONDecodeError, OSError):
+        pass
+    return []
+
+
+def _entry_dedupe_key(e: dict[str, Any]) -> str:
+    """Ключ для слияния записей без дублей (файл + env после рестарта)."""
+    et = str(e.get("event_type") or "")
+    ts = str(e.get("ts") or "")
+    if et == "free_download":
+        return "|".join(
+            (
+                et,
+                ts,
+                str(e.get("telegram_user_id") or ""),
+                str(e.get("track_title") or ""),
+            )
+        )
+    tid = str(e.get("transaction_id") or e.get("session_id") or "")
+    return "|".join(
+        (
+            et,
+            ts,
+            tid,
+            str(e.get("track_title") or e.get("song_id") or ""),
+        )
+    )
+
+
+def _merge_entries(*lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for entries in lists:
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            merged[_entry_dedupe_key(e)] = e
+    out = list(merged.values())
+    out.sort(key=lambda row: str(row.get("ts") or ""))
+    return out
+
+
+def _read_entries() -> list[dict[str, Any]]:
+    """Файл + SALES_LOG_JSON: на Railway после рестарта счётчик не обнуляется."""
+    return _merge_entries(_read_entries_from_file(), _load_sales_from_env())
 
 
 def _write_entries(entries: list[dict[str, Any]]) -> None:
     """Пишем в файл, обновляем env процесса и (опционально) Railway Variables."""
     payload = json.dumps(entries, ensure_ascii=False, indent=2) + "\n"
-    _sales_path().write_text(payload, encoding="utf-8")
+    path = _sales_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="utf-8")
     os.environ["SALES_LOG_JSON"] = payload
     _sync_sales_log_to_railway(payload)
+
+
+def bootstrap_sales_log() -> int:
+    """
+    При старте бота/сервера: слить файл и SALES_LOG_JSON, сохранить обратно.
+    Возвращает число записей в журнале.
+    """
+    merged = _read_entries()
+    if merged:
+        _write_entries(merged)
+        logger.info("sales_log bootstrap: %d entries persisted (file + SALES_LOG_JSON)", len(merged))
+    else:
+        logger.info("sales_log bootstrap: empty log (counting starts on first sale/free gift)")
+    return len(merged)
 
 
 def _sync_sales_log_to_railway(payload: str) -> None:
@@ -109,12 +172,45 @@ def _sync_sales_log_to_railway(payload: str) -> None:
         with urlrequest.urlopen(req, timeout=10) as resp:
             raw = resp.read().decode("utf-8", errors="ignore")
             parsed = json.loads(raw)
-            # Railway может вернуть 200 c errors — считаем нефатальным, но это полезно для диагностики.
             if isinstance(parsed, dict) and parsed.get("errors"):
                 raise RuntimeError(str(parsed.get("errors")))
     except (URLError, OSError, RuntimeError, json.JSONDecodeError):
-        # Нефатально: продажи уже записаны локально.
         return
+
+
+def _is_free_gift_download(e: dict[str, Any]) -> bool:
+    if str(e.get("event_type") or "") != "free_download":
+        return False
+    title = str(e.get("track_title") or "").strip()
+    if not title:
+        return True
+    return title == FREE_GIFT_TRACK_TITLE
+
+
+def count_free_gift_downloads(entries: list[dict[str, Any]]) -> int:
+    return sum(1 for e in entries if _is_free_gift_download(e))
+
+
+def free_gift_counting_started_label(entries: list[dict[str, Any]]) -> str:
+    """Дата первой записи бесплатной выдачи (UTC) или подсказка, что счёт ещё не начался."""
+    times: list[datetime] = []
+    for e in entries:
+        if not _is_free_gift_download(e):
+            continue
+        raw = str(e.get("ts") or "").strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            times.append(dt)
+        except ValueError:
+            continue
+    if not times:
+        return "not started yet (first download will begin the count)"
+    first = min(times).astimezone(timezone.utc)
+    return first.strftime("%Y-%m-%d %H:%M UTC")
 
 
 def append_sale_event(
@@ -164,7 +260,7 @@ def append_free_download_event(*, telegram_user_id: int | None = None, track_tit
     row: dict[str, Any] = {
         "event_type": "free_download",
         "ts": now.isoformat(),
-        "track_title": track_title,
+        "track_title": track_title or FREE_GIFT_TRACK_TITLE,
         "date": now.strftime("%Y-%m-%d"),
         "time": now.strftime("%H:%M:%S"),
         "week": int(now.strftime("%V")),

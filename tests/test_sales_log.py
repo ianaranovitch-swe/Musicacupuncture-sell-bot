@@ -48,6 +48,68 @@ def test_read_sales_entries_fallback_to_env(monkeypatch, tmp_path):
     assert rows[0]["track_title"] == "X"
 
 
+def test_read_entries_merges_env_when_file_empty(monkeypatch, tmp_path):
+    """После рестарта Railway: пустой файл не затирает SALES_LOG_JSON."""
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    path = tmp_path / "sales_log.json"
+    path.write_text("[]\n", encoding="utf-8")
+    payload = json.dumps(
+        [
+            {
+                "event_type": "free_download",
+                "ts": "2026-05-01T10:00:00+00:00",
+                "track_title": "Divine sound Super Feng Shui from God",
+                "telegram_user_id": 1,
+            }
+        ]
+    )
+    monkeypatch.setenv("SALES_LOG_JSON", payload)
+    from music_sales.sales_log import read_sales_entries
+
+    rows = read_sales_entries()
+    assert len(rows) == 1
+    assert rows[0]["telegram_user_id"] == 1
+
+
+def test_bootstrap_sales_log_writes_merged_to_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.delenv("ENABLE_SALES_LOG_RAILWAY_SYNC", raising=False)
+    payload = json.dumps(
+        [
+            {
+                "event_type": "free_download",
+                "ts": "2026-05-02T12:00:00+00:00",
+                "track_title": "Divine sound Super Feng Shui from God",
+            }
+        ]
+    )
+    monkeypatch.setenv("SALES_LOG_JSON", payload)
+    from music_sales.sales_log import bootstrap_sales_log, read_sales_entries
+
+    n = bootstrap_sales_log()
+    assert n == 1
+    assert (tmp_path / "sales_log.json").is_file()
+    rows = read_sales_entries()
+    assert len(rows) == 1
+
+
+def test_count_free_gift_downloads_and_since_label(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.delenv("SALES_LOG_JSON", raising=False)
+    from music_sales.sales_log import (
+        append_free_download_event,
+        count_free_gift_downloads,
+        free_gift_counting_started_label,
+        read_sales_entries,
+    )
+
+    append_free_download_event(telegram_user_id=9, track_title="Divine sound Super Feng Shui from God")
+    rows = read_sales_entries()
+    assert count_free_gift_downloads(rows) == 1
+    since = free_gift_counting_started_label(rows)
+    assert "UTC" in since
+
+
 def test_append_free_download_event(monkeypatch, tmp_path):
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.delenv("SALES_LOG_JSON", raising=False)
