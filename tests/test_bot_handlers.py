@@ -105,6 +105,7 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
     context.bot.send_message = AsyncMock()
     context.bot.send_photo = AsyncMock()
     context.bot.send_animation = AsyncMock()
+    context.bot.send_media_group = AsyncMock()
 
     from music_sales.bot_handlers import ABOUT_VIDEO_SOUND_CB, send_about_michael
 
@@ -112,8 +113,14 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
 
     q.answer.assert_awaited_once()
     context.bot.send_animation.assert_awaited_once()
-    anim_markup = context.bot.send_animation.call_args.kwargs["reply_markup"]
-    assert anim_markup.inline_keyboard[0][0].callback_data == ABOUT_VIDEO_SOUND_CB
+    assert "reply_markup" not in context.bot.send_animation.call_args.kwargs
+    sound_btn_calls = [
+        c
+        for c in context.bot.send_message.await_args_list
+        if c.kwargs.get("reply_markup") is not None
+    ]
+    assert len(sound_btn_calls) >= 1
+    assert sound_btn_calls[0].kwargs["reply_markup"].inline_keyboard[0][0].callback_data == ABOUT_VIDEO_SOUND_CB
     context.bot.send_photo.assert_awaited_once()
     body_call = context.bot.send_message.await_args_list[-1]
     assert "Michael B. Johnsson" in body_call.kwargs["text"]

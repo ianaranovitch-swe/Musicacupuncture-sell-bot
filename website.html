@@ -966,6 +966,7 @@
       </div>
       <p class="modal-price" id="modal-price"></p>
       <div class="modal-actions">
+        <button type="button" class="btn-gold" id="modal-get-free" style="display: none;">🎁 Get Free Track</button>
         <button type="button" class="btn-gold" id="modal-buy-stripe">💳 Buy with Stripe</button>
         <button type="button" class="btn-klarna" id="modal-buy-klarna">💳 Pay with Klarna</button>
         <button type="button" class="btn-back-modal" id="modal-close">← Back to Catalog</button>
@@ -1378,12 +1379,15 @@
 
     var stripeBtn = document.getElementById("modal-buy-stripe");
     var klarnaBtn = document.getElementById("modal-buy-klarna");
+    var freeBtn = document.getElementById("modal-get-free");
     if (track.isFree) {
       stripeBtn.style.display = "none";
       klarnaBtn.style.display = "none";
+      if (freeBtn) freeBtn.style.display = "block";
     } else {
       stripeBtn.style.display = "block";
       klarnaBtn.style.display = "block";
+      if (freeBtn) freeBtn.style.display = "none";
       stripeBtn.textContent =
         currentCurrency === "SEK" ? "💳 Buy with Stripe (SEK)" : "💳 Buy with Stripe (USD)";
     }
@@ -1765,6 +1769,10 @@
   });
 
   document.getElementById("btn-download-free").addEventListener("click", handleFreeDownload);
+
+  document.getElementById("modal-get-free").addEventListener("click", function () {
+    startFreeTrackDownload({ allowRepeat: true });
+  });
 
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("track-modal").addEventListener("click", function (e) {

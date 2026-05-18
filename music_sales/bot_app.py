@@ -151,24 +151,28 @@ def build_application():
 
 
 def _register_handlers(application) -> None:
-    # Админ-диалог регистрируем первым, чтобы /admin стабильно перехватывался ConversationHandler.
-    application.add_handler(build_admin_conversation_handler())
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("about", about_command))
-    application.add_handler(CommandHandler("health", cmd_health))
+    # group 0 — публичные команды и callback (About / free track / reviews).
+    # group 1 — admin ConversationHandler, чтобы adm:* не перехватывал about:* и gift:*.
+    application.add_handler(CommandHandler("start", start), group=0)
+    application.add_handler(CommandHandler("help", help_command), group=0)
+    application.add_handler(CommandHandler("about", about_command), group=0)
+    application.add_handler(CommandHandler("health", cmd_health), group=0)
 
-    application.add_handler(CallbackQueryHandler(send_free_track, pattern=f"^{FREE_TRACK_CB}$"))
-    application.add_handler(CallbackQueryHandler(send_about_michael, pattern=f"^{ABOUT_MICHAEL_CB}$"))
-    application.add_handler(CallbackQueryHandler(about_video_sound_callback, pattern=f"^{ABOUT_VIDEO_SOUND_CB}$"))
+    application.add_handler(CallbackQueryHandler(send_free_track, pattern=f"^{FREE_TRACK_CB}$"), group=0)
+    application.add_handler(CallbackQueryHandler(send_about_michael, pattern=f"^{ABOUT_MICHAEL_CB}$"), group=0)
+    application.add_handler(CallbackQueryHandler(about_video_sound_callback, pattern=f"^{ABOUT_VIDEO_SOUND_CB}$"), group=0)
     application.add_handler(
         CallbackQueryHandler(
             reviews_callback,
             pattern=r"^reviews:",
-        )
+        ),
+        group=0,
     )
-    application.add_handler(PreCheckoutQueryHandler(pre_checkout))
-    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment))
+    application.add_handler(PreCheckoutQueryHandler(pre_checkout), group=0)
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment), group=0)
+
+    application.add_handler(build_admin_conversation_handler(), group=1)
+
     application.add_error_handler(_error_handler)
 
 

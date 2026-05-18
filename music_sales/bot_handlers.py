@@ -151,10 +151,18 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         ),
     )
 
+    # Каталог — до MP3, чтобы последним сообщением в чате был файл (фокус внизу у трека).
+    row = _miniapp_store_row()
+    if row:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Open the Music Store to explore the other tracks:",
+            reply_markup=InlineKeyboardMarkup([row]),
+        )
+
     file_ids = load_file_ids_dict()
     fid = file_ids.get(FREE_TRACK_TITLE)
     if not fid:
-        # Подсказка администратору: нужно загрузить файл через upload_songs.py.
         await context.bot.send_message(
             chat_id=chat_id,
             text="Sorry, the free track is not available right now. Please contact support.",
@@ -165,18 +173,9 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             document=fid,
             caption="🎁 Free bonus track — enjoy! 🙏",
         )
-        # Логируем бесплатную выдачу, чтобы видеть метрику FREE DOWNLOADS в /admin.
         append_free_download_event(
             telegram_user_id=int(chat_id),
             track_title=FREE_TRACK_TITLE,
-        )
-
-    row = _miniapp_store_row()
-    if row:
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="Open the Music Store to explore the other tracks:",
-            reply_markup=InlineKeyboardMarkup([row]),
         )
 
 async def _send_miniapp_store_opener_if_configured(
@@ -266,13 +265,14 @@ def _about_video_sound_markup() -> InlineKeyboardMarkup:
 
 
 async def _send_about_michael_icon_video(chat_id: int, context: ContextTypes.DEFAULT_TYPE, video_path: Path) -> None:
-    """Иконка бота (MP4): в Telegram — animation (без звука); кнопка — видео со звуком."""
+    """Иконка бота (MP4): animation без звука; кнопка звука — отдельным сообщением (надёжнее в Telegram)."""
     with video_path.open("rb") as video:
-        await context.bot.send_animation(
-            chat_id=chat_id,
-            animation=video,
-            reply_markup=_about_video_sound_markup(),
-        )
+        await context.bot.send_animation(chat_id=chat_id, animation=video)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="🔊 Tap below to play the icon video with sound:",
+        reply_markup=_about_video_sound_markup(),
+    )
 
 
 async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -280,13 +280,16 @@ async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAU
     query = update.callback_query
     if query is None:
         return
-    try:
-        await query.answer()
-    except Exception:
-        pass
     if query.message is None:
         return
     chat_id = query.message.chat_id
+    try:
+        await query.answer(text="Sending video with sound…")
+    except Exception:
+        try:
+            await query.answer()
+        except Exception:
+            pass
     video_path = existing_about_michael_video(_repo_root())
     if video_path is None:
         await context.bot.send_message(
