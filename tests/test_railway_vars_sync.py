@@ -46,6 +46,18 @@ def test_upsert_dual_services(monkeypatch):
     assert calls == ["w", "web"]
 
 
+def test_web_service_name_blocks_variable_writes(monkeypatch):
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "musicacupuncture-web")
+    monkeypatch.delenv("RAILWAY_VARIABLE_WRITES", raising=False)
+    assert rvs.railway_variable_writes_allowed() is False
+
+
+def test_worker_service_name_allows_variable_writes(monkeypatch):
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "sell-bot-worker")
+    monkeypatch.delenv("RAILWAY_VARIABLE_WRITES", raising=False)
+    assert rvs.railway_variable_writes_allowed() is True
+
+
 def test_sync_testimonials_triggers_redeploy_web(monkeypatch):
     monkeypatch.setenv("ENABLE_TESTIMONIALS_RAILWAY_SYNC", "1")
     monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")

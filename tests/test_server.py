@@ -549,11 +549,14 @@ def test_free_track_json_returns_file_url(tmp_path, mocker):
     assert "/free-track-file" in (body.get("url") or "")
     assert "api.telegram.org" not in (body.get("url") or "")
 
+    log_free = mocker.patch("music_sales.sales_log.append_free_download_event")
     file_resp = client.get("/free-track-file", follow_redirects=False)
     assert file_resp.status_code == 200
     assert file_resp.mimetype == "audio/mpeg"
     assert file_resp.data == b"\x00\x00\x00\x00"  # съедаем стрим — иначе finally/close может не вызваться
     assert fake_up.closed
+    log_free.assert_called_once()
+    assert log_free.call_args.kwargs.get("source") == "website"
 
 
 def test_free_track_file_falls_back_to_telegram_when_drive_fails(tmp_path, mocker):

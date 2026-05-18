@@ -46,6 +46,20 @@ def test_first_sentence_truncates_long_text():
     assert len(s) <= 50
 
 
+def test_bootstrap_testimonials_does_not_push_railway(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("ENABLE_TESTIMONIALS_RAILWAY_SYNC", "1")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "music_sales.testimonials_store.sync_testimonials_json_to_railway",
+        lambda p: calls.append(p),
+    )
+    from music_sales.testimonials_store import bootstrap_testimonials
+
+    bootstrap_testimonials()
+    assert calls == []
+
+
 def test_save_testimonials_writes_json_and_env(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "music_sales.testimonials_store._testimonials_path",

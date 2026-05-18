@@ -76,13 +76,18 @@ def _merge_testimonials_by_id(*lists: list[dict[str, Any]]) -> list[dict[str, An
     return sorted(by_id.values(), key=lambda x: int(x.get("id") or 0))
 
 
-def _persist_testimonials_json_and_env(items: list[dict[str, Any]]) -> None:
+def _persist_testimonials_json_and_env(
+    items: list[dict[str, Any]],
+    *,
+    push_railway: bool = False,
+) -> None:
     payload = json.dumps(items, ensure_ascii=False, indent=2) + "\n"
     path = _testimonials_json_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload, encoding="utf-8")
     os.environ["TESTIMONIALS_JSON"] = payload
-    sync_testimonials_json_to_railway(payload)
+    if push_railway:
+        sync_testimonials_json_to_railway(payload)
 
 
 def bootstrap_testimonials() -> int:
@@ -95,7 +100,7 @@ def bootstrap_testimonials() -> int:
         _load_testimonials_from_env(),
     )
     if merged:
-        _persist_testimonials_json_and_env(merged)
+        _persist_testimonials_json_and_env(merged, push_railway=False)
         logger.info("testimonials bootstrap: %d reviews (file + TESTIMONIALS_JSON)", len(merged))
     else:
         logger.info("testimonials bootstrap: no reviews found")
@@ -162,7 +167,7 @@ def save_testimonials(items: list[dict[str, Any]]) -> None:
     lines.append("]")
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
-    _persist_testimonials_json_and_env(items)
+    _persist_testimonials_json_and_env(items, push_railway=True)
     reload_testimonials_module()
 
 

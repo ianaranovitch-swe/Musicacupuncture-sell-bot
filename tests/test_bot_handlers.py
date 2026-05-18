@@ -181,9 +181,12 @@ async def test_send_free_track_uses_file_id_and_sends_document(mocker):
     context.bot.send_document = AsyncMock()
     context.bot.send_photo = AsyncMock()
 
+    log_free = mocker.patch("music_sales.bot_handlers.append_free_download_event")
+
     await send_free_track(update, context)
 
     context.bot.send_document.assert_awaited_once()
+    log_free.assert_called_once()
     kwargs = context.bot.send_document.call_args.kwargs
     assert kwargs["chat_id"] == 777
     assert kwargs["document"] == "doc_file_id_123"

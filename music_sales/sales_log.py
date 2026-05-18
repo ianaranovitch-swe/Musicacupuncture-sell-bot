@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -96,14 +97,15 @@ def _read_entries() -> list[dict[str, Any]]:
     return _merge_entries(_read_entries_from_file(), _load_sales_from_env())
 
 
-def _write_entries(entries: list[dict[str, Any]]) -> None:
+def _write_entries(entries: list[dict[str, Any]], *, push_railway: bool = True) -> None:
     """Пишем в файл, обновляем env процесса и (опционально) Railway Variables."""
     payload = json.dumps(entries, ensure_ascii=False, indent=2) + "\n"
     path = _sales_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(payload, encoding="utf-8")
     os.environ["SALES_LOG_JSON"] = payload
-    _sync_sales_log_to_railway(payload)
+    if push_railway:
+        _sync_sales_log_to_railway(payload)
 
 
 def bootstrap_sales_log() -> int:
@@ -113,7 +115,7 @@ def bootstrap_sales_log() -> int:
     """
     merged = _read_entries()
     if merged:
-        _write_entries(merged)
+        _write_entries(merged, push_railway=False)
         logger.info("sales_log bootstrap: %d entries persisted (file + SALES_LOG_JSON)", len(merged))
     else:
         logger.info("sales_log bootstrap: empty log (counting starts on first sale/free gift)")
@@ -126,12 +128,17 @@ def _sync_sales_log_to_railway(payload: str) -> None:
 
     Включается только когда явно задано:
     - ENABLE_SALES_LOG_RAILWAY_SYNC=1
+    - RAILWAY_VARIABLE_WRITES=1 на worker (не на web при старте)
     - RAILWAY_API_TOKEN
     - RAILWAY_PROJECT_ID
     - RAILWAY_ENVIRONMENT_ID
     - RAILWAY_SERVICE_ID
     """
     if (os.environ.get("ENABLE_SALES_LOG_RAILWAY_SYNC") or "").strip() != "1":
+        return
+    from music_sales.railway_vars_sync import railway_variable_writes_allowed
+
+    if not railway_variable_writes_allowed():
         return
     token = (os.environ.get("RAILWAY_API_TOKEN") or "").strip()
     project_id = (os.environ.get("RAILWAY_PROJECT_ID") or "").strip()
@@ -178,13 +185,19 @@ def _sync_sales_log_to_railway(payload: str) -> None:
         return
 
 
+def _normalize_track_title(name: str) -> str:
+    s = str(name or "").lower()
+    s = s.replace("-", " ").replace("—", " ")
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def _is_free_gift_download(e: dict[str, Any]) -> bool:
     if str(e.get("event_type") or "") != "free_download":
         return False
-    title = str(e.get("track_title") or "").strip()
+    title = _normalize_track_title(str(e.get("track_title") or ""))
     if not title:
         return True
-    return title == FREE_GIFT_TRACK_TITLE
+    return title == _normalize_track_title(FREE_GIFT_TRACK_TITLE)
 
 
 def count_free_gift_downloads(entries: list[dict[str, Any]]) -> int:
@@ -253,14 +266,20 @@ def append_sale_event(
     _write_entries(entries)
 
 
-def append_free_download_event(*, telegram_user_id: int | None = None, track_title: str = "") -> None:
-    """Лог бесплатной выдачи трека (для блока FREE DOWNLOADS в статистике)."""
+def append_free_download_event(
+    *,
+    telegram_user_id: int | None = None,
+    track_title: str = "",
+    source: str = "bot",
+) -> None:
+    """Лог бесплатной выдачи трека (бот или сайт → /admin статистика FREE DOWNLOADS)."""
     entries = _read_entries()
     now = datetime.now(timezone.utc)
     row: dict[str, Any] = {
         "event_type": "free_download",
         "ts": now.isoformat(),
         "track_title": track_title or FREE_GIFT_TRACK_TITLE,
+        "source": (source or "bot").strip() or "bot",
         "date": now.strftime("%Y-%m-%d"),
         "time": now.strftime("%H:%M:%S"),
         "week": int(now.strftime("%V")),
@@ -271,6 +290,12 @@ def append_free_download_event(*, telegram_user_id: int | None = None, track_tit
         row["telegram_user_id"] = int(telegram_user_id)
     entries.append(row)
     _write_entries(entries)
+    logger.info(
+        "free_download logged: user_id=%s source=%s total_free=%d",
+        telegram_user_id,
+        row["source"],
+        count_free_gift_downloads(entries),
+    )
 
 
 def read_sales_entries() -> list[dict[str, Any]]:

@@ -38,6 +38,26 @@ def railway_credentials_configured() -> bool:
     return bool(_railway_api_token() and _railway_project_id() and _railway_environment_id())
 
 
+def railway_variable_writes_allowed() -> bool:
+    """
+    Запись в Railway Variables через API — только worker (бот), не web при старте.
+
+    На сервисе web: RAILWAY_VARIABLE_WRITES=0 или не задавать ENABLE_*_RAILWAY_SYNC / RAILWAY_API_TOKEN.
+    На worker: RAILWAY_VARIABLE_WRITES=1 (или имя сервиса содержит worker/bot).
+    """
+    explicit = (os.environ.get("RAILWAY_VARIABLE_WRITES") or "").strip().lower()
+    if explicit in ("0", "false", "no"):
+        return False
+    if explicit in ("1", "true", "yes"):
+        return True
+    svc = (os.environ.get("RAILWAY_SERVICE_NAME") or "").strip().lower()
+    if not svc:
+        return True
+    if "web" in svc and "worker" not in svc and "bot" not in svc:
+        return False
+    return True
+
+
 def railway_use_shared_variables() -> bool:
     """Shared Variables (без serviceId в API) — одна переменная на весь проект."""
     return (os.environ.get("RAILWAY_USE_SHARED_VARIABLES") or "").strip() == "1"
@@ -164,10 +184,10 @@ def redeploy_railway_service(service_id: str) -> bool:
 
 
 def sync_testimonials_json_to_railway(payload: str) -> None:
-    """
-    После save_testimonials: TESTIMONIALS_JSON в shared или web+worker, затем redeploy web.
-    """
+    """После save_testimonials на worker: TESTIMONIALS_JSON + опционально redeploy web."""
     if not _sync_flag_enabled("ENABLE_TESTIMONIALS_RAILWAY_SYNC"):
+        return
+    if not railway_variable_writes_allowed():
         return
     if not railway_credentials_configured():
         logger.warning("ENABLE_TESTIMONIALS_RAILWAY_SYNC=1 but Railway API ids/token missing")

@@ -257,6 +257,7 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         append_free_download_event(
             telegram_user_id=int(chat_id),
             track_title=FREE_TRACK_TITLE,
+            source="bot",
         )
 
 async def _send_miniapp_store_opener_if_configured(

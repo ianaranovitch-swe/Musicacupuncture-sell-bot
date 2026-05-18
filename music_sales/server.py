@@ -1319,6 +1319,10 @@ def create_app(
             use_head=request.method == "HEAD",
             telegram_fallback_on_drive_issue=True,
         )
+        if request.method == "GET" and not isinstance(res, tuple):
+            from music_sales.sales_log import append_free_download_event
+
+            append_free_download_event(source="website")
         if isinstance(res, tuple):
             return res[0], res[1]
         return res
