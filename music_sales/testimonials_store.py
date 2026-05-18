@@ -4,17 +4,102 @@
 
 from __future__ import annotations
 
-import ast
 import importlib
+import json
+import logging
+import os
 import re
 from pathlib import Path
 from typing import Any
-
 from music_sales.catalog import project_root
+from music_sales.railway_vars_sync import sync_testimonials_json_to_railway
+
+logger = logging.getLogger(__name__)
 
 
 def _testimonials_path() -> Path:
     return project_root() / "testimonials.py"
+
+
+def _testimonials_json_path() -> Path:
+    return project_root() / "testimonials.json"
+
+
+def _load_testimonials_from_env() -> list[dict[str, Any]]:
+    raw = (os.environ.get("TESTIMONIALS_JSON") or "").strip()
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [dict(x) for x in data if isinstance(x, dict)]
+
+
+def _read_testimonials_json_file() -> list[dict[str, Any]]:
+    path = _testimonials_json_path()
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [dict(x) for x in data if isinstance(x, dict)]
+
+
+def _load_testimonials_from_py() -> list[dict[str, Any]]:
+    try:
+        from testimonials import testimonials as data
+    except ImportError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [dict(x) for x in data if isinstance(x, dict)]
+
+
+def _merge_testimonials_by_id(*lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Поздние источники перекрывают ранние (env/json важнее py после bootstrap)."""
+    by_id: dict[int, dict[str, Any]] = {}
+    for items in lists:
+        for item in items:
+            try:
+                tid = int(item.get("id", -1))
+            except (TypeError, ValueError):
+                continue
+            if tid < 0:
+                continue
+            by_id[tid] = dict(item)
+    return sorted(by_id.values(), key=lambda x: int(x.get("id") or 0))
+
+
+def _persist_testimonials_json_and_env(items: list[dict[str, Any]]) -> None:
+    payload = json.dumps(items, ensure_ascii=False, indent=2) + "\n"
+    path = _testimonials_json_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="utf-8")
+    os.environ["TESTIMONIALS_JSON"] = payload
+    sync_testimonials_json_to_railway(payload)
+
+
+def bootstrap_testimonials() -> int:
+    """
+    При старте бота/сервера: слить testimonials.py, testimonials.json и TESTIMONIALS_JSON.
+    """
+    merged = _merge_testimonials_by_id(
+        _load_testimonials_from_py(),
+        _read_testimonials_json_file(),
+        _load_testimonials_from_env(),
+    )
+    if merged:
+        _persist_testimonials_json_and_env(merged)
+        logger.info("testimonials bootstrap: %d reviews (file + TESTIMONIALS_JSON)", len(merged))
+    else:
+        logger.info("testimonials bootstrap: no reviews found")
+    return len(merged)
 
 
 def _normalize_track_key(name: str) -> str:
@@ -32,14 +117,12 @@ def reload_testimonials_module() -> None:
 
 
 def load_all_testimonials() -> list[dict[str, Any]]:
-    """Все отзывы из файла (включая скрытые)."""
-    try:
-        from testimonials import testimonials as data
-    except ImportError:
-        return []
-    if not isinstance(data, list):
-        return []
-    return [dict(x) for x in data if isinstance(x, dict)]
+    """Все отзывы (py + json + TESTIMONIALS_JSON), включая скрытые."""
+    return _merge_testimonials_by_id(
+        _load_testimonials_from_py(),
+        _read_testimonials_json_file(),
+        _load_testimonials_from_env(),
+    )
 
 
 def load_visible_testimonials() -> list[dict[str, Any]]:
@@ -79,6 +162,7 @@ def save_testimonials(items: list[dict[str, Any]]) -> None:
     lines.append("]")
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
+    _persist_testimonials_json_and_env(items)
     reload_testimonials_module()
 
 

@@ -15,6 +15,12 @@ def test_load_visible_testimonials_has_ten():
     assert len(items) >= 10
 
 
+def test_three_reviews_have_four_stars():
+    items = load_visible_testimonials()
+    four_star = [t for t in items if int(t.get("rating") or 0) == 4]
+    assert len(four_star) == 3
+
+
 def test_find_testimonials_for_track_heart():
     found = find_testimonials_for_track("Divine sound Heart from God")
     assert len(found) == 1
@@ -40,10 +46,14 @@ def test_first_sentence_truncates_long_text():
     assert len(s) <= 50
 
 
-def test_save_testimonials_roundtrip(tmp_path, monkeypatch):
+def test_save_testimonials_writes_json_and_env(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "music_sales.testimonials_store._testimonials_path",
         lambda: tmp_path / "testimonials.py",
+    )
+    monkeypatch.setattr(
+        "music_sales.testimonials_store._testimonials_json_path",
+        lambda: tmp_path / "testimonials.json",
     )
     save_testimonials(
         [
@@ -61,3 +71,8 @@ def test_save_testimonials_roundtrip(tmp_path, monkeypatch):
     text = (tmp_path / "testimonials.py").read_text(encoding="utf-8")
     assert '"visible": False' in text
     assert "Updated" in text
+    import json
+    import os
+
+    assert json.loads((tmp_path / "testimonials.json").read_text(encoding="utf-8"))[0]["text"] == "Updated"
+    assert "Updated" in os.environ.get("TESTIMONIALS_JSON", "")

@@ -42,6 +42,7 @@ from music_sales.google_drive_delivery import (
 from music_sales.pcloud_delivery import resolve_pcloud_direct_download_url
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 from music_sales.sales_log import bootstrap_sales_log
+from music_sales.testimonials_store import bootstrap_testimonials
 
 logger = logging.getLogger(__name__)
 
@@ -1643,5 +1644,6 @@ def create_app(
         return "Payment cancelled."
 
     bootstrap_sales_log()
+    bootstrap_testimonials()
 
     return app

@@ -11,10 +11,11 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from music_sales import config
 from music_sales.admin_log import append_admin_log
+from music_sales.admin_panel import is_admin
 from music_sales.testimonials_store import (
     find_testimonial_by_id,
+    format_telegram_review,
     load_all_testimonials,
     next_testimonial_id,
     save_testimonials,
@@ -31,9 +32,7 @@ RV_DELETE_ID = "rv_delete_id"
 
 
 def _is_admin(user_id: int | None) -> bool:
-    if user_id is None:
-        return False
-    return int(user_id) in config.admin_telegram_ids()
+    return is_admin(user_id)
 
 
 def _log(uid: int, action: str, detail: dict | None = None) -> None:
@@ -65,7 +64,8 @@ async def show_reviews_admin_menu(message, uid: int) -> None:
     _log(uid, "reviews_admin_open")
     await message.reply_text(
         "⭐ Manage Reviews\n\n"
-        "Reviews are stored in testimonials.py. Hidden reviews (🚫) are not shown on the website or in the bot.",
+        "Reviews sync to testimonials.json and TESTIMONIALS_JSON (set the same env on bot + web on Railway). "
+        "Hidden reviews (🚫) are not shown on the website or in the bot.",
         reply_markup=_reviews_menu_kb(),
     )
 
@@ -150,6 +150,46 @@ async def testimonials_admin_callback(update: Update, context: ContextTypes.DEFA
         await q.message.reply_text("Delete cancelled.", reply_markup=_reviews_menu_kb())
         return _ST_MAIN
 
+    if data == "adm:rv:save_draft":
+        draft = context.user_data.get("rv_draft") or {}
+        text = str(draft.get("text") or "").strip()
+        if not text or not draft.get("name"):
+            await q.message.reply_text("Nothing to save. Start again with Add new review.", reply_markup=_reviews_menu_kb())
+            context.user_data.pop(RV_STEP, None)
+            context.user_data.pop("rv_draft", None)
+            return _ST_MAIN
+        items = load_all_testimonials()
+        new_id = next_testimonial_id(items)
+        items.append(
+            {
+                "id": new_id,
+                "name": draft.get("name", ""),
+                "city": draft.get("city", ""),
+                "track": draft.get("track", ""),
+                "rating": int(draft.get("rating") or 5),
+                "visible": True,
+                "text": text,
+            }
+        )
+        save_testimonials(items)
+        context.user_data.pop(RV_STEP, None)
+        context.user_data.pop("rv_draft", None)
+        _log(uid or 0, "review_add", {"id": new_id})
+        await q.message.reply_text(
+            f"✅ Saved review #{new_id}.\n"
+            "Bot: updated immediately.\n"
+            "Website: updates after Railway sync + web redeploy "
+            "(ENABLE_TESTIMONIALS_RAILWAY_SYNC=1, shared or dual service ids).",
+            reply_markup=_reviews_menu_kb(),
+        )
+        return _ST_MAIN
+
+    if data == "adm:rv:cancel_draft":
+        context.user_data.pop(RV_STEP, None)
+        context.user_data.pop("rv_draft", None)
+        await q.message.reply_text("Add review cancelled.", reply_markup=_reviews_menu_kb())
+        return _ST_MAIN
+
     return _ST_MAIN
 
 
@@ -187,24 +227,28 @@ async def testimonials_admin_message(update: Update, context: ContextTypes.DEFAU
         return _ST_MAIN
 
     if step == "add_text":
-        items = load_all_testimonials()
-        new_id = next_testimonial_id(items)
-        items.append(
-            {
-                "id": new_id,
-                "name": draft.get("name", ""),
-                "city": draft.get("city", ""),
-                "track": draft.get("track", ""),
-                "rating": 5,
-                "visible": True,
-                "text": text,
-            }
+        draft["text"] = text
+        draft["rating"] = 5
+        context.user_data[RV_STEP] = "add_confirm"
+        preview_item = {
+            "id": 0,
+            "name": draft.get("name", ""),
+            "city": draft.get("city", ""),
+            "track": draft.get("track", ""),
+            "rating": draft.get("rating", 5),
+            "text": text,
+        }
+        preview = format_telegram_review(preview_item, index=1, total=1)
+        kb = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("💾 Save new review", callback_data="adm:rv:save_draft")],
+                [InlineKeyboardButton("Cancel", callback_data="adm:rv:cancel_draft")],
+            ]
         )
-        save_testimonials(items)
-        context.user_data.pop(RV_STEP, None)
-        context.user_data.pop("rv_draft", None)
-        _log(uid, "review_add", {"id": new_id})
-        await update.message.reply_text(f"✅ Added review #{new_id}.", reply_markup=_reviews_menu_kb())
+        await update.message.reply_text(
+            "Preview — tap Save to store this review in the bot and website:\n\n" + preview,
+            reply_markup=kb,
+        )
         return _ST_MAIN
 
     if step == "edit_pick":

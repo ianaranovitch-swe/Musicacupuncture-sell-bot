@@ -267,12 +267,9 @@ async def offer_admin_reply_keyboard(
     uid = update.effective_user.id if update.effective_user else None
     if not is_admin(uid):
         return
-    if context.user_data.get("admin_bottom_kb_shown"):
-        return
-    context.user_data["admin_bottom_kb_shown"] = True
     await context.bot.send_message(
         chat_id=update.effective_message.chat_id,
-        text="Admin: tap 🔐 Admin at the bottom of the screen (or type /admin).",
+        text="🔐 Admin — tap the button below the message field (or type /admin).",
         reply_markup=admin_reply_keyboard(),
     )
 
@@ -286,11 +283,11 @@ async def admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         await update.message.reply_text("⛔️ Access denied")
         return ConversationHandler.END
     _log(uid, "admin_open")
-    await offer_admin_reply_keyboard(update, context)
     await update.message.reply_text(
         "🔐 Admin panel\nChoose an action:",
         reply_markup=_main_menu_kb(),
     )
+    await offer_admin_reply_keyboard(update, context)
     return ST_MAIN
 
 

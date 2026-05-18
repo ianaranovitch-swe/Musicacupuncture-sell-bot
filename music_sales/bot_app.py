@@ -34,6 +34,7 @@ from music_sales.buy_payments import pre_checkout, successful_payment
 from music_sales.health_report import cmd_health
 from music_sales.logging_setup import setup_logging
 from music_sales.sales_log import bootstrap_sales_log
+from music_sales.testimonials_store import bootstrap_testimonials
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +252,7 @@ def main() -> None:
         )
     _log_worker_identity()
     bootstrap_sales_log()
+    bootstrap_testimonials()
     try:
         _log_webhook_preflight(config.BOT_TOKEN)
         application = build_application().build()

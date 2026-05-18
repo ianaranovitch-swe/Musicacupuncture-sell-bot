@@ -330,12 +330,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if user is not None:
         logger.info("/start from user_id=%s username=%s", user.id, user.username or "-")
         await notify_owner_about_visitor(context, user)
-    if user is not None and is_admin(user.id):
-        await offer_admin_reply_keyboard(update, context)
     if not _miniapp_store_row():
         await update.message.reply_text(
             "Music Store is not configured yet. Ask admin to set MINIAPP_URL (HTTPS) and BACKEND_URL."
         )
+    if user is not None and is_admin(user.id):
+        await offer_admin_reply_keyboard(update, context)
 
 
 def _about_reply_parameters(update: Update) -> ReplyParameters | None:

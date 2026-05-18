@@ -27,7 +27,7 @@ testimonials: list[dict] = [
         "name": "Anna K.",
         "city": "Göteborg",
         "track": "Divine sound Immunedefence from God",
-        "rating": 5,
+        "rating": 4,
         "visible": True,
         "text": (
             "I started listening to the Immune Defence track when I felt a cold coming on. I was skeptical at first, "
@@ -67,7 +67,7 @@ testimonials: list[dict] = [
         "name": "Johan B.",
         "city": "Västerås",
         "track": "Divine sound Liver from God",
-        "rating": 5,
+        "rating": 4,
         "visible": True,
         "text": (
             "After years of not taking care of myself I decided to make a change. The Liver track became part of my daily "
@@ -121,7 +121,7 @@ testimonials: list[dict] = [
         "name": "Thomas A.",
         "city": "Helsingborg",
         "track": "Divine sound Testosteron from God",
-        "rating": 5,
+        "rating": 4,
         "visible": True,
         "text": (
             "At 52 I felt my energy and drive fading. The gym sessions were getting harder and motivation was low. "
