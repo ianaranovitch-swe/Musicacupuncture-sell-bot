@@ -54,9 +54,12 @@
       font-weight: 600;
     }
     .about-icon-video-wrap {
+      position: relative;
       display: flex;
       justify-content: center;
       margin: 0 auto 24px;
+      width: 100%;
+      max-width: 400px;
     }
     .about-icon-video {
       width: 100%;
@@ -65,6 +68,34 @@
       border-radius: 16px;
       border: 2px solid var(--card-border);
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .about-icon-video-sound-btn {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 2;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid var(--card-border);
+      background: rgba(26, 5, 51, 0.88);
+      color: var(--gold);
+      font-size: 1.2rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .about-icon-video-sound-btn:hover {
+      background: rgba(45, 15, 80, 0.95);
+      transform: scale(1.06);
+    }
+    .about-icon-video-sound-btn.is-on {
+      border-color: var(--gold);
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
     }
     .portraits {
       display: flex;
@@ -103,8 +134,9 @@
     <a class="back" href="miniapp.html" style="margin-left: 12px;">Music Store</a>
     <h1>About Michael</h1>
     <p class="subtitle">Founder &amp; President of MusicAcupuncture®</p>
-    <div class="about-icon-video-wrap">
+    <div class="about-icon-video-wrap" id="about-icon-video-wrap">
       <video
+        id="about-icon-video"
         class="about-icon-video"
         autoplay
         loop
@@ -115,6 +147,15 @@
       >
         <source src="assets/michael.mp4" type="video/mp4" />
       </video>
+      <button
+        type="button"
+        class="about-icon-video-sound-btn"
+        aria-pressed="false"
+        aria-label="Turn sound on"
+        title="Turn sound on"
+      >
+        <span class="about-icon-video-sound-icon" aria-hidden="true">🔇</span>
+      </button>
     </div>
     <div class="portraits">
       <img class="portrait" src="assets/about-michael.png" alt="Michael B. Johnsson, founder of MusicAcupuncture" />
@@ -140,5 +181,32 @@
       Founder &amp; President of MusicAcupuncture®
     </div>
   </div>
+  <script>
+    (function () {
+      var wrap = document.getElementById("about-icon-video-wrap");
+      if (!wrap) return;
+      var video = wrap.querySelector(".about-icon-video");
+      var btn = wrap.querySelector(".about-icon-video-sound-btn");
+      if (!video || !btn) return;
+      function sync() {
+        var on = !video.muted;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.setAttribute("aria-label", on ? "Turn sound off" : "Turn sound on");
+        btn.title = on ? "Turn sound off" : "Turn sound on";
+        var icon = btn.querySelector(".about-icon-video-sound-icon");
+        if (icon) icon.textContent = on ? "\uD83D\uDD0A" : "\uD83D\uDD07";
+      }
+      btn.addEventListener("click", function () {
+        video.muted = !video.muted;
+        if (!video.muted) {
+          video.volume = 1;
+          video.play().catch(function () {});
+        }
+        sync();
+      });
+      sync();
+    })();
+  </script>
 </body>
 </html>

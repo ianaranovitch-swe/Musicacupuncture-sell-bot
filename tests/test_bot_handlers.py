@@ -106,15 +106,46 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
     context.bot.send_photo = AsyncMock()
     context.bot.send_animation = AsyncMock()
 
-    from music_sales.bot_handlers import send_about_michael
+    from music_sales.bot_handlers import ABOUT_VIDEO_SOUND_CB, send_about_michael
 
     await send_about_michael(update, context)
 
     q.answer.assert_awaited_once()
     context.bot.send_animation.assert_awaited_once()
+    anim_markup = context.bot.send_animation.call_args.kwargs["reply_markup"]
+    assert anim_markup.inline_keyboard[0][0].callback_data == ABOUT_VIDEO_SOUND_CB
     context.bot.send_photo.assert_awaited_once()
     body_call = context.bot.send_message.await_args_list[-1]
     assert "Michael B. Johnsson" in body_call.kwargs["text"]
+
+
+@pytest.mark.asyncio
+async def test_about_video_sound_callback_sends_video(mocker, tmp_path):
+    video = tmp_path / "assets" / "michael.mp4"
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"mp4")
+    mocker.patch("music_sales.bot_handlers._repo_root", return_value=tmp_path)
+    mocker.patch(
+        "music_sales.bot_handlers.existing_about_michael_video",
+        return_value=video,
+    )
+    update = MagicMock()
+    q = MagicMock()
+    q.answer = AsyncMock()
+    q.message = MagicMock()
+    q.message.chat_id = 99
+    update.callback_query = q
+    context = MagicMock()
+    context.bot.send_message = AsyncMock()
+    context.bot.send_video = AsyncMock()
+
+    from music_sales.bot_handlers import about_video_sound_callback
+
+    await about_video_sound_callback(update, context)
+
+    q.answer.assert_awaited_once()
+    context.bot.send_video.assert_awaited_once()
+    assert "sound" in context.bot.send_video.call_args.kwargs["caption"].lower()
 
 
 @pytest.mark.asyncio

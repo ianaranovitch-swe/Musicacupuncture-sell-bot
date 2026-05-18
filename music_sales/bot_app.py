@@ -20,8 +20,10 @@ from music_sales import config
 from music_sales.admin_panel import build_admin_conversation_handler
 from music_sales.bot_handlers import (
     ABOUT_MICHAEL_CB,
+    ABOUT_VIDEO_SOUND_CB,
     FREE_TRACK_CB,
     about_command,
+    about_video_sound_callback,
     help_command,
     send_about_michael,
     send_free_track,
@@ -157,6 +159,7 @@ def _register_handlers(application) -> None:
 
     application.add_handler(CallbackQueryHandler(send_free_track, pattern=f"^{FREE_TRACK_CB}$"))
     application.add_handler(CallbackQueryHandler(send_about_michael, pattern=f"^{ABOUT_MICHAEL_CB}$"))
+    application.add_handler(CallbackQueryHandler(about_video_sound_callback, pattern=f"^{ABOUT_VIDEO_SOUND_CB}$"))
     application.add_handler(
         CallbackQueryHandler(
             reviews_callback,

@@ -42,6 +42,7 @@ FREE_TRACK_CB = "gift:free_track"
 FREE_TRACK_START_PAYLOAD = "gift_free_track"
 ABOUT_MICHAEL_CB = "about:michael"
 ABOUT_MICHAEL_BUTTON_TEXT = "About Michael — Founder of MusicAcupuncture®"
+ABOUT_VIDEO_SOUND_CB = "about:video_sound"
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
@@ -257,10 +258,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+def _about_video_sound_markup() -> InlineKeyboardMarkup:
+    """Кнопка под беззвучной анимацией — отдельное видео со звуком."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔊 Turn sound on", callback_data=ABOUT_VIDEO_SOUND_CB)]]
+    )
+
+
 async def _send_about_michael_icon_video(chat_id: int, context: ContextTypes.DEFAULT_TYPE, video_path: Path) -> None:
-    """Иконка бота (MP4): в Telegram — animation (без звука, зациклено в клиенте)."""
+    """Иконка бота (MP4): в Telegram — animation (без звука); кнопка — видео со звуком."""
     with video_path.open("rb") as video:
-        await context.bot.send_animation(chat_id=chat_id, animation=video)
+        await context.bot.send_animation(
+            chat_id=chat_id,
+            animation=video,
+            reply_markup=_about_video_sound_markup(),
+        )
+
+
+async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """По кнопке — то же MP4 как video (в плеере Telegram можно включить звук)."""
+    query = update.callback_query
+    if query is None:
+        return
+    try:
+        await query.answer()
+    except Exception:
+        pass
+    if query.message is None:
+        return
+    chat_id = query.message.chat_id
+    video_path = existing_about_michael_video(_repo_root())
+    if video_path is None:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Video file is not available on the server.",
+        )
+        return
+    with video_path.open("rb") as video:
+        await context.bot.send_video(
+            chat_id=chat_id,
+            video=video,
+            caption="Tap ▶️ on the video to play with sound.",
+            supports_streaming=True,
+        )
 
 
 async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT_TYPE, photo_paths: list[Path]) -> None:
