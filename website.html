@@ -270,6 +270,19 @@
       max-width: 640px;
       margin: 0 auto;
     }
+    .about-icon-video-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+    .about-icon-video {
+      width: 100%;
+      max-width: 400px;
+      display: block;
+      border-radius: 16px;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
     .about-founder-photos {
       display: flex;
       flex-wrap: wrap;
@@ -838,6 +851,20 @@
       <h2 class="section-title">About Michael</h2>
       <p class="section-sub">Founder &amp; President of MusicAcupuncture®</p>
       <div class="about-block about-founder-block">
+        <div class="about-icon-video-wrap">
+          <video
+            id="about-founder-video"
+            class="about-icon-video"
+            autoplay
+            loop
+            muted
+            playsinline
+            disablepictureinpicture
+            aria-label="MusicAcupuncture bot icon animation"
+          >
+            <source id="about-founder-video-src" type="video/mp4" />
+          </video>
+        </div>
         <div class="about-founder-photos">
           <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson" />
           <img class="about-founder-photo" id="about-founder-photo-2" src="" alt="Michael B. Johnsson outdoors" />
@@ -1636,6 +1663,12 @@
     if (el) el.src = assetUrl("assets/about-michael.png");
     var el2 = document.getElementById("about-founder-photo-2");
     if (el2) el2.src = assetUrl("assets/about-michael-2.png");
+    var videoSrc = document.getElementById("about-founder-video-src");
+    var video = document.getElementById("about-founder-video");
+    if (videoSrc && video) {
+      videoSrc.src = assetUrl("assets/michael.mp4");
+      video.load();
+    }
   }
 
   /* ---------- Nav mobile ---------- */

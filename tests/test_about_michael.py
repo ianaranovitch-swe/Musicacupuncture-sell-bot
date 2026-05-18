@@ -5,8 +5,18 @@ from pathlib import Path
 from music_sales.about_michael import (
     ABOUT_MICHAEL_PHOTO_2_REL,
     ABOUT_MICHAEL_PHOTO_REL,
+    ABOUT_MICHAEL_VIDEO_REL,
     existing_about_michael_photos,
+    existing_about_michael_video,
 )
+
+
+def test_existing_about_michael_video(tmp_path):
+    video = tmp_path / ABOUT_MICHAEL_VIDEO_REL
+    video.parent.mkdir(parents=True)
+    video.write_bytes(b"mp4")
+    assert existing_about_michael_video(tmp_path) == video
+    assert existing_about_michael_video(tmp_path / "missing") is None
 
 
 def test_existing_about_michael_photos_finds_both(tmp_path):

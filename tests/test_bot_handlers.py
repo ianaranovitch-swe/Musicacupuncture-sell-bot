@@ -79,14 +79,20 @@ async def test_start_shows_free_gift_button_first(mocker):
 
 
 @pytest.mark.asyncio
-async def test_send_about_michael_callback_sends_photos_and_body(mocker, tmp_path):
+async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, tmp_path):
     photo = tmp_path / "assets" / "about-michael.png"
     photo.parent.mkdir(parents=True)
     photo.write_bytes(b"png")
+    video = tmp_path / "assets" / "michael.mp4"
+    video.write_bytes(b"mp4")
     mocker.patch("music_sales.bot_handlers._repo_root", return_value=tmp_path)
     mocker.patch(
         "music_sales.bot_handlers.existing_about_michael_photos",
         return_value=[photo],
+    )
+    mocker.patch(
+        "music_sales.bot_handlers.existing_about_michael_video",
+        return_value=video,
     )
     update = MagicMock()
     q = MagicMock()
@@ -98,12 +104,14 @@ async def test_send_about_michael_callback_sends_photos_and_body(mocker, tmp_pat
     context = MagicMock()
     context.bot.send_message = AsyncMock()
     context.bot.send_photo = AsyncMock()
+    context.bot.send_animation = AsyncMock()
 
     from music_sales.bot_handlers import send_about_michael
 
     await send_about_michael(update, context)
 
     q.answer.assert_awaited_once()
+    context.bot.send_animation.assert_awaited_once()
     context.bot.send_photo.assert_awaited_once()
     body_call = context.bot.send_message.await_args_list[-1]
     assert "Michael B. Johnsson" in body_call.kwargs["text"]

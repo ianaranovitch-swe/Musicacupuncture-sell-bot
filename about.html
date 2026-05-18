@@ -53,6 +53,19 @@
       margin: 0 0 24px;
       font-weight: 600;
     }
+    .about-icon-video-wrap {
+      display: flex;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+    .about-icon-video {
+      width: 100%;
+      max-width: 400px;
+      display: block;
+      border-radius: 16px;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    }
     .portraits {
       display: flex;
       flex-wrap: wrap;
@@ -90,6 +103,19 @@
     <a class="back" href="miniapp.html" style="margin-left: 12px;">Music Store</a>
     <h1>About Michael</h1>
     <p class="subtitle">Founder &amp; President of MusicAcupuncture®</p>
+    <div class="about-icon-video-wrap">
+      <video
+        class="about-icon-video"
+        autoplay
+        loop
+        muted
+        playsinline
+        disablepictureinpicture
+        aria-label="MusicAcupuncture bot icon animation"
+      >
+        <source src="assets/michael.mp4" type="video/mp4" />
+      </video>
+    </div>
     <div class="portraits">
       <img class="portrait" src="assets/about-michael.png" alt="Michael B. Johnsson, founder of MusicAcupuncture" />
       <img class="portrait" src="assets/about-michael-2.png" alt="Michael B. Johnsson outdoors" />

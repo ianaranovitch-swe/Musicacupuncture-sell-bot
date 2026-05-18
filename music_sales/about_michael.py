@@ -11,6 +11,14 @@ from pathlib import Path
 ABOUT_MICHAEL_PHOTO_REL = "assets/about-michael.png"
 ABOUT_MICHAEL_PHOTO_2_REL = "assets/about-michael-2.png"
 ABOUT_MICHAEL_PHOTO_RELS: tuple[str, ...] = (ABOUT_MICHAEL_PHOTO_REL, ABOUT_MICHAEL_PHOTO_2_REL)
+# Анимация иконки бота в assets/ (HTML <video> на сайте; в Telegram — send_animation).
+ABOUT_MICHAEL_VIDEO_REL = "assets/michael.mp4"
+
+
+def existing_about_michael_video(root: Path) -> Path | None:
+    """MP4 иконки бота для About Michael (если файл задеплоен)."""
+    p = root / ABOUT_MICHAEL_VIDEO_REL
+    return p if p.is_file() else None
 
 
 def existing_about_michael_photos(root: Path) -> list[Path]:

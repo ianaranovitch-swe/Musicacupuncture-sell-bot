@@ -21,6 +21,7 @@ from music_sales.about_michael import (
     ABOUT_MICHAEL_BODY,
     ABOUT_MICHAEL_PHOTO_CAPTION,
     existing_about_michael_photos,
+    existing_about_michael_video,
 )
 from music_sales.file_id_delivery import load_file_ids_dict
 from music_sales.free_track_cover_render import render_free_track_cover_for_telegram
@@ -256,6 +257,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def _send_about_michael_icon_video(chat_id: int, context: ContextTypes.DEFAULT_TYPE, video_path: Path) -> None:
+    """Иконка бота (MP4): в Telegram — animation (без звука, зациклено в клиенте)."""
+    with video_path.open("rb") as video:
+        await context.bot.send_animation(chat_id=chat_id, animation=video)
+
+
 async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT_TYPE, photo_paths: list[Path]) -> None:
     """Одно фото или альбом (до 10) — подпись только у первого снимка."""
     if len(photo_paths) == 1:
@@ -305,7 +312,13 @@ async def send_about_michael(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     root = _repo_root()
+    video_path = existing_about_michael_video(root)
     photo_paths = existing_about_michael_photos(root)
+    if video_path is not None:
+        try:
+            await _send_about_michael_icon_video(chat_id, context, video_path)
+        except Exception:
+            logger.exception("send_about_michael: send icon video failed")
     try:
         if photo_paths:
             await _send_about_michael_photos(chat_id, context, photo_paths)
