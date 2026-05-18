@@ -9,6 +9,7 @@ from telegram import (
     InlineKeyboardMarkup,
     InputMediaPhoto,
     MenuButtonWebApp,
+    ReplyParameters,
     Update,
     User,
     WebAppInfo,
@@ -40,6 +41,8 @@ FREE_TRACK_GALLERY_COVERS = [
 ]
 FREE_TRACK_CB = "gift:free_track"
 FREE_TRACK_START_PAYLOAD = "gift_free_track"
+# ID сообщений с обложками бесплатного трека в этом чате (чтобы не слать дубликаты).
+CHAT_DATA_FREE_TRACK_GALLERY_MSG_IDS = "free_track_gallery_message_ids"
 ABOUT_MICHAEL_CB = "about:michael"
 ABOUT_MICHAEL_BUTTON_TEXT = "About Michael — Founder of MusicAcupuncture®"
 ABOUT_VIDEO_SOUND_CB = "about:video_sound"
@@ -86,6 +89,87 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _free_track_trigger_reply_parameters(update: Update) -> ReplyParameters | None:
+    """Ответ на сообщение с кнопкой Get Free Track — контент сразу под кликом."""
+    if update.callback_query is not None and update.callback_query.message is not None:
+        msg = update.callback_query.message
+    elif update.message is not None:
+        msg = update.message
+    else:
+        return None
+    return ReplyParameters(message_id=msg.message_id, allow_sending_without_reply=True)
+
+
+def _expected_free_track_cover_count(root: Path) -> int:
+    return sum(1 for rel in FREE_TRACK_GALLERY_COVERS if (root / rel).is_file())
+
+
+def _free_track_gallery_is_complete(context: ContextTypes.DEFAULT_TYPE, root: Path) -> bool:
+    expected = _expected_free_track_cover_count(root)
+    if expected <= 0:
+        return False
+    stored = context.chat_data.get(CHAT_DATA_FREE_TRACK_GALLERY_MSG_IDS)
+    if not isinstance(stored, list):
+        return False
+    return len(stored) >= expected
+
+
+def _free_track_gallery_reply_parameters(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    trigger_reply: ReplyParameters | None,
+) -> ReplyParameters | None:
+    """Повторный клик: ответ на последнюю обложку (фокус на уже отправленные картинки)."""
+    stored = context.chat_data.get(CHAT_DATA_FREE_TRACK_GALLERY_MSG_IDS)
+    if isinstance(stored, list) and stored:
+        return ReplyParameters(message_id=int(stored[-1]), allow_sending_without_reply=True)
+    return trigger_reply
+
+
+async def _send_free_track_gallery_covers(
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    root: Path,
+    *,
+    reply_params: ReplyParameters | None,
+) -> list[int]:
+    """Шлём обложки один раз; возвращаем message_id для chat_data."""
+    message_ids: list[int] = []
+    for index, rel_path in enumerate(FREE_TRACK_GALLERY_COVERS):
+        cover_path = root / rel_path
+        if not cover_path.is_file():
+            continue
+        try:
+            if index == 0:
+                with cover_path.open("rb") as photo:
+                    sent = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=photo,
+                        reply_parameters=reply_params,
+                    )
+            else:
+                png_bytes = render_free_track_cover_for_telegram(cover_path, "case_square")
+                if png_bytes:
+                    sent = await context.bot.send_photo(
+                        chat_id=chat_id,
+                        photo=InputFile(BytesIO(png_bytes), filename=f"free_track_cover_{index}.png"),
+                        reply_parameters=reply_params,
+                    )
+                else:
+                    with cover_path.open("rb") as photo:
+                        sent = await context.bot.send_photo(
+                            chat_id=chat_id,
+                            photo=photo,
+                            reply_parameters=reply_params,
+                        )
+            message_ids.append(sent.message_id)
+        except Exception:
+            pass
+    if message_ids:
+        context.chat_data[CHAT_DATA_FREE_TRACK_GALLERY_MSG_IDS] = message_ids
+    return message_ids
+
+
 async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Обработчик кнопки бесплатного трека.
@@ -114,50 +198,45 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     root = _repo_root()
-    # 1-я обложка — уже круглый PNG с альфой из Photoshop, шлём как есть (без повторного «вырезания» круга).
-    # 2–3 — фото футляра: при желании вписываем в квадрат с фоном как в Mini App (см. render…case_square).
-    for index, rel_path in enumerate(FREE_TRACK_GALLERY_COVERS):
-        cover_path = root / rel_path
-        if not cover_path.is_file():
-            continue
-        try:
-            if index == 0:
-                with cover_path.open("rb") as photo:
-                    await context.bot.send_photo(chat_id=chat_id, photo=photo)
-                continue
-            png_bytes = render_free_track_cover_for_telegram(cover_path, "case_square")
-            if png_bytes:
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=InputFile(BytesIO(png_bytes), filename=f"free_track_cover_{index}.png"),
-                )
-            else:
-                with cover_path.open("rb") as photo:
-                    await context.bot.send_photo(chat_id=chat_id, photo=photo)
-        except Exception:
-            # Фото не критично: продолжаем выдачу.
-            pass
+    trigger_reply = _free_track_trigger_reply_parameters(update)
+    gallery_complete = _free_track_gallery_is_complete(context, root)
+
+    if not gallery_complete:
+        await _send_free_track_gallery_covers(
+            chat_id, context, root, reply_params=trigger_reply
+        )
+        content_reply = _free_track_gallery_reply_parameters(context, trigger_reply=trigger_reply)
+    else:
+        content_reply = _free_track_gallery_reply_parameters(context, trigger_reply=trigger_reply)
+
+    gift_lines = [
+        "🎁 Your FREE gift from Michael!",
+        f"✨ {FREE_TRACK_TITLE}",
+        "",
+        "This divine sound supports harmony,",
+        "balance and positive energy flow in",
+        "your home and life.",
+        "",
+        "Listen daily for best results. 🙏",
+        "",
+        "Enjoy the other 17 healing tracks below 👇",
+    ]
+    if gallery_complete:
+        gift_lines.insert(1, "Your free track covers are already shown above ↑")
 
     await context.bot.send_message(
         chat_id=chat_id,
-        text=(
-            "🎁 Your FREE gift from Michael!\n"
-            f"✨ {FREE_TRACK_TITLE}\n\n"
-            "This divine sound supports harmony,\n"
-            "balance and positive energy flow in\n"
-            "your home and life.\n\n"
-            "Listen daily for best results. 🙏\n\n"
-            "Enjoy the other 17 healing tracks below 👇"
-        ),
+        text="\n".join(gift_lines),
+        reply_parameters=content_reply,
     )
 
-    # Каталог — до MP3, чтобы последним сообщением в чате был файл (фокус внизу у трека).
     row = _miniapp_store_row()
     if row:
         await context.bot.send_message(
             chat_id=chat_id,
             text="Open the Music Store to explore the other tracks:",
             reply_markup=InlineKeyboardMarkup([row]),
+            reply_parameters=content_reply,
         )
 
     file_ids = load_file_ids_dict()
@@ -166,12 +245,14 @@ async def send_free_track(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await context.bot.send_message(
             chat_id=chat_id,
             text="Sorry, the free track is not available right now. Please contact support.",
+            reply_parameters=content_reply,
         )
     else:
         await context.bot.send_document(
             chat_id=chat_id,
             document=fid,
             caption="🎁 Free bonus track — enjoy! 🙏",
+            reply_parameters=content_reply,
         )
         append_free_download_event(
             telegram_user_id=int(chat_id),
@@ -257,56 +338,114 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+def _about_reply_parameters(update: Update) -> ReplyParameters | None:
+    """
+    Ответ в цепочке к сообщению с кнопкой — чат прокручивается к About Michael сразу под кликом.
+    """
+    msg = None
+    if update.callback_query is not None and update.callback_query.message is not None:
+        msg = update.callback_query.message
+    elif update.message is not None:
+        msg = update.message
+    if msg is None:
+        return None
+    return ReplyParameters(message_id=msg.message_id, allow_sending_without_reply=True)
+
+
 def _about_video_sound_markup() -> InlineKeyboardMarkup:
-    """Кнопка под беззвучной анимацией — отдельное видео со звуком."""
+    """Звук: HTTPS-ссылка на MP4 (надёжно) или callback для локальной разработки."""
+    base = (config.BACKEND_URL or "").strip().rstrip("/")
+    if base.startswith("https://"):
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔊 Turn sound on",
+                        url=f"{base}/assets/michael.mp4",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "▶️ Play with sound in chat",
+                        callback_data=ABOUT_VIDEO_SOUND_CB,
+                    )
+                ],
+            ]
+        )
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("🔊 Turn sound on", callback_data=ABOUT_VIDEO_SOUND_CB)]]
     )
 
 
-async def _send_about_michael_icon_video(chat_id: int, context: ContextTypes.DEFAULT_TYPE, video_path: Path) -> None:
-    """Иконка бота (MP4): animation без звука; кнопка звука — отдельным сообщением (надёжнее в Telegram)."""
+async def _send_about_michael_icon_video(
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    video_path: Path,
+    *,
+    reply_params: ReplyParameters | None = None,
+) -> None:
+    """Иконка бота (MP4): animation без звука; кнопка звука — отдельным сообщением."""
     with video_path.open("rb") as video:
-        await context.bot.send_animation(chat_id=chat_id, animation=video)
+        await context.bot.send_animation(
+            chat_id=chat_id,
+            animation=video,
+            reply_parameters=reply_params,
+        )
     await context.bot.send_message(
         chat_id=chat_id,
         text="🔊 Tap below to play the icon video with sound:",
         reply_markup=_about_video_sound_markup(),
+        reply_parameters=reply_params,
     )
 
 
 async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """По кнопке — то же MP4 как video (в плеере Telegram можно включить звук)."""
+    """По кнопке — MP4 как video в чате (со звуком в плеере Telegram)."""
     query = update.callback_query
-    if query is None:
-        return
-    if query.message is None:
+    if query is None or query.message is None:
         return
     chat_id = query.message.chat_id
+    reply_params = ReplyParameters(
+        message_id=query.message.message_id,
+        allow_sending_without_reply=True,
+    )
     try:
-        await query.answer(text="Sending video with sound…")
+        await query.answer()
     except Exception:
-        try:
-            await query.answer()
-        except Exception:
-            pass
+        pass
     video_path = existing_about_michael_video(_repo_root())
     if video_path is None:
         await context.bot.send_message(
             chat_id=chat_id,
             text="Video file is not available on the server.",
+            reply_parameters=reply_params,
         )
         return
-    with video_path.open("rb") as video:
-        await context.bot.send_video(
+    try:
+        with video_path.open("rb") as video_file:
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=InputFile(video_file, filename="michael.mp4"),
+                caption="Tap ▶️ on the video to play with sound.",
+                supports_streaming=True,
+                reply_parameters=reply_params,
+            )
+    except Exception:
+        logger.exception("about_video_sound_callback: send_video failed")
+        await context.bot.send_message(
             chat_id=chat_id,
-            video=video,
-            caption="Tap ▶️ on the video to play with sound.",
-            supports_streaming=True,
+            text="Could not send the video with sound. Try the HTTPS link button above.",
+            reply_parameters=reply_params,
         )
 
 
-async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT_TYPE, photo_paths: list[Path]) -> None:
+async def _send_about_michael_photos(
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+    photo_paths: list[Path],
+    *,
+    reply_params: ReplyParameters | None = None,
+) -> None:
     """Одно фото или альбом (до 10) — подпись только у первого снимка."""
     if len(photo_paths) == 1:
         with photo_paths[0].open("rb") as photo:
@@ -314,6 +453,7 @@ async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT
                 chat_id=chat_id,
                 photo=photo,
                 caption=ABOUT_MICHAEL_PHOTO_CAPTION,
+                reply_parameters=reply_params,
             )
         return
 
@@ -325,7 +465,11 @@ async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT
             handles.append(fh)
             cap = ABOUT_MICHAEL_PHOTO_CAPTION if i == 0 else None
             media.append(InputMediaPhoto(media=fh, caption=cap))
-        await context.bot.send_media_group(chat_id=chat_id, media=media)
+        await context.bot.send_media_group(
+            chat_id=chat_id,
+            media=media,
+            reply_parameters=reply_params,
+        )
     finally:
         for fh in handles:
             fh.close()
@@ -354,17 +498,30 @@ async def send_about_michael(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if chat_id is None:
         return
 
+    reply_params = _about_reply_parameters(update)
     root = _repo_root()
     video_path = existing_about_michael_video(root)
     photo_paths = existing_about_michael_photos(root)
+
+    # Якорь под кнопкой — сразу видно начало блока About Michael.
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="About Michael — Founder of MusicAcupuncture®",
+        reply_parameters=reply_params,
+    )
+
     if video_path is not None:
         try:
-            await _send_about_michael_icon_video(chat_id, context, video_path)
+            await _send_about_michael_icon_video(
+                chat_id, context, video_path, reply_params=reply_params
+            )
         except Exception:
             logger.exception("send_about_michael: send icon video failed")
     try:
         if photo_paths:
-            await _send_about_michael_photos(chat_id, context, photo_paths)
+            await _send_about_michael_photos(
+                chat_id, context, photo_paths, reply_params=reply_params
+            )
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -372,14 +529,20 @@ async def send_about_michael(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     "Photo files are not deployed yet. Ask admin to add assets/about-michael.png "
                     "(and about-michael-2.png) to the server."
                 ),
+                reply_parameters=reply_params,
             )
     except Exception:
         logger.exception("send_about_michael: send photos failed")
         await context.bot.send_message(
             chat_id=chat_id,
             text="Could not send the portrait images. Full biography below.",
+            reply_parameters=reply_params,
         )
-    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=ABOUT_MICHAEL_BODY,
+        reply_parameters=reply_params,
+    )
 
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -120,7 +120,12 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
         if c.kwargs.get("reply_markup") is not None
     ]
     assert len(sound_btn_calls) >= 1
-    assert sound_btn_calls[0].kwargs["reply_markup"].inline_keyboard[0][0].callback_data == ABOUT_VIDEO_SOUND_CB
+    first_btn = sound_btn_calls[0].kwargs["reply_markup"].inline_keyboard[0][0]
+    assert first_btn.callback_data == ABOUT_VIDEO_SOUND_CB or (
+        first_btn.url and "michael.mp4" in (first_btn.url or "")
+    )
+    reply_used = any(c.kwargs.get("reply_parameters") is not None for c in context.bot.send_message.await_args_list)
+    assert reply_used
     context.bot.send_photo.assert_awaited_once()
     body_call = context.bot.send_message.await_args_list[-1]
     assert "Michael B. Johnsson" in body_call.kwargs["text"]
@@ -171,6 +176,7 @@ async def test_send_free_track_uses_file_id_and_sends_document(mocker):
     update.effective_chat = MagicMock()
     update.effective_chat.id = 777
     context = MagicMock()
+    context.chat_data = {}
     context.bot.send_message = AsyncMock()
     context.bot.send_document = AsyncMock()
     context.bot.send_photo = AsyncMock()
@@ -181,6 +187,57 @@ async def test_send_free_track_uses_file_id_and_sends_document(mocker):
     kwargs = context.bot.send_document.call_args.kwargs
     assert kwargs["chat_id"] == 777
     assert kwargs["document"] == "doc_file_id_123"
+
+
+@pytest.mark.asyncio
+async def test_send_free_track_skips_duplicate_covers(mocker):
+    mocker.patch(
+        "music_sales.bot_handlers.load_file_ids_dict",
+        return_value={FREE_TRACK_TITLE: "doc_file_id_123"},
+    )
+    mocker.patch("music_sales.bot_handlers.Path.is_file", return_value=True)
+    mocker.patch(
+        "music_sales.bot_handlers.render_free_track_cover_for_telegram",
+        return_value=b"png",
+    )
+
+    class _SentPhoto:
+        def __init__(self, message_id: int) -> None:
+            self.message_id = message_id
+
+    photo_id = {"n": 500}
+
+    async def _send_photo(**_kwargs):
+        photo_id["n"] += 1
+        return _SentPhoto(photo_id["n"])
+
+    update = MagicMock()
+    q = MagicMock()
+    q.answer = AsyncMock()
+    q.message = MagicMock()
+    q.message.chat_id = 777
+    q.message.message_id = 40
+    update.callback_query = q
+    update.effective_chat = MagicMock()
+    update.effective_chat.id = 777
+    context = MagicMock()
+    context.chat_data = {}
+    context.bot.send_message = AsyncMock()
+    context.bot.send_document = AsyncMock()
+    context.bot.send_photo = AsyncMock(side_effect=_send_photo)
+
+    await send_free_track(update, context)
+    first_photo_count = context.bot.send_photo.await_count
+    assert first_photo_count == 3
+    assert len(context.chat_data.get("free_track_gallery_message_ids", [])) == 3
+
+    await send_free_track(update, context)
+    assert context.bot.send_photo.await_count == first_photo_count
+    gift_texts = [
+        (c.args[0] if c.args else c.kwargs.get("text", ""))
+        for c in context.bot.send_message.await_args_list
+    ]
+    assert any("already shown above" in t for t in gift_texts)
 
 
 @pytest.mark.asyncio
