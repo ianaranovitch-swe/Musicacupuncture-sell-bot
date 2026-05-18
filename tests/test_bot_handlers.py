@@ -2,7 +2,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from music_sales.bot_handlers import FREE_TRACK_CB, FREE_TRACK_TITLE, help_command, send_free_track, start
+from music_sales.bot_handlers import (
+    ABOUT_MICHAEL_CB,
+    ABOUT_MICHAEL_BUTTON_TEXT,
+    FREE_TRACK_CB,
+    FREE_TRACK_TITLE,
+    help_command,
+    send_free_track,
+    start,
+)
 
 
 @pytest.mark.asyncio
@@ -64,7 +72,41 @@ async def test_start_shows_free_gift_button_first(mocker):
     markup = first_call.kwargs["reply_markup"]
     assert markup.inline_keyboard[0][0].callback_data == FREE_TRACK_CB
     assert markup.inline_keyboard[1][0].text == "⭐ Customer Reviews"
+    assert markup.inline_keyboard[2][0].callback_data == ABOUT_MICHAEL_CB
+    assert markup.inline_keyboard[2][0].text == ABOUT_MICHAEL_BUTTON_TEXT
+    assert markup.inline_keyboard[2][0].url is None
     assert FREE_TRACK_TITLE in (first_call.args[0] or "")
+
+
+@pytest.mark.asyncio
+async def test_send_about_michael_callback_sends_photos_and_body(mocker, tmp_path):
+    photo = tmp_path / "assets" / "about-michael.png"
+    photo.parent.mkdir(parents=True)
+    photo.write_bytes(b"png")
+    mocker.patch("music_sales.bot_handlers._repo_root", return_value=tmp_path)
+    mocker.patch(
+        "music_sales.bot_handlers.existing_about_michael_photos",
+        return_value=[photo],
+    )
+    update = MagicMock()
+    q = MagicMock()
+    q.answer = AsyncMock()
+    q.message = MagicMock()
+    q.message.chat_id = 42
+    update.callback_query = q
+    update.message = None
+    context = MagicMock()
+    context.bot.send_message = AsyncMock()
+    context.bot.send_photo = AsyncMock()
+
+    from music_sales.bot_handlers import send_about_michael
+
+    await send_about_michael(update, context)
+
+    q.answer.assert_awaited_once()
+    context.bot.send_photo.assert_awaited_once()
+    body_call = context.bot.send_message.await_args_list[-1]
+    assert "Michael B. Johnsson" in body_call.kwargs["text"]
 
 
 @pytest.mark.asyncio

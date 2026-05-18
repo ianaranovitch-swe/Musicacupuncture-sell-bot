@@ -39,6 +39,8 @@ FREE_TRACK_GALLERY_COVERS = [
 ]
 FREE_TRACK_CB = "gift:free_track"
 FREE_TRACK_START_PAYLOAD = "gift_free_track"
+ABOUT_MICHAEL_CB = "about:michael"
+ABOUT_MICHAEL_BUTTON_TEXT = "About Michael — Founder of MusicAcupuncture®"
 
 
 async def notify_owner_about_visitor(context: ContextTypes.DEFAULT_TYPE, visitor: User) -> None:
@@ -58,15 +60,12 @@ def _miniapp_store_row(*, url_override: str | None = None) -> list[InlineKeyboar
     return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
 
 
-def _about_url_button_row() -> list[InlineKeyboardButton] | None:
-    """Ссылка на страницу About на HTTPS-backend (Railway)."""
-    url = (config.resolved_about_page_url() or "").strip()
-    if not url.startswith("https://"):
-        return None
+def _about_michael_button_row() -> list[InlineKeyboardButton]:
+    """About Michael только в чате бота (без ссылки на website)."""
     return [
         InlineKeyboardButton(
-            "About Michael — Founder of MusicAcupuncture®",
-            url=url,
+            ABOUT_MICHAEL_BUTTON_TEXT,
+            callback_data=ABOUT_MICHAEL_CB,
         )
     ]
 
@@ -77,9 +76,7 @@ def _free_track_markup() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🎁 Get Free Track", callback_data=FREE_TRACK_CB)],
         main_menu_reviews_button_row(),
     ]
-    about_row = _about_url_button_row()
-    if about_row:
-        rows.append(about_row)
+    rows.append(_about_michael_button_row())
     return InlineKeyboardMarkup(rows)
 
 
@@ -218,10 +215,7 @@ async def _send_miniapp_store_opener_if_configured(
     welcome = "Welcome! Open the Music Store from the menu button."
     if config.test_mode_active():
         welcome = "[TEST] " + welcome
-    rows = [row]
-    about_row = _about_url_button_row()
-    if about_row:
-        rows.append(about_row)
+    rows = [row, _about_michael_button_row()]
     await update.message.reply_text(
         welcome,
         # Inline-кнопку оставляем как fallback (на случай, если MenuButton не поддержан в клиенте/ошибка API).
@@ -287,27 +281,56 @@ async def _send_about_michael_photos(chat_id: int, context: ContextTypes.DEFAULT
             fh.close()
 
 
-async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда /about: портрет(ы) + полный текст; при HTTPS — кнопка на страницу about.html."""
-    if update.message is None:
+def _about_michael_chat_id(update: Update) -> int | None:
+    if update.callback_query is not None and update.callback_query.message is not None:
+        return update.callback_query.message.chat_id
+    if update.message is not None:
+        return update.message.chat_id
+    if update.effective_chat is not None:
+        return update.effective_chat.id
+    return None
+
+
+async def send_about_michael(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Портрет(ы) + полный текст About Michael — только в Telegram."""
+    query = update.callback_query
+    if query is not None:
+        try:
+            await query.answer()
+        except Exception:
+            pass
+
+    chat_id = _about_michael_chat_id(update)
+    if chat_id is None:
         return
-    chat_id = update.message.chat_id
+
     root = _repo_root()
     photo_paths = existing_about_michael_photos(root)
-    about_row = _about_url_button_row()
-    markup = InlineKeyboardMarkup([about_row]) if about_row else None
     try:
         if photo_paths:
             await _send_about_michael_photos(chat_id, context, photo_paths)
         else:
-            await update.message.reply_text(
-                "Photo files are not deployed yet. Ask admin to add assets/about-michael.png "
-                "(and about-michael-2.png) to the server.",
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "Photo files are not deployed yet. Ask admin to add assets/about-michael.png "
+                    "(and about-michael-2.png) to the server."
+                ),
             )
     except Exception:
-        logger.exception("about_command: send photos failed")
-        await update.message.reply_text("Could not send the portrait images. Full biography below.")
-    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY, reply_markup=markup)
+        logger.exception("send_about_michael: send photos failed")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Could not send the portrait images. Full biography below.",
+        )
+    await context.bot.send_message(chat_id=chat_id, text=ABOUT_MICHAEL_BODY)
+
+
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Команда /about: портрет(ы) + полный текст в чате."""
+    if update.message is None:
+        return
+    await send_about_michael(update, context)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

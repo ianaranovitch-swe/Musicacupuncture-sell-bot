@@ -42,5 +42,5 @@ Founder & President of MusicAcupuncture®"""
 # Короткая подпись к первому фото в альбоме (лимит Telegram caption ~1024 символа)
 ABOUT_MICHAEL_PHOTO_CAPTION = (
     "Michael B. Johnsson — Founder & President of MusicAcupuncture®. "
-    "Read the full biography in the message below or on the website."
+    "Read the full biography in the message below."
 )
