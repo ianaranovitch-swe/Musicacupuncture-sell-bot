@@ -90,7 +90,9 @@
 5. **@BotFather** → твой бот → настройки Mini App / Web App → домен **`musicacupuncture.digital`** (без `https://`), иначе Telegram не откроет WebApp.
 6. **Redeploy** `web` и `worker`.
 
-Опционально: `WEBSITE_SUCCESS_URL` — полный URL страницы успеха для оплат с сайта; если не задан, сервер берёт `BACKEND_URL`/`DOMAIN` и добавляет `/website.html`.
+Опционально: `WEBSITE_SUCCESS_URL` — полный URL страницы успеха (например `https://musicacupuncture.digital/`); если не задан, Stripe возвращает на корень домена `/` (витрина = `website.html`).
+
+Сайт открывается как **`https://musicacupuncture.digital/`** (маршрут `/` в Flask). Старый `/website.html` делает 301 на `/`.
 
 ## 6) Пример env для worker
 

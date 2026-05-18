@@ -46,9 +46,11 @@ jobs:
         run: |
           mkdir -p _site/covers _site/assets
           cp miniapp.html _site/miniapp.html
-          if [ -f website.html ]; then cp website.html _site/website.html; fi
+          if [ -f website.html ]; then
+            cp website.html _site/website.html
+            cp website.html _site/index.html
+          elif [ -f index.html ]; then cp index.html _site/index.html; else cp miniapp.html _site/index.html; fi
           if [ -f about.html ]; then cp about.html _site/about.html; fi
-          if [ -f index.html ]; then cp index.html _site/index.html; else cp miniapp.html _site/index.html; fi
           touch _site/.nojekyll
           if [ -d covers ]; then
             find covers -maxdepth 1 -type f -exec cp {} _site/covers/ \;

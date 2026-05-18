@@ -85,7 +85,7 @@ def test_create_checkout_accepts_selected_currency(mocker):
 
 
 def test_website_create_payment_success_url_follows_backend_without_hardcoded_domain(mocker, monkeypatch):
-    """WEBSITE_SUCCESS_URL не задан — success_url = тот же origin, что cancel, + /website.html."""
+    """WEBSITE_SUCCESS_URL не задан — success_url = origin + / (корень витрины)."""
     monkeypatch.delenv("WEBSITE_SUCCESS_URL", raising=False)
     mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
     mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
@@ -107,7 +107,8 @@ def test_website_create_payment_success_url_follows_backend_without_hardcoded_do
     resp = client.post("/website-create-payment", json={"track_id": 2, "currency": "usd"})
     assert resp.status_code == 200
     su = create.call_args.kwargs["success_url"]
-    assert "railway-backend.example/website.html" in su
+    assert "railway-backend.example/?" in su or su.startswith("https://railway-backend.example/?")
+    assert "/website.html" not in su.split("?", 1)[0]
     assert "musicacupuncture.digital" not in su
 
 
@@ -1295,7 +1296,7 @@ def test_miniapp_html_route(mocker, tmp_path):
     assert b"doctype html" in resp.data.lower()
 
 
-def test_website_html_route(mocker, tmp_path):
+def test_website_root_route(mocker, tmp_path):
     (tmp_path / "website.html").write_text("<!doctype html><title>shop</title>", encoding="utf-8")
     from music_sales.server import create_app
 
@@ -1306,9 +1307,25 @@ def test_website_html_route(mocker, tmp_path):
         project_root_override=tmp_path,
     )
     client = app.test_client()
-    resp = client.get("/website.html")
+    resp = client.get("/")
     assert resp.status_code == 200
-    assert b"doctype html" in resp.data.lower()
+    assert b"shop" in resp.data.lower()
+
+
+def test_website_html_redirects_to_root(mocker, tmp_path):
+    (tmp_path / "website.html").write_text("<!doctype html><title>shop</title>", encoding="utf-8")
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/website.html?success=true&track_id=2")
+    assert resp.status_code == 301
+    assert resp.headers["Location"].endswith("/?success=true&track_id=2")
 
 
 def test_covers_route_serves_file(mocker, tmp_path):

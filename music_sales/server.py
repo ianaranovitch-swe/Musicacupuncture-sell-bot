@@ -884,13 +884,12 @@ def create_app(
         URL после оплаты с публичного сайта (Stripe success_url).
 
         Приоритет: WEBSITE_SUCCESS_URL (полный URL страницы, например GitHub Pages).
-        Иначе: тот же публичный origin, что и для cancel_url (_stripe_public_origin) + /website.html
-        — без жёстко зашитого домена, чтобы совпадало с BACKEND_URL/Railway или Pages.
+        Иначе: тот же публичный origin + / (корень домена, без /website.html в адресной строке).
         """
         base = (os.environ.get("WEBSITE_SUCCESS_URL") or "").strip().rstrip("/")
         if not base:
             origin = _stripe_public_origin()
-            base = f"{origin.rstrip('/')}/website.html"
+            base = f"{origin.rstrip('/')}/"
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}success=true&track_id={track_id_raw}&session_id={{CHECKOUT_SESSION_ID}}"
 
@@ -909,10 +908,22 @@ def create_app(
         """Страница о создателе MusicAcupuncture® (Michael B. Johnsson)."""
         return send_from_directory(str(root_path()), "about.html", mimetype="text/html")
 
-    @app.route("/website.html")
-    def website_landing_page() -> Any:
-        """Публичная витрина (тот же файл, что на GitHub Pages); ссылка «Back» из about.html ведёт сюда."""
+    @app.route("/")
+    def website_root() -> Any:
+        """Главная витрина: https://musicacupuncture.digital/ (файл website.html)."""
         return send_from_directory(str(root_path()), "website.html", mimetype="text/html")
+
+    @app.route("/index.html")
+    def website_index_redirect() -> Any:
+        """Старый вход — на корень домена."""
+        qs = request.query_string.decode() if request.query_string else ""
+        return redirect("/" + (f"?{qs}" if qs else ""), code=301)
+
+    @app.route("/website.html")
+    def website_landing_page_legacy() -> Any:
+        """301 на / — чтобы в браузере не оставался /website.html."""
+        qs = request.query_string.decode() if request.query_string else ""
+        return redirect("/" + (f"?{qs}" if qs else ""), code=301)
 
     @app.route("/assets/<path:filename>")
     def static_assets(filename: str) -> Any:
