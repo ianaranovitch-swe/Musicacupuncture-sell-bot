@@ -16,9 +16,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib import request as urlrequest
-from urllib.error import URLError
-
 from music_sales.catalog import project_root
 
 logger = logging.getLogger(__name__)
@@ -92,9 +89,35 @@ def _merge_entries(*lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _load_sales_from_railway_api() -> list[dict[str, Any]]:
+    """Актуальный журнал из Shared SALES_LOG_JSON (события с web + worker)."""
+    if (os.environ.get("ENABLE_SALES_LOG_RAILWAY_SYNC") or "").strip() != "1":
+        return []
+    try:
+        from music_sales.railway_vars_sync import fetch_railway_variable_value, railway_credentials_configured
+
+        if not railway_credentials_configured():
+            return []
+        raw = (fetch_railway_variable_value("SALES_LOG_JSON") or "").strip()
+    except Exception:
+        logger.exception("SALES_LOG_JSON fetch from Railway failed")
+        return []
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
+
+
 def _read_entries() -> list[dict[str, Any]]:
-    """Файл + SALES_LOG_JSON: на Railway после рестарта счётчик не обнуляется."""
-    return _merge_entries(_read_entries_from_file(), _load_sales_from_env())
+    """Файл + env + Railway Shared SALES_LOG_JSON (бот видит покупки/загрузки с сайта)."""
+    return _merge_entries(
+        _read_entries_from_file(),
+        _load_sales_from_env(),
+        _load_sales_from_railway_api(),
+    )
 
 
 def _write_entries(entries: list[dict[str, Any]], *, push_railway: bool = True) -> None:
@@ -123,66 +146,9 @@ def bootstrap_sales_log() -> int:
 
 
 def _sync_sales_log_to_railway(payload: str) -> None:
-    """
-    Опциональная синхронизация SALES_LOG_JSON в Railway через GraphQL API.
+    from music_sales.railway_vars_sync import sync_sales_log_json_to_railway
 
-    Включается только когда явно задано:
-    - ENABLE_SALES_LOG_RAILWAY_SYNC=1
-    - RAILWAY_VARIABLE_WRITES=1 на worker (не на web при старте)
-    - RAILWAY_API_TOKEN
-    - RAILWAY_PROJECT_ID
-    - RAILWAY_ENVIRONMENT_ID
-    - RAILWAY_SERVICE_ID
-    """
-    if (os.environ.get("ENABLE_SALES_LOG_RAILWAY_SYNC") or "").strip() != "1":
-        return
-    from music_sales.railway_vars_sync import railway_variable_writes_allowed
-
-    if not railway_variable_writes_allowed():
-        return
-    token = (os.environ.get("RAILWAY_API_TOKEN") or "").strip()
-    project_id = (os.environ.get("RAILWAY_PROJECT_ID") or "").strip()
-    environment_id = (os.environ.get("RAILWAY_ENVIRONMENT_ID") or "").strip()
-    service_id = (os.environ.get("RAILWAY_SERVICE_ID") or "").strip()
-    if not token or not project_id or not environment_id or not service_id:
-        return
-
-    query = """
-    mutation UpsertVars($input: VariableCollectionUpsertInput!) {
-      variableCollectionUpsert(input: $input) { id }
-    }
-    """
-    body = {
-        "query": query,
-        "variables": {
-            "input": {
-                "projectId": project_id,
-                "environmentId": environment_id,
-                "serviceId": service_id,
-                "variables": [
-                    {"name": "SALES_LOG_JSON", "value": payload},
-                ],
-            }
-        },
-    }
-    data = json.dumps(body).encode("utf-8")
-    req = urlrequest.Request(
-        "https://backboard.railway.app/graphql/v2",
-        method="POST",
-        data=data,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-    )
-    try:
-        with urlrequest.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode("utf-8", errors="ignore")
-            parsed = json.loads(raw)
-            if isinstance(parsed, dict) and parsed.get("errors"):
-                raise RuntimeError(str(parsed.get("errors")))
-    except (URLError, OSError, RuntimeError, json.JSONDecodeError):
-        return
+    sync_sales_log_json_to_railway(payload)
 
 
 def _normalize_track_title(name: str) -> str:
@@ -264,6 +230,13 @@ def append_sale_event(
         row.update(extra)
     entries.append(row)
     _write_entries(entries)
+    logger.info(
+        "sale logged: source=%s track=%s amount=%s %s",
+        row.get("source"),
+        row.get("track_title"),
+        row.get("amount"),
+        row.get("currency"),
+    )
 
 
 def append_free_download_event(

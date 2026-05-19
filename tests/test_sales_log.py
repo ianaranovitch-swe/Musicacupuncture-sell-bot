@@ -110,6 +110,21 @@ def test_count_free_gift_downloads_and_since_label(monkeypatch, tmp_path):
     assert "UTC" in since
 
 
+def test_append_free_download_pushes_railway_when_sync(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
+    pushed: list[str] = []
+    monkeypatch.setattr(
+        "music_sales.railway_vars_sync.sync_sales_log_json_to_railway",
+        lambda p: pushed.append(p),
+    )
+    from music_sales.sales_log import append_free_download_event
+
+    append_free_download_event(source="website")
+    assert len(pushed) == 1
+    assert "free_download" in pushed[0]
+
+
 def test_append_free_download_event(monkeypatch, tmp_path):
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.delenv("SALES_LOG_JSON", raising=False)

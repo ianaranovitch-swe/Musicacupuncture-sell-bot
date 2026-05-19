@@ -38,6 +38,17 @@ def railway_credentials_configured() -> bool:
     return bool(_railway_api_token() and _railway_project_id() and _railway_environment_id())
 
 
+def railway_sales_log_sync_enabled() -> bool:
+    return _sync_flag_enabled("ENABLE_SALES_LOG_RAILWAY_SYNC")
+
+
+def railway_sales_log_writes_allowed() -> bool:
+    """Запись SALES_LOG_JSON (web + worker) при включённом sync и API-токене."""
+    if not railway_sales_log_sync_enabled():
+        return False
+    return railway_credentials_configured()
+
+
 def railway_variable_writes_allowed() -> bool:
     """
     Запись в Railway Variables через API — только worker (бот), не web при старте.
@@ -140,6 +151,52 @@ def upsert_railway_variables(
     """
     result = _graphql_request(query, {"input": inp})
     return result is not None
+
+
+def fetch_railway_variables(*, service_id: str | None = None) -> dict[str, str]:
+    """
+    Прочитать переменные Railway (shared: service_id=None, без поля в запросе).
+    """
+    if not railway_credentials_configured():
+        return {}
+    gql_vars: dict[str, Any] = {
+        "projectId": _railway_project_id(),
+        "environmentId": _railway_environment_id(),
+    }
+    if service_id:
+        gql_vars["serviceId"] = service_id
+    query = """
+    query Variables($projectId: String!, $environmentId: String!, $serviceId: String) {
+      variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+    }
+    """
+    result = _graphql_request(query, gql_vars)
+    if not result:
+        return {}
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    raw = data.get("variables")
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
+def fetch_railway_variable_value(name: str) -> str:
+    """Значение одной переменной (shared или service-specific)."""
+    if railway_use_shared_variables():
+        return fetch_railway_variables(service_id=None).get(name, "")
+    merged: dict[str, str] = {}
+    for sid in collect_railway_service_ids_for_sync():
+        merged.update(fetch_railway_variables(service_id=sid))
+    return merged.get(name, "")
+
+
+def sync_sales_log_json_to_railway(payload: str) -> None:
+    """После продажи/бесплатной загрузки: общий SALES_LOG_JSON (shared или web+worker)."""
+    if not railway_sales_log_writes_allowed():
+        return
+    n = upsert_railway_variable_to_targets("SALES_LOG_JSON", payload)
+    if n < 1:
+        logger.warning("SALES_LOG_JSON Railway sync failed (check token and shared variables)")
 
 
 def upsert_railway_variable_to_targets(name: str, value: str) -> int:

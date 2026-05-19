@@ -58,6 +58,45 @@ def test_worker_service_name_allows_variable_writes(monkeypatch):
     assert rvs.railway_variable_writes_allowed() is True
 
 
+def test_sales_log_writes_allowed_on_web_with_sync(monkeypatch):
+    monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "env")
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "musicacupuncture-web")
+    monkeypatch.setenv("RAILWAY_VARIABLE_WRITES", "0")
+    assert rvs.railway_sales_log_writes_allowed() is True
+    assert rvs.railway_variable_writes_allowed() is False
+
+
+def test_read_sales_entries_merges_railway_json(monkeypatch, tmp_path):
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.delenv("SALES_LOG_JSON", raising=False)
+    monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "env")
+    remote = json.dumps(
+        [
+            {
+                "event_type": "free_download",
+                "ts": "2026-05-20T12:00:00+00:00",
+                "track_title": "Divine sound Super Feng Shui from God",
+                "source": "website",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        rvs,
+        "fetch_railway_variable_value",
+        lambda name: remote if name == "SALES_LOG_JSON" else "",
+    )
+    from music_sales.sales_log import read_sales_entries, count_free_gift_downloads
+
+    rows = read_sales_entries()
+    assert count_free_gift_downloads(rows) == 1
+
+
 def test_sync_testimonials_triggers_redeploy_web(monkeypatch):
     monkeypatch.setenv("ENABLE_TESTIMONIALS_RAILWAY_SYNC", "1")
     monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
