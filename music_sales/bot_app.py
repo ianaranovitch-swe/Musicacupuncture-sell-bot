@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import socket
@@ -143,12 +144,34 @@ async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error("Unhandled error in update handler (no context.error)")
 
 
+async def _sales_log_pull_background_loop() -> None:
+    """Worker: периодически забирает журнал с web (без Railway GraphQL на web)."""
+    await asyncio.sleep(45)
+    while True:
+        try:
+            from music_sales.sales_log_pull import pull_sales_log_from_web
+
+            pull_sales_log_from_web()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("sales log pull from web failed")
+        await asyncio.sleep(120)
+
+
+async def _post_init_sales_log_pull(application) -> None:
+    if not (os.environ.get("SALES_LOG_PULL_SECRET") or "").strip():
+        return
+    asyncio.create_task(_sales_log_pull_background_loop())
+    logger.info("sales log pull from web: every 120s (SALES_LOG_PULL_SECRET set)")
+
+
 def build_application():
     if not config.BOT_TOKEN:
         raise RuntimeError(
             "BOT_TOKEN is not set. Set the environment variable BOT_TOKEN (see .env.example)."
         )
-    return ApplicationBuilder().token(config.BOT_TOKEN)
+    return ApplicationBuilder().token(config.BOT_TOKEN).post_init(_post_init_sales_log_pull)
 
 
 def _register_handlers(application) -> None:

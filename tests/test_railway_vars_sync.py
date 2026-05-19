@@ -58,18 +58,19 @@ def test_worker_service_name_allows_variable_writes(monkeypatch):
     assert rvs.railway_variable_writes_allowed() is True
 
 
-def test_sales_log_writes_allowed_on_web_with_sync(monkeypatch):
+def test_sales_log_writes_not_allowed_on_web(monkeypatch):
     monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
     monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
     monkeypatch.setenv("RAILWAY_PROJECT_ID", "proj")
     monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "env")
     monkeypatch.setenv("RAILWAY_SERVICE_NAME", "musicacupuncture-web")
     monkeypatch.setenv("RAILWAY_VARIABLE_WRITES", "0")
-    assert rvs.railway_sales_log_writes_allowed() is True
+    assert rvs.railway_sales_log_writes_allowed() is False
     assert rvs.railway_variable_writes_allowed() is False
 
 
-def test_read_sales_entries_merges_railway_json(monkeypatch, tmp_path):
+def test_read_sales_entries_merges_railway_json_on_worker(monkeypatch, tmp_path):
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "sell-bot-worker")
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.delenv("SALES_LOG_JSON", raising=False)
     monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")

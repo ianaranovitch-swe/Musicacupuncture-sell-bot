@@ -11,7 +11,7 @@ import logging
 import os
 from typing import Any
 from urllib import request as urlrequest
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +43,17 @@ def railway_sales_log_sync_enabled() -> bool:
 
 
 def railway_sales_log_writes_allowed() -> bool:
-    """Запись SALES_LOG_JSON (web + worker) при включённом sync и API-токене."""
+    """Запись SALES_LOG_JSON через GraphQL — только worker (на web → 403 Forbidden)."""
     if not railway_sales_log_sync_enabled():
         return False
-    return railway_credentials_configured()
+    if not railway_credentials_configured():
+        return False
+    return railway_variable_writes_allowed()
+
+
+def railway_sales_log_fetch_allowed() -> bool:
+    """Чтение SALES_LOG_JSON через GraphQL — только worker."""
+    return railway_sales_log_writes_allowed()
 
 
 def railway_variable_writes_allowed() -> bool:
@@ -124,6 +131,12 @@ def _graphql_request(query: str, variables: dict[str, Any]) -> dict[str, Any] | 
                 logger.warning("Railway GraphQL errors: %s", parsed.get("errors"))
                 return None
             return parsed if isinstance(parsed, dict) else None
+    except HTTPError as exc:
+        if exc.code == 403:
+            logger.debug("Railway GraphQL forbidden (403) — check project token on worker only")
+        else:
+            logger.warning("Railway GraphQL HTTP error: %s", exc)
+        return None
     except (URLError, OSError, json.JSONDecodeError) as exc:
         logger.warning("Railway GraphQL request failed: %s", exc)
         return None

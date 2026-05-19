@@ -1598,6 +1598,17 @@ def create_app(
             logger.exception("GET /api/testimonials failed")
             return jsonify({"error": str(e), "testimonials": []}), 500
 
+    @app.route("/internal/sales-log-snapshot", methods=["GET"])
+    def sales_log_snapshot() -> Any:
+        """Снимок журнала для worker (секрет SALES_LOG_PULL_SECRET). Без Railway API на web."""
+        secret = (request.headers.get("X-Sales-Log-Secret") or "").strip()
+        expected = (os.environ.get("SALES_LOG_PULL_SECRET") or "").strip()
+        if not expected or secret != expected:
+            return jsonify({"error": "forbidden"}), 403
+        from music_sales.sales_log import read_sales_entries_local
+
+        return jsonify({"entries": read_sales_entries_local()})
+
     @app.route("/health")
     def health_json() -> Any:
         """JSON: файлы songs/covers, Stripe, backend, Mini App / CORS (без секретов)."""

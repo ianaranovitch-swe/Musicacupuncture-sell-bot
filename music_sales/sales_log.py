@@ -90,17 +90,18 @@ def _merge_entries(*lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _load_sales_from_railway_api() -> list[dict[str, Any]]:
-    """Актуальный журнал из Shared SALES_LOG_JSON (события с web + worker)."""
-    if (os.environ.get("ENABLE_SALES_LOG_RAILWAY_SYNC") or "").strip() != "1":
-        return []
+    """Актуальный журнал из Shared SALES_LOG_JSON (только worker, не web)."""
     try:
-        from music_sales.railway_vars_sync import fetch_railway_variable_value, railway_credentials_configured
+        from music_sales.railway_vars_sync import (
+            fetch_railway_variable_value,
+            railway_sales_log_fetch_allowed,
+        )
 
-        if not railway_credentials_configured():
+        if not railway_sales_log_fetch_allowed():
             return []
         raw = (fetch_railway_variable_value("SALES_LOG_JSON") or "").strip()
     except Exception:
-        logger.exception("SALES_LOG_JSON fetch from Railway failed")
+        logger.debug("SALES_LOG_JSON fetch from Railway skipped or failed", exc_info=True)
         return []
     if not raw:
         return []
@@ -111,13 +112,22 @@ def _load_sales_from_railway_api() -> list[dict[str, Any]]:
     return data if isinstance(data, list) else []
 
 
-def _read_entries() -> list[dict[str, Any]]:
-    """Файл + env + Railway Shared SALES_LOG_JSON (бот видит покупки/загрузки с сайта)."""
-    return _merge_entries(
-        _read_entries_from_file(),
-        _load_sales_from_env(),
-        _load_sales_from_railway_api(),
-    )
+def read_sales_entries_local() -> list[dict[str, Any]]:
+    """Только файл + env (для web snapshot, без Railway API)."""
+    return _merge_entries(_read_entries_from_file(), _load_sales_from_env())
+
+
+def _read_entries(*, fetch_remote: bool = False) -> list[dict[str, Any]]:
+    sources = [_read_entries_from_file(), _load_sales_from_env()]
+    if fetch_remote:
+        sources.append(_load_sales_from_railway_api())
+    return _merge_entries(*sources)
+
+
+def _read_entries_for_append() -> list[dict[str, Any]]:
+    from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
+
+    return _read_entries(fetch_remote=railway_sales_log_fetch_allowed())
 
 
 def _write_entries(entries: list[dict[str, Any]], *, push_railway: bool = True) -> None:
@@ -136,7 +146,7 @@ def bootstrap_sales_log() -> int:
     При старте бота/сервера: слить файл и SALES_LOG_JSON, сохранить обратно.
     Возвращает число записей в журнале.
     """
-    merged = _read_entries()
+    merged = _read_entries(fetch_remote=False)
     if merged:
         _write_entries(merged, push_railway=False)
         logger.info("sales_log bootstrap: %d entries persisted (file + SALES_LOG_JSON)", len(merged))
@@ -205,7 +215,7 @@ def append_sale_event(
     telegram_id: int | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
-    entries = _read_entries()
+    entries = _read_entries_for_append()
     now = datetime.now(timezone.utc)
     row: dict[str, Any] = {
         "event_type": "sale",
@@ -246,7 +256,7 @@ def append_free_download_event(
     source: str = "bot",
 ) -> None:
     """Лог бесплатной выдачи трека (бот или сайт → /admin статистика FREE DOWNLOADS)."""
-    entries = _read_entries()
+    entries = _read_entries_for_append()
     now = datetime.now(timezone.utc)
     row: dict[str, Any] = {
         "event_type": "free_download",
@@ -272,4 +282,6 @@ def append_free_download_event(
 
 
 def read_sales_entries() -> list[dict[str, Any]]:
-    return _read_entries()
+    from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
+
+    return _read_entries(fetch_remote=railway_sales_log_fetch_allowed())

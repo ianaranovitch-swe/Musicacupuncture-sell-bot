@@ -112,7 +112,12 @@ def test_count_free_gift_downloads_and_since_label(monkeypatch, tmp_path):
 
 def test_append_free_download_pushes_railway_when_sync(monkeypatch, tmp_path):
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "sell-bot-worker")
+    monkeypatch.setenv("RAILWAY_VARIABLE_WRITES", "1")
     monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "p")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "e")
     pushed: list[str] = []
     monkeypatch.setattr(
         "music_sales.railway_vars_sync.sync_sales_log_json_to_railway",
