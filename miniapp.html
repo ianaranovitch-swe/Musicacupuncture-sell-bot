@@ -447,6 +447,37 @@
       position: relative;
       z-index: 2;
     }
+    .detail-testimonial {
+      margin: 14px 0 4px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.25);
+      display: none;
+    }
+    .detail-testimonial.visible {
+      display: block;
+    }
+    .detail-testimonial h3 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      color: var(--gold);
+    }
+    .detail-testimonial .testimonial-stars {
+      margin: 0 0 8px;
+      letter-spacing: 2px;
+    }
+    .detail-testimonial .testimonial-quote {
+      margin: 0 0 8px;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .detail-testimonial .testimonial-author {
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
     .currency-choice-title {
       font-size: 0.9rem;
       color: var(--muted);
@@ -566,6 +597,12 @@
           <p id="detail-duration" class="detail-duration" style="display: none" aria-live="polite"></p>
           <p id="detail-desc" class="detail-desc"></p>
           <div id="detail-price" class="detail-price"></div>
+          <div id="detail-testimonial" class="detail-testimonial" aria-hidden="true">
+            <h3>⭐ What customers say about this track:</h3>
+            <p class="testimonial-stars" id="detail-testimonial-stars"></p>
+            <p class="testimonial-quote" id="detail-testimonial-quote"></p>
+            <p class="testimonial-author" id="detail-testimonial-author"></p>
+          </div>
           <div class="btn-row">
             <p class="currency-choice-title">Choose currency to pay</p>
             <div class="currency-choice-row">
@@ -674,6 +711,8 @@
     let currentCurrency = CURRENCY_USD;
     let selected = null;
     let selectedGalleryCovers = [];
+    /** Отзывы с /api/testimonials — показываем над кнопками Buy, если есть для трека. */
+    let siteTestimonials = [];
     /** Чтобы не отправить два checkout подряд (MainButton + HTML). */
     let checkoutInFlight = false;
 
@@ -886,6 +925,61 @@
       tg.MainButton.hide();
     }
 
+    function normTrackKey(name) {
+      return String(name || "")
+        .toLowerCase()
+        .replace(/-/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function findTestimonialForTrack(fullTitle) {
+      const key = normTrackKey(fullTitle);
+      for (let i = 0; i < siteTestimonials.length; i++) {
+        if (normTrackKey(siteTestimonials[i].track) === key) return siteTestimonials[i];
+      }
+      return null;
+    }
+
+    function starsHtml(rating) {
+      const n = Math.max(0, Math.min(5, parseInt(rating, 10) || 5));
+      let out = "";
+      for (let i = 0; i < n; i++) out += "⭐";
+      return out;
+    }
+
+    function showDetailTestimonial(track) {
+      const box = document.getElementById("detail-testimonial");
+      if (!box) return;
+      const t = findTestimonialForTrack(track.fullTitle);
+      if (!t) {
+        box.classList.remove("visible");
+        box.setAttribute("aria-hidden", "true");
+        return;
+      }
+      document.getElementById("detail-testimonial-stars").textContent = starsHtml(t.rating);
+      document.getElementById("detail-testimonial-quote").textContent = `"${t.text}"`;
+      document.getElementById("detail-testimonial-author").textContent =
+        [t.name, t.city].filter(Boolean).join(", ");
+      box.classList.add("visible");
+      box.setAttribute("aria-hidden", "false");
+    }
+
+    async function loadTestimonials() {
+      try {
+        const base = getCheckoutApiBase();
+        const r = await fetch(`${base}/api/testimonials`, { method: "GET", mode: "cors" });
+        if (r.ok) {
+          const data = await r.json();
+          if (data && data.testimonials && data.testimonials.length) {
+            siteTestimonials = data.testimonials;
+          }
+        }
+      } catch (e) {
+        /* без отзывов — просто не показываем блок */
+      }
+    }
+
     function openDetail(track) {
       if (!track || !currentCurrency) return;
       selected = track;
@@ -906,6 +1000,7 @@
       }
       document.getElementById("detail-desc").textContent = track.description;
       document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : formatPrice(currentCurrency);
+      showDetailTestimonial(track);
       // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
       const freeBtn = document.getElementById("btn-free-track");
       const currencyTitle = document.querySelector(".currency-choice-title");
@@ -1216,7 +1311,7 @@
     /** Старт: параметры checkout из URL; цены с backend; валюта из localStorage. */
     (async function init() {
       syncCheckoutParamsFromUrl();
-      await loadServerPricing();
+      await Promise.all([loadServerPricing(), loadTestimonials()]);
       syncTestModeBanner();
       currentCurrency = readStoredCurrency() || CURRENCY_USD;
       showAppShell();

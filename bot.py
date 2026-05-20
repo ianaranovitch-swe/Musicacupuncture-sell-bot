@@ -105,13 +105,17 @@ def _duration_line(track: dict) -> str | None:
 
 def _detail_text(track: dict) -> str:
     """Текст карточки трека в детальном просмотре."""
+    from music_sales.testimonials_store import format_track_testimonial_caption_block
+
     esc = html.escape
     prefix = esc(_test_banner_prefix())
     dur = _duration_line(track)
     dur_block = f"\n\n⏱ {esc(dur)}" if dur else ""
+    testimonial = format_track_testimonial_caption_block(str(track.get("title") or ""), html=True)
     return (
         f"{prefix}✨ {esc(track['title'])}\n\n"
-        f"{esc(track['description'])}\n\n"
+        f"{esc(track['description'])}"
+        f"{testimonial}\n\n"
         f"{esc(_detail_price_line(track))}"
         f"{dur_block}"
     )

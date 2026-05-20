@@ -21,6 +21,15 @@ def test_three_reviews_have_four_stars():
     assert len(four_star) == 3
 
 
+def test_format_track_testimonial_caption_block_for_heart():
+    from music_sales.testimonials_store import format_track_testimonial_caption_block
+
+    block = format_track_testimonial_caption_block("Divine sound Heart from God", html=True)
+    assert "What customers say" in block
+    assert "Sarah" in block or "Heart" in block
+    assert format_track_testimonial_caption_block("Unknown Track XYZ") == ""
+
+
 def test_find_testimonials_for_track_heart():
     found = find_testimonials_for_track("Divine sound Heart from God")
     assert len(found) == 1

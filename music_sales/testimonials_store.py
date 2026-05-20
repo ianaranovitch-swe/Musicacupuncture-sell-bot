@@ -192,6 +192,51 @@ def find_testimonials_for_track(track_title: str, *, visible_only: bool = True) 
     return [t for t in pool if _normalize_track_key(str(t.get("track") or "")) == key]
 
 
+def first_testimonial_for_track(track_title: str, *, visible_only: bool = True) -> dict[str, Any] | None:
+    """Первый видимый отзыв для трека (карточка покупки в боте / Mini App)."""
+    items = find_testimonials_for_track(track_title, visible_only=visible_only)
+    return items[0] if items else None
+
+
+def format_track_testimonial_caption_block(track_title: str, *, html: bool = False) -> str:
+    """
+    Блок «что говорят клиенты» над кнопкой Buy в боте.
+    Пустая строка, если отзыва для этого трека нет.
+    """
+    t = first_testimonial_for_track(track_title)
+    if not t:
+        return ""
+    quote = str(t.get("text") or "").strip()
+    if not quote:
+        return ""
+    stars = rating_stars(int(t.get("rating") or 5))
+    name = str(t.get("name") or "").strip()
+    city = str(t.get("city") or "").strip()
+    author = ", ".join(x for x in (name, city) if x)
+    if html:
+        import html as html_mod
+
+        esc = html_mod.escape
+        lines = [
+            "",
+            f"⭐ <b>{esc('What customers say about this track:')}</b>",
+            esc(stars),
+            f"“{esc(quote)}”",
+        ]
+        if author:
+            lines.append(f"— {esc(author)}")
+        return "\n".join(lines)
+    lines = [
+        "",
+        "⭐ What customers say about this track:",
+        stars,
+        f'"{quote}"',
+    ]
+    if author:
+        lines.append(f"— {author}")
+    return "\n".join(lines)
+
+
 def rating_stars(rating: int) -> str:
     r = max(0, min(5, int(rating or 0)))
     return "⭐" * r if r else "⭐"
