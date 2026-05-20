@@ -13,12 +13,16 @@ import json
 import logging
 import os
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from music_sales.catalog import project_root
 
 logger = logging.getLogger(__name__)
+
+# На web несколько gunicorn-воркеров: без lock параллельные append теряют записи.
+_SALES_LOG_LOCK = threading.Lock()
 
 # Бесплатный подарок в боте (Super Feng Shui) — отдельная метрика в статистике.
 FREE_GIFT_TRACK_TITLE = "Divine sound Super Feng Shui from God"
@@ -141,18 +145,43 @@ def _write_entries(entries: list[dict[str, Any]], *, push_railway: bool = True) 
         _sync_sales_log_to_railway(payload)
 
 
+def _bootstrap_fetch_remote() -> bool:
+    """Worker после redeploy: подтянуть Shared SALES_LOG_JSON из Railway API."""
+    from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
+
+    return railway_sales_log_fetch_allowed()
+
+
 def bootstrap_sales_log() -> int:
     """
-    При старте бота/сервера: слить файл и SALES_LOG_JSON, сохранить обратно.
+    При старте: слить файл, SALES_LOG_JSON (env) и на worker — Shared Variable через API.
     Возвращает число записей в журнале.
     """
-    merged = _read_entries(fetch_remote=False)
-    if merged:
-        _write_entries(merged, push_railway=False)
-        logger.info("sales_log bootstrap: %d entries persisted (file + SALES_LOG_JSON)", len(merged))
-    else:
-        logger.info("sales_log bootstrap: empty log (counting starts on first sale/free gift)")
-    return len(merged)
+    fetch_remote = _bootstrap_fetch_remote()
+    with _SALES_LOG_LOCK:
+        merged = _read_entries(fetch_remote=fetch_remote)
+        if merged:
+            _write_entries(merged, push_railway=False)
+            src = "file + env + Railway" if fetch_remote else "file + SALES_LOG_JSON"
+            logger.info("sales_log bootstrap: %d entries persisted (%s)", len(merged), src)
+        else:
+            logger.info("sales_log bootstrap: empty log (counting starts on first sale/free gift)")
+        return len(merged)
+
+
+def merge_and_persist_sales_log(*extra_lists: list[dict[str, Any]]) -> int:
+    """
+    Worker: атомарно слить текущий журнал с доп. списками (например снимок с web) и сохранить.
+    """
+    from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
+
+    with _SALES_LOG_LOCK:
+        merged = _merge_entries(
+            _read_entries(fetch_remote=railway_sales_log_fetch_allowed()),
+            *extra_lists,
+        )
+        _write_entries(merged, push_railway=True)
+        return len(merged)
 
 
 def _sync_sales_log_to_railway(payload: str) -> None:
@@ -215,38 +244,39 @@ def append_sale_event(
     telegram_id: int | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
-    entries = _read_entries_for_append()
-    now = datetime.now(timezone.utc)
-    row: dict[str, Any] = {
-        "event_type": "sale",
-        "ts": now.isoformat(),
-        "song_id": song_id,
-        "track_id": int(track_id) if track_id is not None else None,
-        "track_title": track_title,
-        "transaction_id": transaction_id or session_id or "",
-        "amount": float(amount) if amount is not None else 0.0,
-        "currency": currency or "",
-        "source": source or "",
-        "session_id": session_id or "",
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-        "week": int(now.strftime("%V")),
-        "month": now.month,
-        "year": now.year,
-    }
-    if telegram_id is not None:
-        row["telegram_user_id"] = telegram_id
-    if extra:
-        row.update(extra)
-    entries.append(row)
-    _write_entries(entries)
-    logger.info(
-        "sale logged: source=%s track=%s amount=%s %s",
-        row.get("source"),
-        row.get("track_title"),
-        row.get("amount"),
-        row.get("currency"),
-    )
+    with _SALES_LOG_LOCK:
+        entries = _read_entries_for_append()
+        now = datetime.now(timezone.utc)
+        row: dict[str, Any] = {
+            "event_type": "sale",
+            "ts": now.isoformat(),
+            "song_id": song_id,
+            "track_id": int(track_id) if track_id is not None else None,
+            "track_title": track_title,
+            "transaction_id": transaction_id or session_id or "",
+            "amount": float(amount) if amount is not None else 0.0,
+            "currency": currency or "",
+            "source": source or "",
+            "session_id": session_id or "",
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M:%S"),
+            "week": int(now.strftime("%V")),
+            "month": now.month,
+            "year": now.year,
+        }
+        if telegram_id is not None:
+            row["telegram_user_id"] = telegram_id
+        if extra:
+            row.update(extra)
+        entries.append(row)
+        _write_entries(entries)
+        logger.info(
+            "sale logged: source=%s track=%s amount=%s %s",
+            row.get("source"),
+            row.get("track_title"),
+            row.get("amount"),
+            row.get("currency"),
+        )
 
 
 def append_free_download_event(
@@ -256,32 +286,34 @@ def append_free_download_event(
     source: str = "bot",
 ) -> None:
     """Лог бесплатной выдачи трека (бот или сайт → /admin статистика FREE DOWNLOADS)."""
-    entries = _read_entries_for_append()
-    now = datetime.now(timezone.utc)
-    row: dict[str, Any] = {
-        "event_type": "free_download",
-        "ts": now.isoformat(),
-        "track_title": track_title or FREE_GIFT_TRACK_TITLE,
-        "source": (source or "bot").strip() or "bot",
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-        "week": int(now.strftime("%V")),
-        "month": now.month,
-        "year": now.year,
-    }
-    if telegram_user_id is not None:
-        row["telegram_user_id"] = int(telegram_user_id)
-    entries.append(row)
-    _write_entries(entries)
-    logger.info(
-        "free_download logged: user_id=%s source=%s total_free=%d",
-        telegram_user_id,
-        row["source"],
-        count_free_gift_downloads(entries),
-    )
+    with _SALES_LOG_LOCK:
+        entries = _read_entries_for_append()
+        now = datetime.now(timezone.utc)
+        row: dict[str, Any] = {
+            "event_type": "free_download",
+            "ts": now.isoformat(),
+            "track_title": track_title or FREE_GIFT_TRACK_TITLE,
+            "source": (source or "bot").strip() or "bot",
+            "date": now.strftime("%Y-%m-%d"),
+            "time": now.strftime("%H:%M:%S"),
+            "week": int(now.strftime("%V")),
+            "month": now.month,
+            "year": now.year,
+        }
+        if telegram_user_id is not None:
+            row["telegram_user_id"] = int(telegram_user_id)
+        entries.append(row)
+        _write_entries(entries)
+        logger.info(
+            "free_download logged: user_id=%s source=%s total_free=%d",
+            telegram_user_id,
+            row["source"],
+            count_free_gift_downloads(entries),
+        )
 
 
 def read_sales_entries() -> list[dict[str, Any]]:
     from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
 
-    return _read_entries(fetch_remote=railway_sales_log_fetch_allowed())
+    with _SALES_LOG_LOCK:
+        return _read_entries(fetch_remote=railway_sales_log_fetch_allowed())

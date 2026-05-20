@@ -146,7 +146,6 @@ async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def _sales_log_pull_background_loop() -> None:
     """Worker: периодически забирает журнал с web (без Railway GraphQL на web)."""
-    await asyncio.sleep(45)
     while True:
         try:
             from music_sales.sales_log_pull import pull_sales_log_from_web

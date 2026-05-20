@@ -71,6 +71,37 @@ def test_read_entries_merges_env_when_file_empty(monkeypatch, tmp_path):
     assert rows[0]["telegram_user_id"] == 1
 
 
+def test_bootstrap_sales_log_fetches_railway_on_worker(monkeypatch, tmp_path):
+    """После redeploy worker: bootstrap подтягивает Shared SALES_LOG_JSON через API."""
+    monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
+    monkeypatch.setenv("RAILWAY_SERVICE_NAME", "sell-bot-worker")
+    monkeypatch.setenv("RAILWAY_VARIABLE_WRITES", "1")
+    monkeypatch.setenv("ENABLE_SALES_LOG_RAILWAY_SYNC", "1")
+    monkeypatch.setenv("RAILWAY_API_TOKEN", "tok")
+    monkeypatch.setenv("RAILWAY_PROJECT_ID", "p")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "e")
+    monkeypatch.delenv("SALES_LOG_JSON", raising=False)
+    remote = json.dumps(
+        [
+            {
+                "event_type": "free_download",
+                "ts": "2026-05-10T08:00:00+00:00",
+                "track_title": "Divine sound Super Feng Shui from God",
+                "source": "website",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "music_sales.sales_log._load_sales_from_railway_api",
+        lambda: json.loads(remote),
+    )
+    from music_sales.sales_log import bootstrap_sales_log, read_sales_entries
+
+    n = bootstrap_sales_log()
+    assert n == 1
+    assert len(read_sales_entries()) == 1
+
+
 def test_bootstrap_sales_log_writes_merged_to_file(monkeypatch, tmp_path):
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.delenv("ENABLE_SALES_LOG_RAILWAY_SYNC", raising=False)

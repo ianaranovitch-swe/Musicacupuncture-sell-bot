@@ -37,7 +37,16 @@ def fetch_web_sales_log_snapshot() -> list[dict[str, Any]]:
     """GET /internal/sales-log-snapshot на web (только с секретом)."""
     secret = _pull_secret()
     base = _web_public_base_url()
-    if not secret or not base:
+    if not secret:
+        logger.warning(
+            "sales log pull: SALES_LOG_PULL_SECRET not set on worker — "
+            "website free downloads will not appear in /admin stats"
+        )
+        return []
+    if not base:
+        logger.warning(
+            "sales log pull: set WEB_PUBLIC_URL=https://musicacupuncture.digital on worker"
+        )
         return []
     url = f"{base}/internal/sales-log-snapshot"
     req = urlrequest.Request(
@@ -50,7 +59,7 @@ def fetch_web_sales_log_snapshot() -> list[dict[str, Any]]:
             raw = resp.read().decode("utf-8", errors="ignore")
             data = json.loads(raw)
     except (URLError, OSError, json.JSONDecodeError, TimeoutError) as exc:
-        logger.debug("sales log pull from web failed: %s", exc)
+        logger.warning("sales log pull from web failed (%s): %s", url, exc)
         return []
     if not isinstance(data, dict):
         return []
@@ -68,19 +77,21 @@ def pull_sales_log_from_web() -> int:
     web_entries = fetch_web_sales_log_snapshot()
     if not web_entries:
         return 0
-    from music_sales.railway_vars_sync import railway_sales_log_fetch_allowed
     from music_sales.sales_log import (
-        _merge_entries,
-        _read_entries,
-        _write_entries,
+        count_free_gift_downloads,
+        merge_and_persist_sales_log,
         read_sales_entries,
     )
 
-    before = len(read_sales_entries())
-    merged = _merge_entries(_read_entries(fetch_remote=railway_sales_log_fetch_allowed()), web_entries)
-    _write_entries(merged, push_railway=True)
-    after = len(merged)
-    added = max(0, after - before)
-    if added:
-        logger.info("sales log: merged %d new entries from website (total %d)", added, after)
-    return added
+    before_free = count_free_gift_downloads(read_sales_entries())
+    total = merge_and_persist_sales_log(web_entries)
+    after_free = count_free_gift_downloads(read_sales_entries())
+    added_free = max(0, after_free - before_free)
+    if added_free:
+        logger.info(
+            "sales log: merged %d new free downloads from website (total entries %d, free %d)",
+            added_free,
+            total,
+            after_free,
+        )
+    return added_free
