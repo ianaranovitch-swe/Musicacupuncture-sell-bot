@@ -1335,29 +1335,27 @@ def create_app(
         payment_ok: Optional[bool] = None,
         reason: Optional[str] = None,
     ) -> None:
-        """Send an owner notification directly via the Telegram Bot API (no Bot instance)."""
-        import html as _html
+        """Уведомление владельцу и разработчику через Telegram Bot API (без Bot instance)."""
+        from music_sales.owner_notify import owner_and_developer_chat_ids, _format_notify_lines
 
-        owner_id = config.owner_telegram_id_int()
-        if owner_id is None:
-            return
-        lines = [f"🛎 <b>{_html.escape(event)}</b>", f"User: {_html.escape(actor_name)}"]
-        if song_name:
-            lines.append(f"Track: {_html.escape(song_name)}")
-        if payment_ok is True:
-            lines.append("Payment: ✅ success")
-        elif payment_ok is False:
-            lines.append("Payment: ❌ failed")
-        if reason:
-            lines.append(f"Reason: {_html.escape(reason)}")
-        try:
-            requests.post(
-                _tg_api_url("sendMessage"),
-                json={"chat_id": owner_id, "text": "\n".join(lines), "parse_mode": "HTML"},
-                timeout=10,
+        text = "\n".join(
+            _format_notify_lines(
+                actor_label=actor_name,
+                event=event,
+                song_name=song_name,
+                payment_ok=payment_ok,
+                reason=reason,
             )
-        except Exception:
-            logger.exception("Failed to notify owner via Telegram API")
+        )
+        for chat_id in owner_and_developer_chat_ids():
+            try:
+                requests.post(
+                    _tg_api_url("sendMessage"),
+                    json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+                    timeout=10,
+                )
+            except Exception:
+                logger.exception("Failed to notify chat_id=%s via Telegram API", chat_id)
 
     @app.route("/webhook", methods=["POST"])
     def webhook() -> Any:
