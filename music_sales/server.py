@@ -1511,6 +1511,19 @@ def create_app(
             except Exception:
                 logger.exception("sales_log preparation failed")
 
+            try:
+                from music_sales.purchase_email import send_purchase_emails_for_stripe_session
+
+                send_purchase_emails_for_stripe_session(
+                    session,
+                    catalog=catalog,
+                    song_id=song_id,
+                    meta=meta,
+                    telegram_id_int=tid_int,
+                )
+            except Exception:
+                logger.exception("purchase email failed (checkout webhook)")
+
             # Website: не шлём документ в Telegram. Запасной путь: chat_id=0 невалиден в Telegram.
             if source == "website" or tid_int == 0:
                 _notify_owner_via_api(

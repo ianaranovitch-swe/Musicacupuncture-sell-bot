@@ -205,6 +205,33 @@ async def successful_payment(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     logger.info("successful_payment delivered: user_id=%s song_id=%s (file_id)", user_id, song_id)
+    try:
+        from datetime import datetime, timezone
+
+        from music_sales.purchase_email import buyer_label_from_metadata, send_purchase_emails
+
+        u = msg.from_user
+        if u and u.username:
+            tg_name = f"@{u.username}"
+        elif u:
+            tg_name = " ".join(x for x in (u.first_name, u.last_name or "") if x).strip()
+        else:
+            tg_name = ""
+        label = buyer_label_from_metadata(tg_name, u.id if u else None)
+        amount_major = float(sp.total_amount) / 100.0
+        send_purchase_emails(
+            track_title=title,
+            song_row=song_meta,
+            amount=amount_major,
+            currency=str(sp.currency or config.PAYMENTS_CURRENCY or "USD"),
+            purchased_at_utc=datetime.now(timezone.utc),
+            buyer_email=None,
+            buyer_telegram_label=label,
+            source="telegram",
+        )
+    except Exception:
+        logger.exception("purchase email failed (telegram payment)")
+
     await notify_owner_async(
         context,
         actor=msg.from_user,
