@@ -748,6 +748,14 @@
       return "$16";
     }
 
+    /** Обе валюты на карточках каталога (не зависит от последнего Pay in USD/SEK). */
+    function formatDualPrice() {
+      if (serverPricing) {
+        return { usd: serverPricing.usd_display, sek: serverPricing.sek_display };
+      }
+      return { usd: "$16", sek: "169 kr" };
+    }
+
     /** Берём из query (бот открывает ссылку с checkout_api=) и кладём в sessionStorage. */
     function syncCheckoutParamsFromUrl() {
       try {
@@ -855,7 +863,8 @@
 
     function renderGrid() {
       const root = document.getElementById("track-grid");
-      const priceStr = formatPrice(currentCurrency);
+      const dual = formatDualPrice();
+      const priceStr = dual.usd + " · " + dual.sek;
       const aboutUrl = getAboutPageUrl();
       const aboutCardHtml = aboutUrl
         ? `
@@ -999,7 +1008,8 @@
         }
       }
       document.getElementById("detail-desc").textContent = track.description;
-      document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : formatPrice(currentCurrency);
+      const dual = formatDualPrice();
+      document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : dual.usd + " · " + dual.sek;
       showDetailTestimonial(track);
       // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
       const freeBtn = document.getElementById("btn-free-track");
