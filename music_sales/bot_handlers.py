@@ -75,6 +75,45 @@ def _about_michael_button_row() -> list[InlineKeyboardButton]:
     ]
 
 
+async def _miniapp_store_button_row(context: ContextTypes.DEFAULT_TYPE) -> list[InlineKeyboardButton] | None:
+    """Строка WebApp «Open Music Store» с bot_username в URL (как при /start)."""
+    url = (config.resolved_miniapp_url() or "").strip()
+    if not url.startswith("https://"):
+        return None
+    try:
+        me = await context.bot.get_me()
+        uname = (me.username or "").strip().lstrip("@")
+        if uname:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}bot_username={uname}"
+    except Exception:
+        pass
+    return [InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=url))]
+
+
+async def _send_main_navigation_footer(
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """
+    Последнее сообщение после About: кнопки отзывов и магазина.
+    Без reply_parameters — новое сообщение внизу чата (бот не может прокрутить экран пользователя).
+    """
+    store_row = await _miniapp_store_button_row(context)
+    rows: list[list[InlineKeyboardButton]] = [main_menu_reviews_button_row()]
+    if store_row:
+        rows.append(store_row)
+    markup = InlineKeyboardMarkup(rows)
+    if store_row:
+        text = "Browse the Music Store or read customer reviews:"
+    else:
+        text = (
+            "Read customer reviews below, or open the Music Store from the menu button "
+            "next to the message field."
+        )
+    await context.bot.send_message(chat_id=chat_id, text=text, reply_markup=markup)
+
+
 def _free_track_markup() -> InlineKeyboardMarkup:
     """Главное меню /start: подарок, отзывы, About."""
     rows: list[list[InlineKeyboardButton]] = [
@@ -421,6 +460,7 @@ async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAU
             text="Video file is not available on the server.",
             reply_parameters=reply_params,
         )
+        await _send_main_navigation_footer(chat_id, context)
         return
     try:
         with video_path.open("rb") as video_file:
@@ -438,6 +478,7 @@ async def about_video_sound_callback(update: Update, context: ContextTypes.DEFAU
             text="Could not send the video with sound. Try the HTTPS link button above.",
             reply_parameters=reply_params,
         )
+    await _send_main_navigation_footer(chat_id, context)
 
 
 async def _send_about_michael_photos(
@@ -544,6 +585,7 @@ async def send_about_michael(update: Update, context: ContextTypes.DEFAULT_TYPE)
         text=ABOUT_MICHAEL_BODY,
         reply_parameters=reply_params,
     )
+    await _send_main_navigation_footer(chat_id, context)
 
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

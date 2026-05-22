@@ -11,6 +11,7 @@ from music_sales.bot_handlers import (
     send_free_track,
     start,
 )
+from music_sales.testimonials_bot import REVIEWS_OPEN_CB
 
 
 @pytest.mark.asyncio
@@ -106,6 +107,11 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
     context.bot.send_photo = AsyncMock()
     context.bot.send_animation = AsyncMock()
     context.bot.send_media_group = AsyncMock()
+    context.bot.get_me = AsyncMock(return_value=MagicMock(username="music_bot"))
+    mocker.patch(
+        "music_sales.bot_handlers.config.resolved_miniapp_url",
+        return_value="https://example.com/miniapp.html",
+    )
 
     from music_sales.bot_handlers import ABOUT_VIDEO_SOUND_CB, send_about_michael
 
@@ -127,8 +133,17 @@ async def test_send_about_michael_callback_sends_video_photos_and_body(mocker, t
     reply_used = any(c.kwargs.get("reply_parameters") is not None for c in context.bot.send_message.await_args_list)
     assert reply_used
     context.bot.send_photo.assert_awaited_once()
-    body_call = context.bot.send_message.await_args_list[-1]
-    assert "Michael B. Johnsson" in body_call.kwargs["text"]
+    footer_call = context.bot.send_message.await_args_list[-1]
+    assert "Browse the Music Store" in footer_call.kwargs["text"]
+    assert footer_call.kwargs.get("reply_parameters") is None
+    nav_kb = footer_call.kwargs["reply_markup"].inline_keyboard
+    assert nav_kb[0][0].callback_data == REVIEWS_OPEN_CB
+    assert nav_kb[1][0].web_app is not None
+    assert "Open Music Store" in nav_kb[1][0].text
+    bio_calls = [
+        c for c in context.bot.send_message.await_args_list if "Michael B. Johnsson" in (c.kwargs.get("text") or "")
+    ]
+    assert len(bio_calls) == 1
 
 
 @pytest.mark.asyncio
@@ -150,6 +165,11 @@ async def test_about_video_sound_callback_sends_video(mocker, tmp_path):
     context = MagicMock()
     context.bot.send_message = AsyncMock()
     context.bot.send_video = AsyncMock()
+    context.bot.get_me = AsyncMock(return_value=MagicMock(username="music_bot"))
+    mocker.patch(
+        "music_sales.bot_handlers.config.resolved_miniapp_url",
+        return_value="https://example.com/miniapp.html",
+    )
 
     from music_sales.bot_handlers import about_video_sound_callback
 
@@ -158,6 +178,9 @@ async def test_about_video_sound_callback_sends_video(mocker, tmp_path):
     q.answer.assert_awaited_once()
     context.bot.send_video.assert_awaited_once()
     assert "sound" in context.bot.send_video.call_args.kwargs["caption"].lower()
+    footer = context.bot.send_message.await_args_list[-1]
+    assert footer.kwargs.get("reply_parameters") is None
+    assert footer.kwargs["reply_markup"].inline_keyboard[0][0].callback_data == REVIEWS_OPEN_CB
 
 
 @pytest.mark.asyncio
