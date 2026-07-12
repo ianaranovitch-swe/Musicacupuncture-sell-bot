@@ -736,6 +736,35 @@ def test_website_download_redirect_returns_302_to_file(mocker):
     assert "website/download-file" in (resp.headers.get("Location") or "")
 
 
+def test_website_download_redirect_forwards_disposition_inline(mocker):
+    """Плеер на сайте: disposition=inline на redirect → в Location для download-file."""
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mocker.patch(
+        "stripe.checkout.Session.retrieve",
+        return_value={
+            "payment_status": "paid",
+            "metadata": {"source": "website", "song_id": "song1"},
+        },
+    )
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.get(
+        "/website/download-redirect?session_id=cs_test_redirect&track_id=2&disposition=inline",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers.get("Location") or ""
+    assert "website/download-file" in location
+    assert "disposition=inline" in location
+
+
 def test_website_download_file_streams_from_telegram_cdn(mocker, tmp_path):
     """После проверки подписи — прокси-стрим с CDN Telegram (без 302 с BOT_TOKEN в Location)."""
     import hashlib

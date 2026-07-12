@@ -1213,12 +1213,17 @@ def create_app(
         """
         Редирект на подписанный MP3 — работает по обычной ссылке <a href> с GitHub Pages
         без CORS (в отличие от fetch к /website/download).
+
+        disposition=inline пробрасываем в Location — иначе <audio> после 302 получит attachment.
         """
         session_id = (request.args.get("session_id") or "").strip()
         track_id = (request.args.get("track_id") or "").strip()
         out = _website_signed_mp3_abs_url_or_error(session_id, track_id)
         if isinstance(out, tuple):
             return jsonify(out[0]), out[1]
+        disposition = (request.args.get("disposition") or "").strip().lower()
+        if disposition == "inline":
+            out = f"{out}&{urlencode({'disposition': 'inline'})}"
         return redirect(out, code=302)
 
     @app.route("/website/download", methods=["GET", "OPTIONS"])
