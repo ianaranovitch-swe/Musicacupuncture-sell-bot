@@ -661,6 +661,37 @@ def test_website_download_returns_signed_url(mocker):
     assert "/website/download-file?" in (body.get("url") or "")
 
 
+def test_website_download_signed_url_uses_default_300s_ttl(mocker):
+    from urllib.parse import parse_qs, urlparse
+
+    fixed_now = 1_700_000_000
+    mocker.patch("time.time", return_value=fixed_now)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mocker.patch(
+        "stripe.checkout.Session.retrieve",
+        return_value={
+            "payment_status": "paid",
+            "metadata": {"source": "website", "song_id": "song1"},
+        },
+    )
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.get("/website/download?session_id=cs_test_123&track_id=2")
+
+    assert resp.status_code == 200
+    url = (resp.get_json() or {}).get("url") or ""
+    exp = int(parse_qs(urlparse(url).query)["exp"][0])
+    assert exp == fixed_now + 300
+
+
 def test_website_download_options_preflight_includes_cors(mocker):
     mocker.patch("music_sales.config.MINIAPP_CORS_ORIGINS", "https://ianaranovitch-swe.github.io")
     from music_sales.server import create_app

@@ -35,3 +35,7 @@ file_ids.json
 # Runtime sales / admin stats (local + Railway; do not commit — use SALES_LOG_JSON on server if needed)
 sales_log.json
 testimonials.json
+
+# Lokala marknads-/ljudmappar (stora filer — ska inte till GitHub)
+5-Chakror/
+Free-Annons/

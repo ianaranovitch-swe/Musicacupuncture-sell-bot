@@ -52,6 +52,24 @@ CHECKOUT_SEK_UNIT_AMOUNT = _env("CHECKOUT_SEK_UNIT_AMOUNT", "16900")
 # Пример: https://t.me/musicacupuncture_bot
 CHECKOUT_SUCCESS_URL = _env("CHECKOUT_SUCCESS_URL")
 
+
+def website_download_token_ttl_seconds() -> int:
+    """
+    Срок жизни подписанной ссылки /website/download-file (секунды).
+
+    Короткий TTL снижает риск повторного использования утёкшего URL.
+    Новая подпись выдаётся при каждом вызове /website/download или /website/download-redirect
+    (после проверки оплаченной Stripe Checkout Session).
+    """
+    raw = (os.environ.get("WEBSITE_DOWNLOAD_TOKEN_TTL_SECONDS") or "300").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 300
+    # 60 с — минимум; 900 с (15 мин) — верхняя граница, чтобы не оставлять «дырявые» ссылки на часы.
+    return max(60, min(n, 900))
+
+
 # Telegram Payments (Stripe): provider token из BotFather (нужен для sendInvoice)
 PAYMENTS_PROVIDER_TOKEN = _env("PAYMENTS_PROVIDER_TOKEN")
 # Валюта инвойса Telegram Payments (должна совпадать с валютой Stripe Checkout)

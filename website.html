@@ -690,6 +690,156 @@
       align-items: center;
     }
 
+    /* ========== Post-purchase MP3 player modal ========== */
+    #purchase-player-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 350;
+      background: rgba(8, 2, 18, 0.94);
+      backdrop-filter: blur(8px);
+      padding: 16px;
+      align-items: center;
+      justify-content: center;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    #purchase-player-modal.open {
+      display: flex;
+    }
+    body.purchase-player-open {
+      overflow: hidden;
+    }
+    .purchase-player-panel {
+      width: 100%;
+      max-width: 420px;
+      margin: auto;
+      padding: 22px 20px 20px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+      background: linear-gradient(165deg, rgba(42, 12, 72, 0.98) 0%, rgba(26, 5, 51, 0.99) 100%);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+      position: relative;
+      text-align: center;
+    }
+    .purchase-player-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 1.25rem;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .purchase-player-close:hover {
+      background: rgba(255, 215, 0, 0.15);
+      color: var(--gold);
+    }
+    .purchase-player-success {
+      margin: 0 0 14px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .purchase-player-cover {
+      width: min(220px, 72vw);
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 215, 0, 0.45);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      margin: 0 auto 14px;
+      display: block;
+    }
+    .purchase-player-title {
+      margin: 0 0 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--text);
+    }
+    .purchase-player-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .purchase-player-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .purchase-player-btn {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ffe066, #ffd700 55%, #daa520);
+      color: #1a0533;
+      font-size: 1.1rem;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(255, 215, 0, 0.25);
+    }
+    .purchase-player-btn:disabled {
+      opacity: 0.45;
+      cursor: wait;
+    }
+    .purchase-player-progress-wrap {
+      flex: 1;
+      min-width: 0;
+    }
+    .purchase-player-time {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .purchase-player-progress {
+      width: 100%;
+      height: 6px;
+      accent-color: var(--gold);
+      cursor: pointer;
+    }
+    .purchase-player-volume-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      min-width: 52px;
+    }
+    .purchase-player-volume {
+      flex: 1;
+      accent-color: var(--gold);
+      cursor: pointer;
+    }
+    .purchase-player-audio-hidden {
+      display: none;
+    }
+    .purchase-player-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    .purchase-player-status {
+      min-height: 1.2em;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0 0 10px;
+    }
+    .purchase-player-thanks {
+      margin: 14px 0 0;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
     /* ========== About ========== */
     .about-block {
       max-width: 640px;
@@ -976,6 +1126,39 @@
     </div>
   </div>
 
+  <!-- ========== Post-purchase MP3 player (after Stripe success) ========== -->
+  <div id="purchase-player-modal" class="purchase-player-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="purchase-player-title">
+    <div class="purchase-player-panel">
+      <button type="button" class="purchase-player-close" id="purchase-player-close" aria-label="Close player">✕</button>
+      <p class="purchase-player-success">✅ Payment Successful!</p>
+      <img class="purchase-player-cover" id="purchase-player-cover" src="" alt="" />
+      <p class="purchase-player-title" id="purchase-player-title"></p>
+      <p class="purchase-player-status" id="purchase-player-status">Loading your track…</p>
+      <div class="purchase-player-controls">
+        <div class="purchase-player-row">
+          <button type="button" class="purchase-player-btn" id="purchase-player-play" aria-label="Play" disabled>▶</button>
+          <div class="purchase-player-progress-wrap">
+            <div class="purchase-player-time">
+              <span id="purchase-player-elapsed">0:00</span>
+              <span id="purchase-player-duration">0:00</span>
+            </div>
+            <input type="range" class="purchase-player-progress" id="purchase-player-progress" min="0" max="1000" value="0" aria-label="Playback progress" disabled />
+          </div>
+        </div>
+        <div class="purchase-player-row">
+          <span class="purchase-player-volume-label">🔊 Volume</span>
+          <input type="range" class="purchase-player-volume" id="purchase-player-volume" min="0" max="100" value="100" aria-label="Volume" />
+        </div>
+      </div>
+      <audio id="purchase-player-audio" class="purchase-player-audio-hidden" preload="auto" playsinline crossorigin="anonymous"></audio>
+      <div class="purchase-player-actions">
+        <button type="button" class="btn-gold" id="purchase-player-download">⬇️ Download MP3</button>
+        <button type="button" class="btn-outline" id="purchase-player-download-again">⬇️ Download again</button>
+      </div>
+      <p class="purchase-player-thanks">Thank you for supporting Music Acupuncture. 🙏<br />— Michael</p>
+    </div>
+  </div>
+
   <script>
 (function () {
   "use strict";
@@ -1049,6 +1232,8 @@
   let successTrackId = "";
   let successSessionId = "";
   let successDownloadUrl = "";
+  let purchasePlayerMp3Url = "";
+  let purchasePlayerReady = false;
   let siteTestimonials = [];
   let testimonialsSlide = 0;
   let testimonialsTimer = null;
@@ -1604,6 +1789,216 @@
     } catch (e) {}
   }
 
+  function findTrackById(trackId) {
+    var idStr = String(trackId);
+    for (var i = 0; i < TRACKS.length; i++) {
+      if (String(TRACKS[i].id) === idStr) return TRACKS[i];
+    }
+    return null;
+  }
+
+  function formatAudioTime(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return "0:00";
+    var m = Math.floor(seconds / 60);
+    var s = Math.floor(seconds % 60);
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function appendQueryParam(url, key, value) {
+    if (!url) return url;
+    var sep = url.indexOf("?") >= 0 ? "&" : "?";
+    return url + sep + encodeURIComponent(key) + "=" + encodeURIComponent(value);
+  }
+
+  function closePurchasePlayerModal() {
+    var modal = document.getElementById("purchase-player-modal");
+    var audio = document.getElementById("purchase-player-audio");
+    if (audio) {
+      try {
+        audio.pause();
+      } catch (e) {}
+      audio.removeAttribute("src");
+      try {
+        audio.load();
+      } catch (e2) {}
+    }
+    if (modal) {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("purchase-player-open");
+    purchasePlayerReady = false;
+  }
+
+  function updatePurchasePlayerProgress() {
+    var audio = document.getElementById("purchase-player-audio");
+    var progress = document.getElementById("purchase-player-progress");
+    var elapsed = document.getElementById("purchase-player-elapsed");
+    var duration = document.getElementById("purchase-player-duration");
+    if (!audio || !progress) return;
+    var dur = audio.duration;
+    var cur = audio.currentTime;
+    if (isFinite(dur) && dur > 0) {
+      progress.value = String(Math.round((cur / dur) * 1000));
+      if (duration) duration.textContent = formatAudioTime(dur);
+    }
+    if (elapsed) elapsed.textContent = formatAudioTime(cur);
+  }
+
+  function setPurchasePlayerStatus(text) {
+    var el = document.getElementById("purchase-player-status");
+    if (el) el.textContent = text || "";
+  }
+
+  function openPurchasePlayerModal(track, mp3Url) {
+    if (!track || !mp3Url) return;
+    purchasePlayerMp3Url = mp3Url;
+    var modal = document.getElementById("purchase-player-modal");
+    var cover = document.getElementById("purchase-player-cover");
+    var title = document.getElementById("purchase-player-title");
+    var audio = document.getElementById("purchase-player-audio");
+    var playBtn = document.getElementById("purchase-player-play");
+    var progress = document.getElementById("purchase-player-progress");
+    if (!modal || !audio) return;
+
+    if (cover) {
+      cover.src = assetUrl(track.cover);
+      cover.alt = track.fullTitle || track.shortName || "Track cover";
+    }
+    if (title) {
+      title.textContent = (track.emoji ? track.emoji + " " : "") + (track.fullTitle || track.shortName || "Your track");
+    }
+
+    purchasePlayerReady = false;
+    if (playBtn) {
+      playBtn.disabled = true;
+      playBtn.textContent = "▶";
+      playBtn.setAttribute("aria-label", "Play");
+    }
+    if (progress) {
+      progress.disabled = true;
+      progress.value = "0";
+    }
+    var elapsed = document.getElementById("purchase-player-elapsed");
+    var duration = document.getElementById("purchase-player-duration");
+    if (elapsed) elapsed.textContent = "0:00";
+    if (duration) duration.textContent = "0:00";
+    setPurchasePlayerStatus("Loading your track…");
+
+    /* inline — браузеру проще стримить в <audio>, чем attachment */
+    var playbackUrl = appendQueryParam(mp3Url, "disposition", "inline");
+    audio.src = playbackUrl;
+
+    modal.classList.add("open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("purchase-player-open");
+
+    audio.onloadedmetadata = function () {
+      purchasePlayerReady = true;
+      if (playBtn) playBtn.disabled = false;
+      if (progress) progress.disabled = false;
+      updatePurchasePlayerProgress();
+      setPurchasePlayerStatus("Tap ▶ to listen now. Your download also starts in the background.");
+      audio.play().catch(function () {
+        setPurchasePlayerStatus("Tap ▶ to start listening. Your download also starts in the background.");
+      });
+    };
+    audio.onerror = function () {
+      setPurchasePlayerStatus("Could not load the player. Use Download MP3 below — your file is ready.");
+      if (playBtn) playBtn.disabled = true;
+    };
+    audio.ontimeupdate = updatePurchasePlayerProgress;
+    try {
+      audio.load();
+    } catch (e) {}
+  }
+
+  async function showPurchasePlayerForPaidTrack(trackId, sessionId) {
+    var track = findTrackById(trackId);
+    if (!track || track.isFree) return;
+    var mp3Url = await tryFetchPurchaseDownload(trackId, sessionId);
+    if (!mp3Url) mp3Url = buildWebsiteDownloadRedirectUrl(trackId, sessionId);
+    openPurchasePlayerModal(track, mp3Url);
+  }
+
+  function initPurchasePlayerUi() {
+    var modal = document.getElementById("purchase-player-modal");
+    var audio = document.getElementById("purchase-player-audio");
+    var playBtn = document.getElementById("purchase-player-play");
+    var progress = document.getElementById("purchase-player-progress");
+    var volume = document.getElementById("purchase-player-volume");
+    var closeBtn = document.getElementById("purchase-player-close");
+    var dlBtn = document.getElementById("purchase-player-download");
+    var dlAgainBtn = document.getElementById("purchase-player-download-again");
+
+    if (closeBtn) closeBtn.addEventListener("click", closePurchasePlayerModal);
+    if (modal) {
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal) closePurchasePlayerModal();
+      });
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && modal && modal.classList.contains("open")) closePurchasePlayerModal();
+    });
+
+    if (playBtn && audio) {
+      playBtn.addEventListener("click", function () {
+        if (!purchasePlayerReady) return;
+        if (audio.paused) {
+          audio.play().catch(function () {
+            setPurchasePlayerStatus("Tap play again or use Download MP3.");
+          });
+          playBtn.textContent = "⏸";
+          playBtn.setAttribute("aria-label", "Pause");
+        } else {
+          audio.pause();
+          playBtn.textContent = "▶";
+          playBtn.setAttribute("aria-label", "Play");
+        }
+      });
+      audio.addEventListener("play", function () {
+        playBtn.textContent = "⏸";
+        playBtn.setAttribute("aria-label", "Pause");
+      });
+      audio.addEventListener("pause", function () {
+        playBtn.textContent = "▶";
+        playBtn.setAttribute("aria-label", "Play");
+      });
+      audio.addEventListener("ended", function () {
+        playBtn.textContent = "▶";
+        playBtn.setAttribute("aria-label", "Play");
+      });
+    }
+
+    if (progress && audio) {
+      progress.addEventListener("input", function () {
+        if (!purchasePlayerReady || !isFinite(audio.duration) || audio.duration <= 0) return;
+        var pct = Number(progress.value) / 1000;
+        audio.currentTime = pct * audio.duration;
+        updatePurchasePlayerProgress();
+      });
+    }
+
+    if (volume && audio) {
+      volume.addEventListener("input", function () {
+        audio.volume = Math.max(0, Math.min(1, Number(volume.value) / 100));
+      });
+    }
+
+    function downloadFromPlayer() {
+      if (!purchasePlayerMp3Url) return;
+      try {
+        var w = window.open(purchasePlayerMp3Url, "_blank", "noopener,noreferrer");
+        if (!w) window.location.href = purchasePlayerMp3Url;
+      } catch (e) {
+        window.location.href = purchasePlayerMp3Url;
+      }
+    }
+
+    if (dlBtn) dlBtn.addEventListener("click", downloadFromPlayer);
+    if (dlAgainBtn) dlAgainBtn.addEventListener("click", retrySuccessDownload);
+  }
+
   function initSuccessPage() {
     var params = new URLSearchParams(window.location.search);
     if (params.get("success") !== "true") return;
@@ -1627,8 +2022,9 @@
         showSuccessDirectLink(redirectUrl);
         actions.style.display = "flex";
         startAutomaticPaidDownload(redirectUrl);
+        showPurchasePlayerForPaidTrack(tid, sessionId);
         msg.textContent =
-          "Your download should start automatically. If nothing happens, tap “Download again” or “Open MP3 in new tab”. Thank you! 🙏";
+          "Your track is ready — listen in the player. Download also starts automatically in the background.";
       } else {
         actions.style.display = "flex";
         msg.textContent =
@@ -1796,6 +2192,7 @@
   initScrollFade();
   initFreeSection();
   initAboutFounderPhoto();
+  initPurchasePlayerUi();
   initSuccessPage();
   loadPricing();
   loadTestimonials();

@@ -63,6 +63,13 @@ def _safe_mp3_attachment_filename(display_name: str) -> str:
     return safe[:180]
 
 
+def _mpeg_content_disposition(filename: str, *, inline: bool = False) -> str:
+    """attachment — скачивание; inline — воспроизведение в <audio> на сайте после Stripe."""
+    kind = "inline" if inline else "attachment"
+    disp_name = filename.replace('"', "'")
+    return f'{kind}; filename="{disp_name}"'
+
+
 def _telegram_download_too_big(tg_err: str | None) -> bool:
     """Ошибка getFile из-за лимита Bot API (~20 MB на скачивание файла ботом)."""
     if not tg_err:
@@ -95,6 +102,7 @@ def _stream_attached_mpeg_from_url(
     attachment_filename: str,
     log_prefix: str,
     upstream_label: str = "upstream",
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """Общий прокси: GET по уже готовому URL с stream=True → attachment audio/mpeg."""
     disp_name = attachment_filename.replace('"', "'")
@@ -122,7 +130,7 @@ def _stream_attached_mpeg_from_url(
     cl = upstream.headers.get("Content-Length")
     headers: dict[str, str] = {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": f'attachment; filename="{disp_name}"',
+        "Content-Disposition": _mpeg_content_disposition(disp_name, inline=inline_playback),
     }
     if cl and str(cl).isdigit():
         headers["Content-Length"] = str(cl)
@@ -144,12 +152,13 @@ def _head_attached_mpeg_from_url(
     *,
     attachment_filename: str,
     log_prefix: str,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """HEAD по готовому URL — только заголовки для проверок (без тела)."""
     disp_name = attachment_filename.replace('"', "'")
     hdrs: dict[str, str] = {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": f'attachment; filename="{disp_name}"',
+        "Content-Disposition": _mpeg_content_disposition(disp_name, inline=inline_playback),
     }
     try:
         h = requests.head(source_url, timeout=25, allow_redirects=True)
@@ -167,6 +176,7 @@ def _stream_mp3_from_telegram(
     *,
     attachment_filename: str,
     log_prefix: str,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """
     Прокси: getFile → GET по URL CDN Telegram с stream=True → чанки в браузер.
@@ -188,6 +198,7 @@ def _stream_mp3_from_telegram(
         attachment_filename=attachment,
         log_prefix=log_prefix,
         upstream_label="Telegram CDN",
+        inline_playback=inline_playback,
     )
 
 
@@ -197,6 +208,7 @@ def _head_mp3_from_telegram(
     *,
     attachment_filename: str,
     log_prefix: str,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """Лёгкая проверка для health / браузеров: без тела, только заголовки после getFile."""
     tg_url, tg_err = resolve_telegram_file_download_url(bot_token, file_id)
@@ -205,7 +217,12 @@ def _head_mp3_from_telegram(
         return _json_telegram_download_error(tg_err)
 
     attachment = attachment_filename.replace('"', "'")
-    return _head_attached_mpeg_from_url(tg_url, attachment_filename=attachment, log_prefix=log_prefix)
+    return _head_attached_mpeg_from_url(
+        tg_url,
+        attachment_filename=attachment,
+        log_prefix=log_prefix,
+        inline_playback=inline_playback,
+    )
 
 
 def _stream_mp3_from_google_drive(
@@ -213,6 +230,7 @@ def _stream_mp3_from_google_drive(
     *,
     attachment_filename: str,
     log_prefix: str,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """Прокси: Drive API alt=media → чанки в браузер (ссылку Drive не отдаём)."""
     meta, meta_err = drive_file_metadata(drive_file_id)
@@ -227,7 +245,7 @@ def _stream_mp3_from_google_drive(
     disp_name = attachment_filename.replace('"', "'")
     headers: dict[str, str] = {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": f'attachment; filename="{disp_name}"',
+        "Content-Disposition": _mpeg_content_disposition(disp_name, inline=inline_playback),
     }
     if meta:
         try:
@@ -250,6 +268,7 @@ def _head_mp3_from_google_drive(
     *,
     attachment_filename: str,
     log_prefix: str,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """HEAD: только заголовки по метаданным Drive."""
     meta, err = drive_file_metadata(drive_file_id)
@@ -260,7 +279,7 @@ def _head_mp3_from_google_drive(
     disp_name = attachment_filename.replace('"', "'")
     hdrs: dict[str, str] = {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": f'attachment; filename="{disp_name}"',
+        "Content-Disposition": _mpeg_content_disposition(disp_name, inline=inline_playback),
     }
     try:
         sz = int(meta.get("size") or 0)
@@ -278,6 +297,7 @@ def _deliver_mp3_for_website_song(
     log_prefix: str,
     use_head: bool,
     telegram_fallback_on_drive_issue: bool = False,
+    inline_playback: bool = False,
 ) -> Union[Response, Tuple[Any, int]]:
     """
     Выдача MP3 на сайт после Stripe (/website/download-file).
@@ -323,12 +343,14 @@ def _deliver_mp3_for_website_song(
                 gdrive_id,
                 attachment_filename=attachment_filename,
                 log_prefix=f"{log_prefix} (Drive)",
+                inline_playback=inline_playback,
             )
         else:
             drive_res = _stream_mp3_from_google_drive(
                 gdrive_id,
                 attachment_filename=attachment_filename,
                 log_prefix=f"{log_prefix} (Drive)",
+                inline_playback=inline_playback,
             )
         if not isinstance(drive_res, tuple):
             return drive_res
@@ -356,12 +378,14 @@ def _deliver_mp3_for_website_song(
                 pc_url,
                 attachment_filename=attachment_filename,
                 log_prefix=f"{log_prefix} (pCloud)",
+                inline_playback=inline_playback,
             )
         return _stream_attached_mpeg_from_url(
             pc_url,
             attachment_filename=attachment_filename,
             log_prefix=f"{log_prefix} (pCloud)",
             upstream_label="pCloud CDN",
+            inline_playback=inline_playback,
         )
 
     if gdrive_id and drive_failed and not telegram_fallback_on_drive_issue:
@@ -385,11 +409,19 @@ def _deliver_mp3_for_website_song(
     tok = config.BOT_TOKEN.strip()
     if use_head:
         tg_res = _head_mp3_from_telegram(
-            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+            tok,
+            tg_fid,
+            attachment_filename=attachment_filename,
+            log_prefix=log_prefix,
+            inline_playback=inline_playback,
         )
     else:
         tg_res = _stream_mp3_from_telegram(
-            tok, tg_fid, attachment_filename=attachment_filename, log_prefix=log_prefix
+            tok,
+            tg_fid,
+            attachment_filename=attachment_filename,
+            log_prefix=log_prefix,
+            inline_playback=inline_playback,
         )
     if isinstance(tg_res, tuple) and gdrive_id:
         try:
@@ -1169,7 +1201,7 @@ def create_app(
         if source != "website" or sess_song_id != song_id.strip():
             return ({"error": "Session metadata mismatch"}, 403)
 
-        exp = int(time.time()) + 300
+        exp = int(time.time()) + config.website_download_token_ttl_seconds()
         sig = _website_download_sign(song_id, exp)
         qs = urlencode({"song_id": song_id, "exp": exp, "sig": sig})
         # Публичный URL из DOMAIN/BACKEND_URL, а не внутренний hostname Railway (request.url_root).
@@ -1237,11 +1269,13 @@ def create_app(
             song = {**song, "google_drive_file_id": gid}
 
         attachment = _safe_mp3_attachment_filename(str(song.get("name") or song_id))
+        inline_playback = (request.args.get("disposition") or "").strip().lower() == "inline"
         res = _deliver_mp3_for_website_song(
             song,
             attachment_filename=attachment,
             log_prefix=f"website download-file song_id={song_id}",
             use_head=request.method == "HEAD",
+            inline_playback=inline_playback,
         )
         if isinstance(res, tuple):
             return res[0], res[1]
