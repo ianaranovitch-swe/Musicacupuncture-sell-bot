@@ -825,7 +825,9 @@
       if (serverPricing) {
         el.textContent = currentCurrency === CURRENCY_SEK ? serverPricing.badge_sek : serverPricing.badge_usd;
       } else {
-        el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 150 SEK" : "USD · $15";
+        /* Как /miniapp-pricing live: compare-at + текущая цена (без HTML — только текст бейджа). */
+        el.textContent =
+          currentCurrency === CURRENCY_SEK ? "SEK · 1000 SEK 150 SEK" : "USD · $100 $15";
       }
       el.title = "Change currency";
     }
