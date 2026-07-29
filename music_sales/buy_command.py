@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from music_sales.buy_constants import index_to_callback, sorted_buy_rows
 from music_sales.catalog import discover_songs
+from music_sales.pricing_display import usd_pair_plain
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,9 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     rows = sorted_buy_rows(songs)
+    price_label = usd_pair_plain()
     keyboard = [
-        [InlineKeyboardButton(f"{r.name} — ${r.price_usd}", callback_data=index_to_callback(idx))]
+        [InlineKeyboardButton(f"{r.name} — {price_label}", callback_data=index_to_callback(idx))]
         for idx, r in enumerate(rows)
     ]
 

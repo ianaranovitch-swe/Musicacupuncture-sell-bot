@@ -38,7 +38,7 @@ def _fixed_track_price_usd() -> int:
     """
     Фиксированная цена трека в целых долларах США (USD) для всех треков.
 
-    Значение можно задать через переменные окружения, но продуктовый дефолт — $16.
+    Значение можно задать через переменные окружения, но продуктовый дефолт — $15.
     При TEST_MODE — берём TEST_PRICE_USD (по умолчанию 1).
     """
     if config.test_mode_active():
@@ -49,11 +49,11 @@ def _fixed_track_price_usd() -> int:
             return 1
     primary = (config.DEFAULT_TRACK_PRICE_USD or "").strip()
     legacy = (config.DEFAULT_TRACK_PRICE_SEK or "").strip()
-    raw = primary or legacy or "16"
+    raw = primary or legacy or "15"
     try:
         return int(raw)
     except ValueError:
-        return 16
+        return 15
 
 
 def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:

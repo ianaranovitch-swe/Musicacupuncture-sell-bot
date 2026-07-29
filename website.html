@@ -568,6 +568,22 @@
       font-weight: 700;
       color: var(--gold);
     }
+    .price-was {
+      text-decoration: line-through;
+      opacity: 0.55;
+      font-weight: 600;
+      color: var(--muted);
+      margin-right: 0.35em;
+    }
+    .price-now {
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .price-sep {
+      opacity: 0.55;
+      margin: 0 0.2em;
+      font-weight: 600;
+    }
     .card-dur {
       margin-top: 4px;
       font-size: 0.65rem;
@@ -637,6 +653,9 @@
       font-weight: 700;
       color: var(--gold);
       margin-bottom: 18px;
+    }
+    .modal-price .price-was {
+      font-size: 1.05rem;
     }
     .modal-actions {
       display: flex;
@@ -1377,17 +1396,34 @@
     box.setAttribute("aria-hidden", "false");
   }
 
-  function formatPriceDisplay() {
-    if (serverPricing) {
-      return currentCurrency === "SEK" ? serverPricing.sek_display : serverPricing.usd_display;
+  function formatPricePairHtml(currency) {
+    /* ~~$100~~ $15 или ~~1000 SEK~~ 150 SEK — без слов old/current */
+    var nowUsd = serverPricing ? serverPricing.usd_display : "$15";
+    var nowSek = serverPricing ? serverPricing.sek_display : "150 SEK";
+    var wasUsd = serverPricing ? (serverPricing.usd_compare_display || "") : "$100";
+    var wasSek = serverPricing ? (serverPricing.sek_compare_display || "") : "1000 SEK";
+    if (currency === "SEK") {
+      if (wasSek) {
+        return '<span class="price-was">' + escapeHtml(wasSek) + '</span><span class="price-now">' + escapeHtml(nowSek) + "</span>";
+      }
+      return '<span class="price-now">' + escapeHtml(nowSek) + "</span>";
     }
-    return currentCurrency === "SEK" ? "169 kr" : "$16";
+    if (wasUsd) {
+      return '<span class="price-was">' + escapeHtml(wasUsd) + '</span><span class="price-now">' + escapeHtml(nowUsd) + "</span>";
+    }
+    return '<span class="price-now">' + escapeHtml(nowUsd) + "</span>";
   }
 
-  function formatDualPrice() {
-    const usd = serverPricing ? serverPricing.usd_display : "$16";
-    const sek = serverPricing ? serverPricing.sek_display : "169 kr";
-    return { usd, sek };
+  function formatPriceDisplay() {
+    return formatPricePairHtml(currentCurrency);
+  }
+
+  function formatDualPriceHtml() {
+    return (
+      formatPricePairHtml("USD") +
+      '<span class="price-sep">·</span>' +
+      formatPricePairHtml("SEK")
+    );
   }
 
   function setLoading(on) {
@@ -1483,11 +1519,9 @@
 
   function renderCatalog() {
     const grid = document.getElementById("catalog-grid");
-    const dual = formatDualPrice();
+    const dualHtml = formatDualPriceHtml();
     grid.innerHTML = TRACKS.map(function (t) {
-      const priceLine = t.isFree
-        ? "🎁 FREE"
-        : escapeHtml(dual.usd) + " · " + escapeHtml(dual.sek);
+      const priceLine = t.isFree ? "🎁 FREE" : dualHtml;
       const dur = t.durationLabel ? '<div class="card-dur">⏱ ' + escapeHtml(t.durationLabel) + "</div>" : "";
       const badge = t.isFree ? '<span class="badge-free">🎁 FREE</span>' : "";
       const newBadge = !t.isFree && t.isNew ? '<span class="badge-new-site" aria-label="New release">🆕 NEW</span>' : "";
@@ -1562,7 +1596,7 @@
     }
     document.getElementById("modal-desc").textContent = track.description;
     showModalTestimonial(track);
-    document.getElementById("modal-price").textContent = track.isFree ? "🎁 FREE" : formatPriceDisplay();
+    document.getElementById("modal-price").innerHTML = track.isFree ? "🎁 FREE" : formatPriceDisplay();
 
     var stripeBtn = document.getElementById("modal-buy-stripe");
     var klarnaBtn = document.getElementById("modal-buy-klarna");

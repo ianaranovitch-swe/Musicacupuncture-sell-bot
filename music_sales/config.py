@@ -46,8 +46,11 @@ MINIAPP_URL = _env("MINIAPP_URL")
 MINIAPP_CORS_ORIGINS = _env("MINIAPP_CORS_ORIGINS")
 # Опционально: общий секрет; Mini App шлёт заголовок X-Miniapp-Checkout-Secret (тот же текст в .env).
 MINIAPP_CHECKOUT_SECRET = _env("MINIAPP_CHECKOUT_SECRET")
-# Stripe Checkout: сумма в öre для валюты sek (169 kr = 16900).
-CHECKOUT_SEK_UNIT_AMOUNT = _env("CHECKOUT_SEK_UNIT_AMOUNT", "16900")
+# Stripe Checkout: сумма в öre для валюты sek (150 SEK = 15000).
+CHECKOUT_SEK_UNIT_AMOUNT = _env("CHECKOUT_SEK_UNIT_AMOUNT", "15000")
+# Зачёркнутая «старая» цена на витрине (только отображение, не сумма Stripe).
+COMPARE_AT_PRICE_USD = _env("COMPARE_AT_PRICE_USD", "100")
+COMPARE_AT_PRICE_SEK = _env("COMPARE_AT_PRICE_SEK", "1000")
 # Куда редиректить после успешной оплаты Stripe (обычно deep-link в Telegram бота).
 # Пример: https://t.me/musicacupuncture_bot
 CHECKOUT_SUCCESS_URL = _env("CHECKOUT_SUCCESS_URL")
@@ -81,7 +84,7 @@ DEVELOPER_TELEGRAM_ID = _env("DEVELOPER_TELEGRAM_ID", "7973899604")
 # Папка в корне проекта с аудио для витрины (по умолчанию `songs`; для старых установок можно задать `SONGS`)
 AUDIO_SALES_DIR = _env("AUDIO_SALES_DIR", "songs")
 # Цена по умолчанию (USD, целые доллары) для файлов в этой папке, если не задано иначе в коде/окружении
-DEFAULT_TRACK_PRICE_USD = _env("DEFAULT_TRACK_PRICE_USD", "16")
+DEFAULT_TRACK_PRICE_USD = _env("DEFAULT_TRACK_PRICE_USD", "15")
 # Обратная совместимость (старое имя переменной): используется только если DEFAULT_TRACK_PRICE_USD пустой
 DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")
 # TEST_MODE: см. test_mode_active(). Цены теста (целые доллары / целые SEK).

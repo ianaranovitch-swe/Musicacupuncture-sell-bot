@@ -277,9 +277,26 @@
     }
     .card-price {
       margin-top: 6px;
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       font-weight: 700;
       color: var(--gold);
+      line-height: 1.35;
+    }
+    .price-was {
+      text-decoration: line-through;
+      opacity: 0.55;
+      font-weight: 600;
+      color: var(--muted);
+      margin-right: 0.3em;
+    }
+    .price-now {
+      font-weight: 700;
+      color: var(--gold);
+    }
+    .price-sep {
+      opacity: 0.55;
+      margin: 0 0.15em;
+      font-weight: 600;
     }
     .screens {
       position: relative;
@@ -435,10 +452,14 @@
       white-space: pre-wrap;
     }
     .detail-price {
-      font-size: 1.75rem;
+      font-size: 1.35rem;
       font-weight: 700;
       color: var(--gold);
       margin-bottom: 18px;
+      line-height: 1.4;
+    }
+    .detail-price .price-was {
+      font-size: 1rem;
     }
     .btn-row {
       display: flex;
@@ -744,16 +765,30 @@
       if (serverPricing) {
         return currency === CURRENCY_SEK ? serverPricing.sek_display : serverPricing.usd_display;
       }
-      if (currency === CURRENCY_SEK) return "169 kr";
-      return "$16";
+      if (currency === CURRENCY_SEK) return "150 SEK";
+      return "$15";
     }
 
-    /** Обе валюты на карточках каталога (не зависит от последнего Pay in USD/SEK). */
-    function formatDualPrice() {
-      if (serverPricing) {
-        return { usd: serverPricing.usd_display, sek: serverPricing.sek_display };
+    /** Обе валюты: зачёркнутая + актуальная (без слов old/current). */
+    function formatPricePairHtml(currency) {
+      const nowUsd = serverPricing ? serverPricing.usd_display : "$15";
+      const nowSek = serverPricing ? serverPricing.sek_display : "150 SEK";
+      const wasUsd = serverPricing ? (serverPricing.usd_compare_display || "") : "$100";
+      const wasSek = serverPricing ? (serverPricing.sek_compare_display || "") : "1000 SEK";
+      if (currency === CURRENCY_SEK) {
+        if (wasSek) {
+          return `<span class="price-was">${escapeHtml(wasSek)}</span><span class="price-now">${escapeHtml(nowSek)}</span>`;
+        }
+        return `<span class="price-now">${escapeHtml(nowSek)}</span>`;
       }
-      return { usd: "$16", sek: "169 kr" };
+      if (wasUsd) {
+        return `<span class="price-was">${escapeHtml(wasUsd)}</span><span class="price-now">${escapeHtml(nowUsd)}</span>`;
+      }
+      return `<span class="price-now">${escapeHtml(nowUsd)}</span>`;
+    }
+
+    function formatDualPriceHtml() {
+      return formatPricePairHtml(CURRENCY_USD) + '<span class="price-sep">·</span>' + formatPricePairHtml(CURRENCY_SEK);
     }
 
     /** Берём из query (бот открывает ссылку с checkout_api=) и кладём в sessionStorage. */
@@ -790,7 +825,7 @@
       if (serverPricing) {
         el.textContent = currentCurrency === CURRENCY_SEK ? serverPricing.badge_sek : serverPricing.badge_usd;
       } else {
-        el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 169 kr" : "USD · $16";
+        el.textContent = currentCurrency === CURRENCY_SEK ? "SEK · 150 SEK" : "USD · $15";
       }
       el.title = "Change currency";
     }
@@ -863,8 +898,7 @@
 
     function renderGrid() {
       const root = document.getElementById("track-grid");
-      const dual = formatDualPrice();
-      const priceStr = dual.usd + " · " + dual.sek;
+      const dualHtml = formatDualPriceHtml();
       const aboutUrl = getAboutPageUrl();
       const aboutCardHtml = aboutUrl
         ? `
@@ -894,7 +928,7 @@
           <div class="card-body">
             <div class="card-title">${escapeHtml(t.fullTitle)}</div>
             ${t.durationLabel ? `<div class="card-duration">⏱ ${escapeHtml(t.durationLabel)}</div>` : ""}
-            <div class="card-price">${t.isFree ? "🎁 FREE" : escapeHtml(priceStr)}</div>
+            <div class="card-price">${t.isFree ? "🎁 FREE" : dualHtml}</div>
           </div>
         </article>`
           )
@@ -1008,8 +1042,7 @@
         }
       }
       document.getElementById("detail-desc").textContent = track.description;
-      const dual = formatDualPrice();
-      document.getElementById("detail-price").textContent = track.isFree ? "🎁 FREE" : dual.usd + " · " + dual.sek;
+      document.getElementById("detail-price").innerHTML = track.isFree ? "🎁 FREE" : formatDualPriceHtml();
       showDetailTestimonial(track);
       // Для бесплатного трека показываем одну кнопку подарка, а валюты скрываем.
       const freeBtn = document.getElementById("btn-free-track");

@@ -105,9 +105,9 @@ _BUILTIN_TRACKS: list[dict] = [
             "🎧 Close your eyes. Breathe slowly. Let go.\n\n"
             "This is Mikael's most powerful creation yet."
         ),
-        "price": "$16",
-        "price_sek": "169 kr",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
         "currency": "USD",
         "cover": "covers/Divine sound Sleep Best Silver Power from God.png",
         "audio": "songs/Divine sound Sleep Best Silver Power from God.mp3",
@@ -128,8 +128,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Helps you speak your truth with confidence and calm. Encourages authentic voice "
             "and inner clarity. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Crownchakra-Browchakra-Throatchakra-from-God.png",
         "audio": "songs/Divine sound Crownchakra-Browchakra-Throatchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/28E3cubrLcsT2CV5K9cfK00",
@@ -145,8 +145,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Encourages harmony, vitality, and inner softness. Ideal for restoring natural flow "
             "and emotional balance. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Estrogen-from-God.png",
         "audio": "songs/Divine sound Estrogen from God.mp3",
         "buy_url": "https://buy.stripe.com/6oU4gy0N78cDa5ngoNcfK02",
@@ -163,8 +163,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "A beautiful daily practice to awaken heart energy and connect with divine love. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Heart-from-God.png",
         "audio": "songs/Divine sound Heart from God.mp3",
         "buy_url": "https://buy.stripe.com/28EeVcanHakL4L3a0pcfK03",
@@ -180,8 +180,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Supports emotional healing and deeper relationships. "
             "A gentle expansion of love within and around you. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Heartchakra-and-Diaphragmchakra-from-God.png",
         "audio": "songs/Divine sound Heartchakra and Diaphragmchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm28qeDX9gH5P70pPcfK04",
@@ -198,8 +198,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "listening to help your body stay centered, protected, and energized. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Immunedefence-from-God.png",
         "audio": "songs/Divine sound Immunedefence from God.mp3",
         "buy_url": "https://buy.stripe.com/14AdR8dzTcsTb9rfkJcfK05",
@@ -215,8 +215,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Encourages deep relaxation and energetic detox. A soothing sound journey that helps "
             "restore flow, grounding, and harmony in your whole body. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Kidney-from-God.png",
         "audio": "songs/Divine sound Kidney from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm5kCbrLboPgtL7ShcfK06",
@@ -232,8 +232,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Encourages renewal, clarity, and emotional release. Helps your body feel lighter, "
             "cleaner, and more balanced through daily listening. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Liver-from-God.png",
         "audio": "songs/Divine sound Liver from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wO53ndwX4L3b4tcfK07",
@@ -249,8 +249,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "relaxation, and life energy flow. Helps release stress and open the body to clarity, "
             "calmness, and renewed vitality through conscious listening. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Lungs-from-God.png",
         "audio": "songs/Divine sound Lungs from God.mp3",
         "buy_url": "https://buy.stripe.com/14AfZg67rgJ96TbegFcfK08",
@@ -267,8 +267,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "supported, balanced, and naturally energized through consistent listening. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Minerals-from-God.png",
         "audio": "songs/Divine sound Minerals from God.mp3",
         "buy_url": "https://buy.stripe.com/cNidR88fzgJ9cdv6OdcfK09",
@@ -285,8 +285,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "mind and body toward freedom, clarity, and a healthier, smoke-free life. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-NO-Smoking-from-God.png",
         "audio": "songs/Divine sound NO Smoking from God.mp3",
         "buy_url": "https://buy.stripe.com/dRm4gy7bv1Of4L37ShcfK0a",
@@ -302,8 +302,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "restore inner balance, and strengthen self-control. A daily sound practice guiding you "
             "toward clarity, peace, and a healthier, more conscious lifestyle. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-NO-Alcohol-from-God.png",
         "audio": "songs/Divine sound NO Alcohol from God.mp3",
         "buy_url": "https://buy.stripe.com/28E8wOgM5akLa5n5K9cfK0b",
@@ -319,8 +319,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Supports connection to the earth and inner security. Ideal for building a strong "
             "foundation in body and life. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Rootchakra-from-God.png",
         "audio": "songs/Divine sound Rootchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/cNieVc7bv0KbfpH8WlcfK0c",
@@ -336,8 +336,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "energy, inspiration, and positive life force. Helps you reconnect with pleasure and "
             "inner movement. Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Sacralchakra-and-Navelchakra-from-God.png",
         "audio": "songs/Divine sound Sacralchakra and Navelchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEWcvPgJ9dhz4G5cfK0d",
@@ -353,8 +353,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "inner strength, and self-belief. A daily boost for your willpower and direction in life. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Solarplexuschakra-and-Spleenchakra-from-God.png",
         "audio": "songs/Divine sound Solarplexuschakra and Spleenchakra from God.mp3",
         "buy_url": "https://buy.stripe.com/8x2fZg2Vf64v0uN5K9cfK0e",
@@ -370,8 +370,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "Helps balance hormones, increase focus, and build inner power and confidence. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 1600,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Testosteron-from-God.png",
         "audio": "songs/Divine sound Testosteron from God.mp3",
         "buy_url": "https://buy.stripe.com/6oUeVc2Vf50r5P78WlcfK0f",
@@ -388,8 +388,8 @@ _BUILTIN_TRACKS: list[dict] = [
             "energy from within. A daily sound ritual to feel refreshed, supported, and aligned. "
             "Listen daily for best results."
         ),
-        "price": "$16",
-        "price_amount": 100,
+        "price": "$15",
+        "price_amount": 1500,
         "cover": "covers/Divine-sound-Vitamins-from-God.png",
         "audio": "songs/Divine sound Vitamins from God.mp3",
         "buy_url": "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",

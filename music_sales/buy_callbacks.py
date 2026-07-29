@@ -22,6 +22,7 @@ from music_sales.buy_constants import (
 )
 from music_sales.catalog import discover_songs
 from music_sales.owner_notify import notify_owner_async
+from music_sales.pricing_display import usd_pair_html
 
 logger = logging.getLogger(__name__)
 
@@ -75,11 +76,10 @@ async def buy_track_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     meta = songs.get(song_id, {})
     title = str(meta.get("name", song_id))
-    price = int(meta.get("price_usd", 0) or 0)
 
     text = (
         f"Track: <b>{title}</b>\n"
-        f"Price: <b>${price} USD</b>\n\n"
+        f"Price: {usd_pair_html()}\n\n"
         "Choose a payment method:"
     )
 

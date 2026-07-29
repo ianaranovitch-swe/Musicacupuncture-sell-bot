@@ -879,9 +879,9 @@ def create_app(
                 return 100
         if currency == "sek":
             try:
-                return int((config.CHECKOUT_SEK_UNIT_AMOUNT or "16900").strip() or "16900")
+                return int((config.CHECKOUT_SEK_UNIT_AMOUNT or "15000").strip() or "15000")
             except ValueError:
-                return 16900
+                return 15000
         return unit_amount_for_song(song)
 
     def _checkout_success_url() -> str:
@@ -997,6 +997,8 @@ def create_app(
         """
         if request.method == "OPTIONS":
             return "", 204
+        from music_sales import pricing_display as pd
+
         if config.test_mode_active():
             try:
                 usd_n = int((os.environ.get("TEST_PRICE_USD") or config.TEST_PRICE_USD or "1").strip() or "1")
@@ -1011,31 +1013,30 @@ def create_app(
             payload: dict[str, Any] = {
                 "test_mode": True,
                 "usd_display": f"${usd_n}",
-                "sek_display": f"{sek_n} kr",
+                "sek_display": f"{sek_n} SEK",
+                "usd_compare_display": "",
+                "sek_compare_display": "",
                 "badge_usd": f"USD · ${usd_n}",
-                "badge_sek": f"SEK · {sek_n} kr",
+                "badge_sek": f"SEK · {sek_n} SEK",
                 "track_durations": _miniapp_track_durations_payload(),
             }
             test_link = config.resolved_test_payment_link()
             if test_link:
                 payload["test_payment_link"] = test_link
             return jsonify(payload)
-        try:
-            usd_n = int((os.environ.get("DEFAULT_TRACK_PRICE_USD") or config.DEFAULT_TRACK_PRICE_USD or "16").strip() or "16")
-        except ValueError:
-            usd_n = 16
-        try:
-            ore = int((config.CHECKOUT_SEK_UNIT_AMOUNT or "16900").strip() or "16900")
-        except ValueError:
-            ore = 16900
-        kr = max(1, ore // 100)
+        usd_disp = pd.usd_now_display()
+        sek_disp = pd.sek_now_display()
+        usd_cmp = pd.usd_compare_display()
+        sek_cmp = pd.sek_compare_display()
         return jsonify(
             {
                 "test_mode": False,
-                "usd_display": f"${usd_n}",
-                "sek_display": f"{kr} kr",
-                "badge_usd": f"USD · ${usd_n}",
-                "badge_sek": f"SEK · {kr} kr",
+                "usd_display": usd_disp,
+                "sek_display": sek_disp,
+                "usd_compare_display": usd_cmp,
+                "sek_compare_display": sek_cmp,
+                "badge_usd": f"USD · {usd_cmp} {usd_disp}",
+                "badge_sek": f"SEK · {sek_cmp} {sek_disp}",
                 "track_durations": _miniapp_track_durations_payload(),
             }
         )

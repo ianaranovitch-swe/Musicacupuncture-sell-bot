@@ -19,6 +19,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from music_sales.admin_panel import build_admin_conversation_handler
+from music_sales.pricing_display import usd_pair_plain
 
 from tracks import TRACKS, get_track
 
@@ -40,14 +41,14 @@ def _test_banner_prefix() -> str:
 
 
 def _detail_price_line(track: dict) -> str:
-    """Строка цены для карточки: в тесте — из TEST_PRICE_USD, иначе из tracks.py."""
+    """Строка цены для карточки: в тесте — из TEST_PRICE_USD, иначе зачёркнутая + актуальная."""
     if _test_mode():
         try:
             n = int((os.getenv("TEST_PRICE_USD") or "1").strip() or "1")
         except ValueError:
             n = 1
         return f"💰 Price: ${n} (test)"
-    return f"💰 Price: {track['price']}"
+    return f"💰 Price: {usd_pair_plain()}"
 
 
 def _miniapp_url() -> str:

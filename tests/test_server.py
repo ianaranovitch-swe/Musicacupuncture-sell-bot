@@ -81,7 +81,7 @@ def test_create_checkout_accepts_selected_currency(mocker):
     assert resp.status_code == 200
     kwargs = create.call_args.kwargs
     assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
-    assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 16900
+    assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 15000
 
 
 def test_website_create_payment_success_url_follows_backend_without_hardcoded_domain(mocker, monkeypatch):
@@ -291,6 +291,10 @@ def test_miniapp_pricing_get_and_cors(mocker):
     body = got.get_json()
     assert body.get("test_mode") is False
     assert "$" in (body.get("usd_display") or "")
+    assert body.get("usd_display") == "$15"
+    assert body.get("sek_display") == "150 SEK"
+    assert body.get("usd_compare_display") == "$100"
+    assert body.get("sek_compare_display") == "1000 SEK"
     assert body.get("track_durations") == [{"id": 2, "seconds": 3008, "label": "50m 8s"}]
 
 
@@ -315,7 +319,8 @@ def test_miniapp_pricing_test_mode_response(mocker):
     body = got.get_json()
     assert body.get("test_mode") is True
     assert body.get("usd_display") == "$1"
-    assert "kr" in (body.get("sek_display") or "").lower()
+    assert "sek" in (body.get("sek_display") or "").lower()
+    assert body.get("usd_compare_display") == ""
     assert body.get("test_payment_link") == "https://buy.stripe.com/test_abc"
     assert body.get("track_durations") == []
 
