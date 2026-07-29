@@ -283,20 +283,27 @@
       line-height: 1.35;
     }
     .price-was {
+      /* Старая цена: розово-серый + толстая линия — на тёмном фоне лучше видно */
       text-decoration: line-through;
-      opacity: 0.55;
+      text-decoration-thickness: 2.5px;
+      text-decoration-color: rgba(255, 150, 150, 0.95);
+      text-decoration-skip-ink: none;
+      -webkit-text-decoration-skip: none;
       font-weight: 600;
-      color: var(--muted);
-      margin-right: 0.3em;
+      color: rgba(255, 198, 190, 0.92);
+      margin-right: 0.35em;
+      font-size: 0.9em;
     }
     .price-now {
-      font-weight: 700;
+      font-weight: 800;
       color: var(--gold);
+      letter-spacing: 0.01em;
     }
     .price-sep {
-      opacity: 0.55;
-      margin: 0 0.15em;
+      opacity: 0.45;
+      margin: 0 0.2em;
       font-weight: 600;
+      color: var(--muted);
     }
     .screens {
       position: relative;
