@@ -2,12 +2,19 @@
 Письма покупателю и владельцу магазина после успешной оплаты (Gmail SMTP).
 
 Включение: ENABLE_PURCHASE_EMAIL=1 и GMAIL_USER + GMAIL_PASSWORD (app password).
+
+SMTP (обязательные настройки):
+  host = smtp.gmail.com
+  port = 587
+  TLS  = starttls() ДО login()
+  login = GMAIL_USER / GMAIL_PASSWORD из .env
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import smtplib
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -23,21 +30,86 @@ def purchase_emails_enabled() -> bool:
     if (os.environ.get("ENABLE_PURCHASE_EMAIL") or "").strip() != "1":
         return False
     user = (os.environ.get("GMAIL_USER") or "").strip()
-    password = (os.environ.get("GMAIL_PASSWORD") or "").strip()
+    password = _gmail_password()
     return bool(user and password)
+
+
+def purchase_emails_disabled_reason() -> str | None:
+    """Почему письма выключены (для логов диагностики). None — включены."""
+    if (os.environ.get("ENABLE_PURCHASE_EMAIL") or "").strip() != "1":
+        return "ENABLE_PURCHASE_EMAIL is not '1'"
+    if not (os.environ.get("GMAIL_USER") or "").strip():
+        return "GMAIL_USER is empty"
+    if not _gmail_password():
+        return "GMAIL_PASSWORD is empty"
+    return None
 
 
 def _gmail_user() -> str:
     return (os.environ.get("GMAIL_USER") or "").strip()
 
 
+def _gmail_password() -> str:
+    """App password из .env; пробелы внутри часто копируют из Google — убираем."""
+    raw = os.environ.get("GMAIL_PASSWORD") or ""
+    return "".join(raw.split())
+
+
+def _parse_email_addresses(raw: str) -> list[str]:
+    """
+    Разбор одного или нескольких адресов из env.
+
+    Примеры:
+      owner@gmail.com
+      owner1@gmail.com, owner2@gmail.com
+      a@x.com; b@y.com
+    """
+    text = (raw or "").strip()
+    if not text:
+        return []
+    parts = re.split(r"[,;]+", text)
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        addr = part.strip()
+        if not addr or "@" not in addr:
+            continue
+        key = addr.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(addr)
+    return out
+
+
+def _shop_owner_emails() -> list[str]:
+    """Список адресов владельца(ев) для уведомлений о покупке."""
+    owner_raw = (os.environ.get("SHOP_OWNER_EMAIL") or "").strip()
+    if owner_raw:
+        parsed = _parse_email_addresses(owner_raw)
+        if parsed:
+            return parsed
+    user = _gmail_user()
+    return [user] if user else []
+
+
 def _shop_owner_email() -> str:
-    owner = (os.environ.get("SHOP_OWNER_EMAIL") or "").strip()
-    return owner or _gmail_user()
+    """Строка для логов: один адрес или несколько через запятую."""
+    return ", ".join(_shop_owner_emails())
 
 
 def _support_contact_line() -> str:
     return (os.environ.get("SUPPORT_CONTACT") or "").strip() or "Please contact us on Telegram."
+
+
+def _smtp_startup_test_enabled() -> bool:
+    """По умолчанию тест при старте включён, если purchase email включён. SMTP_STARTUP_TEST=0 — выкл."""
+    raw = (os.environ.get("SMTP_STARTUP_TEST") or "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    return purchase_emails_enabled()
 
 
 def drive_download_link(song_row: dict[str, Any]) -> str | None:
@@ -102,19 +174,162 @@ def _build_owner_body(
     return "\n".join(lines)
 
 
+def _log_smtp_exception(stage: str, exc: BaseException, *, to_addr: str) -> None:
+    """Подробный лог SMTP-ошибки без пароля."""
+    user = _gmail_user()
+    details = [
+        f"stage={stage}",
+        f"host={_GMAIL_SMTP_HOST}",
+        f"port={_GMAIL_SMTP_PORT}",
+        f"from={user!r}",
+        f"to={to_addr!r}",
+        f"exc_type={type(exc).__name__}",
+        f"exc={exc!r}",
+    ]
+    if isinstance(exc, smtplib.SMTPResponseException):
+        details.append(f"smtp_code={getattr(exc, 'smtp_code', None)!r}")
+        details.append(f"smtp_error={getattr(exc, 'smtp_error', None)!r}")
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        details.append(
+            "hint=Check GMAIL_USER and Gmail App Password (2FA required; "
+            "regular account password will not work)."
+        )
+    if isinstance(exc, (TimeoutError, OSError, smtplib.SMTPConnectError)):
+        details.append("hint=Network/firewall may block outbound TCP 587 to smtp.gmail.com.")
+    logger.error("Gmail SMTP failed: %s", " | ".join(details), exc_info=True)
+
+
 def _send_smtp(*, to_addr: str, subject: str, body: str) -> None:
+    """
+    Отправка через Gmail SMTP:
+      smtp.gmail.com:587 → ehlo → starttls() → ehlo → login(GMAIL_USER, GMAIL_PASSWORD) → send.
+    """
     from_addr = _gmail_user()
+    password = _gmail_password()
+    if not from_addr:
+        raise RuntimeError("GMAIL_USER is empty — cannot send email")
+    if not password:
+        raise RuntimeError("GMAIL_PASSWORD is empty — cannot send email")
+    if not (to_addr or "").strip():
+        raise RuntimeError("Recipient address is empty — cannot send email")
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg.set_content(body)
-    with smtplib.SMTP(_GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT, timeout=30) as smtp:
+
+    logger.info(
+        "Gmail SMTP sending: host=%s port=%s tls=starttls login_user=%r to=%r subject=%r password_len=%s",
+        _GMAIL_SMTP_HOST,
+        _GMAIL_SMTP_PORT,
+        from_addr,
+        to_addr,
+        subject,
+        len(password),
+    )
+
+    smtp: smtplib.SMTP | None = None
+    try:
+        logger.debug("Gmail SMTP: connecting to %s:%s …", _GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT)
+        smtp = smtplib.SMTP(_GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT, timeout=30)
+        logger.debug("Gmail SMTP: connected, calling ehlo()")
         smtp.ehlo()
+        logger.debug("Gmail SMTP: calling starttls() before login")
         smtp.starttls()
+        logger.debug("Gmail SMTP: starttls OK, calling ehlo() again")
         smtp.ehlo()
-        smtp.login(from_addr, (os.environ.get("GMAIL_PASSWORD") or "").strip())
+        logger.debug("Gmail SMTP: calling login(%r, ***)", from_addr)
+        smtp.login(from_addr, password)
+        logger.debug("Gmail SMTP: login OK, calling send_message()")
         smtp.send_message(msg)
+        logger.info("Gmail SMTP: message accepted for delivery to=%r subject=%r", to_addr, subject)
+    except smtplib.SMTPAuthenticationError as e:
+        _log_smtp_exception("login", e, to_addr=to_addr)
+        raise
+    except smtplib.SMTPRecipientsRefused as e:
+        _log_smtp_exception("recipients", e, to_addr=to_addr)
+        raise
+    except smtplib.SMTPSenderRefused as e:
+        _log_smtp_exception("sender", e, to_addr=to_addr)
+        raise
+    except smtplib.SMTPDataError as e:
+        _log_smtp_exception("data", e, to_addr=to_addr)
+        raise
+    except smtplib.SMTPConnectError as e:
+        _log_smtp_exception("connect", e, to_addr=to_addr)
+        raise
+    except smtplib.SMTPException as e:
+        _log_smtp_exception("smtp", e, to_addr=to_addr)
+        raise
+    except OSError as e:
+        _log_smtp_exception("os/network", e, to_addr=to_addr)
+        raise
+    except Exception as e:
+        _log_smtp_exception("unexpected", e, to_addr=to_addr)
+        raise
+    finally:
+        if smtp is not None:
+            try:
+                smtp.quit()
+            except Exception:
+                try:
+                    smtp.close()
+                except Exception:
+                    pass
+
+
+def send_smtp_startup_test_email() -> bool:
+    """
+    Простое тестовое письмо при старте (проверка smtp.gmail.com:587 + starttls + login).
+
+    Возвращает True при успехе. Ошибки только логируются (не роняют процесс).
+    """
+    reason = purchase_emails_disabled_reason()
+    if reason:
+        logger.warning("SMTP startup test skipped: %s", reason)
+        return False
+    if not _smtp_startup_test_enabled():
+        logger.info("SMTP startup test skipped: SMTP_STARTUP_TEST is off")
+        return False
+
+    owners = _shop_owner_emails()
+    if not owners:
+        logger.warning("SMTP startup test skipped: no owner email (SHOP_OWNER_EMAIL / GMAIL_USER)")
+        return False
+
+    subject = "Music Acupuncture — SMTP startup test"
+    body = (
+        "This is an automatic test email from Music Acupuncture sell-bot.\n"
+        "If you received it, Gmail SMTP works:\n"
+        f"  server={_GMAIL_SMTP_HOST}\n"
+        f"  port={_GMAIL_SMTP_PORT}\n"
+        "  TLS=starttls() before login\n"
+        f"  login user={_gmail_user()}\n"
+    )
+    ok_any = False
+    for to_addr in owners:
+        try:
+            logger.info("SMTP startup test: sending test email to %r …", to_addr)
+            _send_smtp(to_addr=to_addr, subject=subject, body=body)
+            logger.info("SMTP startup test: SUCCESS — test email sent to %r", to_addr)
+            ok_any = True
+        except Exception as e:
+            logger.error(
+                "SMTP startup test: FAILED for %r — email will not work until this is fixed. error=%r",
+                to_addr,
+                e,
+                exc_info=True,
+            )
+    return ok_any
+
+
+def run_smtp_startup_test_if_configured() -> None:
+    """Точка входа для bot/web startup (безопасно вызывать всегда)."""
+    try:
+        send_smtp_startup_test_email()
+    except Exception:
+        logger.exception("SMTP startup test: unexpected outer failure")
 
 
 def send_purchase_emails(
@@ -131,7 +346,13 @@ def send_purchase_emails(
     """
     Два письма: покупателю (если есть email) и владельцу. Ошибки SMTP только в лог — не роняют webhook/бот.
     """
-    if not purchase_emails_enabled():
+    disabled = purchase_emails_disabled_reason()
+    if disabled:
+        logger.warning(
+            "purchase email: SKIPPED after purchase — %s (set ENABLE_PURCHASE_EMAIL=1, "
+            "GMAIL_USER, GMAIL_PASSWORD in .env)",
+            disabled,
+        )
         return
 
     title = (track_title or str(song_row.get("name") or "Track")).strip() or "Track"
@@ -144,27 +365,49 @@ def send_purchase_emails(
     elif buyer_to and buyer_label not in ("Unknown", ""):
         owner_buyer = f"{buyer_label} ({buyer_to})"
 
-    try:
-        owner_to = _shop_owner_email()
-        if owner_to:
-            _send_smtp(
-                to_addr=owner_to,
-                subject=f"New purchase – {title}",
-                body=_build_owner_body(
-                    track_title=title,
-                    buyer_label=owner_buyer,
-                    amount=amount,
-                    currency=currency,
-                    purchased_at_utc=purchased_at_utc,
-                    source=source,
-                ),
-            )
-            logger.info("purchase email: owner notified track=%r", title)
-    except Exception:
-        logger.exception("purchase email: failed to send owner notification")
+    logger.info(
+        "purchase email: start track=%r source=%s buyer_email=%r owners=%r has_drive_link=%s",
+        title,
+        source,
+        buyer_to or None,
+        _shop_owner_emails(),
+        bool(link),
+    )
+
+    owners = _shop_owner_emails()
+    if not owners:
+        logger.error("purchase email: owner address empty — cannot notify owner")
+    else:
+        owner_body = _build_owner_body(
+            track_title=title,
+            buyer_label=owner_buyer,
+            amount=amount,
+            currency=currency,
+            purchased_at_utc=purchased_at_utc,
+            source=source,
+        )
+        owner_subject = f"New purchase – {title}"
+        for owner_to in owners:
+            try:
+                _send_smtp(
+                    to_addr=owner_to,
+                    subject=owner_subject,
+                    body=owner_body,
+                )
+                logger.info("purchase email: owner notified track=%r to=%r", title, owner_to)
+            except Exception as e:
+                logger.exception(
+                    "purchase email: failed to send owner notification to %r: %r",
+                    owner_to,
+                    e,
+                )
 
     if not buyer_to:
-        logger.debug("purchase email: no buyer email — skipping buyer message track=%r", title)
+        logger.warning(
+            "purchase email: no buyer email — skipping buyer message track=%r "
+            "(Telegram Payments often has no email; website Stripe checkout may have customer_email)",
+            title,
+        )
         return
 
     try:
@@ -174,8 +417,8 @@ def send_purchase_emails(
             body=_build_buyer_body(track_title=title, download_link=link),
         )
         logger.info("purchase email: buyer notified %s track=%r", buyer_to, title)
-    except Exception:
-        logger.exception("purchase email: failed to send buyer notification to %s", buyer_to)
+    except Exception as e:
+        logger.exception("purchase email: failed to send buyer notification to %s: %r", buyer_to, e)
 
 
 def buyer_email_from_checkout_session(session: Any) -> str | None:

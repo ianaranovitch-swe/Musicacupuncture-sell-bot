@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -17,12 +18,20 @@ if str(_REPO_ROOT) not in sys.path:
 
 import music_sales.env_bootstrap  # noqa: F401 — loads .env before config
 
+from music_sales.purchase_email import run_smtp_startup_test_if_configured
 from music_sales.server import create_app
+
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
 
 def main() -> None:
+    try:
+        run_smtp_startup_test_if_configured()
+    except Exception:
+        # Не блокируем старт веб-сервера из-за SMTP.
+        logger.exception("SMTP startup test hook failed (non-fatal)")
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port)
 
