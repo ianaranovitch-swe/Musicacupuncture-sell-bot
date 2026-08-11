@@ -19,7 +19,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from music_sales.admin_panel import build_admin_conversation_handler
-from music_sales.pricing_display import usd_pair_plain
+from music_sales.pricing_display import track_usd_sek, usd_pair_plain
 
 from tracks import TRACKS, get_track
 
@@ -48,7 +48,18 @@ def _detail_price_line(track: dict) -> str:
         except ValueError:
             n = 1
         return f"💰 Price: ${n} (test)"
-    return f"💰 Price: {usd_pair_plain()}"
+    # Бесплатный трек — не подставляем дефолт $15 через None.
+    if str(track.get("price", "")).strip().upper() == "FREE":
+        return "🎁 FREE"
+    if track.get("price_amount") is not None:
+        try:
+            if int(track.get("price_amount")) == 0:
+                return "🎁 FREE"
+        except (TypeError, ValueError):
+            pass
+    usd, _sek = track_usd_sek(track)
+    # usd=0 оставляем как 0 (не None), иначе usd_pair_plain возьмёт дефолт $15.
+    return f"💰 Price: {usd_pair_plain(usd)}"
 
 
 def _miniapp_url() -> str:

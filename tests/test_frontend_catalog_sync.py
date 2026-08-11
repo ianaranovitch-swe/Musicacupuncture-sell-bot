@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from music_sales.frontend_catalog_sync import (
+    is_free_track,
     miniapp_js_block,
     ordered_frontend_pairs,
     peel_emoji_short,
@@ -82,6 +83,21 @@ def test_miniapp_js_contains_real_ids_for_paid() -> None:
     assert '"isFeatured": true' in js
     assert "Free T" in js
 
+
+def test_live_catalog_miniapp_block_starts_with_free_gift() -> None:
+    """Регрессия: бесплатный трек (UI id 0) должен быть первым в miniapp/website JSON."""
+    from tracks import TRACKS
+
+    pairs = ordered_frontend_pairs(TRACKS)
+    assert pairs, "TRACKS must not be empty"
+    assert pairs[0][0] == 0
+    assert is_free_track(pairs[0][1])
+    js = miniapp_js_block(TRACKS)
+    # Первый объект в массиве — free gift с display id 0
+    first_obj = js.split("const tracks = [", 1)[1].lstrip().split("\n", 1)[0]
+    assert '"id": 0' in first_obj
+    assert '"isFree": true' in first_obj
+    assert "Super Feng Shui" in first_obj or "Free" in first_obj
 
 def test_website_js_stripe_fields_for_paid() -> None:
     tracks = [

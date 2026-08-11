@@ -56,6 +56,26 @@ def _fixed_track_price_usd() -> int:
         return 15
 
 
+def _prices_from_tracks_py_for_stem(stem: str) -> tuple[int, int] | None:
+    """Если трек есть в tracks.py — берём usd_price/sek_price (иначе None)."""
+    stem = (stem or "").strip()
+    if not stem:
+        return None
+    try:
+        from tracks import TRACKS
+    except ImportError:
+        return None
+    from music_sales.pricing_display import track_usd_sek
+
+    for t in TRACKS:
+        if Path(str(t.get("audio", "") or "")).stem != stem:
+            continue
+        if _track_dict_is_free_gift(t):
+            return None
+        return track_usd_sek(t)
+    return None
+
+
 def _load_catalog_json(folder: Path) -> Dict[str, Dict[str, Any]]:
     """
     Опциональный `songs/catalog.json` (или `<AUDIO_SALES_DIR>/catalog.json`):
@@ -91,11 +111,12 @@ def _track_dict_is_free_gift(t: dict[str, Any]) -> bool:
     """Совпадает с витриной: FREE по полю price или нулевой price_amount."""
     if str(t.get("price", "")).strip().upper() == "FREE":
         return True
-    try:
-        if int(t.get("price_amount") or -1) == 0:
-            return True
-    except (TypeError, ValueError):
-        pass
+    if t.get("price_amount") is not None:
+        try:
+            if int(t.get("price_amount")) == 0:
+                return True
+        except (TypeError, ValueError):
+            pass
     return False
 
 
@@ -149,9 +170,13 @@ def synthetic_song_row_for_song_id(song_id: str) -> dict[str, Any] | None:
         name = str(t.get("title") or stem)
         dir_name = _audio_sales_dir_name()
         fname = Path(str(t.get("audio", "") or f"{stem}.mp3")).name
+        from music_sales.pricing_display import track_usd_sek
+
+        usd_n, sek_n = track_usd_sek(t)
         row: Dict[str, Any] = {
             "name": name,
-            "price_usd": _fixed_track_price_usd(),
+            "price_usd": usd_n,
+            "price_sek": sek_n,
             "file": f"{dir_name}/{fname}",
         }
         gid = t.get("google_drive_file_id")
@@ -198,9 +223,25 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         name = ov.get("name") if isinstance(ov.get("name"), str) else None
         if not name:
             name = path.stem.replace("_", " ").strip() or path.stem
-        # Требование продукта: все треки продаются по фиксированной USD-цене.
-        # `catalog.json` в папке треков может менять отображаемое имя, но не цену.
-        price_usd = default_price
+        # Красивое имя и цена из tracks.py (если трек уже в каталоге).
+        from music_sales.pricing_display import current_price_sek
+
+        priced = _prices_from_tracks_py_for_stem(path.stem)
+        if priced:
+            price_usd, price_sek = priced
+        else:
+            price_usd, price_sek = default_price, current_price_sek()
+        try:
+            from tracks import TRACKS as _tracks_for_name
+
+            for _t in _tracks_for_name:
+                if Path(str(_t.get("audio", "") or "")).stem == path.stem:
+                    title = str(_t.get("title") or "").strip()
+                    if title:
+                        name = title
+                    break
+        except ImportError:
+            pass
 
         base_id = _song_id_from_stem(path.stem)
         song_id = base_id
@@ -214,6 +255,7 @@ def discover_songs() -> Dict[str, Dict[str, Any]]:
         out[song_id] = {
             "name": name,
             "price_usd": price_usd,
+            "price_sek": price_sek,
             "file": f"{dir_name}/{path.name}",
         }
         gid = ov.get("google_drive_file_id")

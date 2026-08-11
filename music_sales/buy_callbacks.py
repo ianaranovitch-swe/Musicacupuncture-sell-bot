@@ -76,10 +76,15 @@ async def buy_track_select(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     meta = songs.get(song_id, {})
     title = str(meta.get("name", song_id))
+    try:
+        price_usd = int(meta.get("price_usd") or 0)
+    except (TypeError, ValueError):
+        price_usd = 0
 
     text = (
         f"Track: <b>{title}</b>\n"
-        f"Price: {usd_pair_html()}\n\n"
+        # Не превращаем 0 в None — иначе покажется дефолт $15 вместо $0.
+        f"Price: {usd_pair_html(price_usd)}\n\n"
         "Choose a payment method:"
     )
 

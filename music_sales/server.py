@@ -878,6 +878,12 @@ def create_app(
             except (TypeError, ValueError):
                 return 100
         if currency == "sek":
+            # Цена трека (целые SEK) → öre; иначе глобальный CHECKOUT_SEK_UNIT_AMOUNT.
+            if song.get("price_sek") is not None:
+                try:
+                    return max(100, int(song["price_sek"]) * 100)
+                except (TypeError, ValueError):
+                    pass
             try:
                 return int((config.CHECKOUT_SEK_UNIT_AMOUNT or "15000").strip() or "15000")
             except ValueError:

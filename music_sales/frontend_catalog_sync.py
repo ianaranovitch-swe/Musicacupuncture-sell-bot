@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from music_sales.catalog import project_root
+from music_sales.pricing_display import track_usd_sek
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,12 @@ def is_free_track(t: dict[str, Any]) -> bool:
     """Бесплатный трек: по полю price или нулевой price_amount."""
     if str(t.get("price", "")).strip().upper() == "FREE":
         return True
-    try:
-        if int(t.get("price_amount") or -1) == 0:
-            return True
-    except (TypeError, ValueError):
-        pass
+    if t.get("price_amount") is not None:
+        try:
+            if int(t.get("price_amount")) == 0:
+                return True
+        except (TypeError, ValueError):
+            pass
     return False
 
 
@@ -125,6 +127,10 @@ def miniapp_js_block(tracks: list[dict[str, Any]]) -> str:
             obj["isNew"] = True
         if is_free:
             obj["isFree"] = True
+        else:
+            usd_n, sek_n = track_usd_sek(t)
+            obj["priceUsd"] = usd_n
+            obj["priceSek"] = sek_n
         gal = _gallery_covers_miniapp(t, is_free)
         if gal:
             obj["galleryCovers"] = gal
@@ -161,6 +167,9 @@ def website_js_block(tracks: list[dict[str, Any]]) -> str:
             obj["buyUrlUsd"] = None
             obj["buyUrlSek"] = None
         else:
+            usd_n, sek_n = track_usd_sek(t)
+            obj["priceUsd"] = usd_n
+            obj["priceSek"] = sek_n
             usd = str(t.get("buy_url") or "").strip()
             sek = str(t.get("buy_url_sek") or "").strip()
             obj["buyUrlUsd"] = usd or None

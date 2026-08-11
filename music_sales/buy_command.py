@@ -38,9 +38,13 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     rows = sorted_buy_rows(songs)
-    price_label = usd_pair_plain()
     keyboard = [
-        [InlineKeyboardButton(f"{r.name} — {price_label}", callback_data=index_to_callback(idx))]
+        [
+            InlineKeyboardButton(
+                f"{r.name} — {usd_pair_plain(int(r.price_usd))}",
+                callback_data=index_to_callback(idx),
+            )
+        ]
         for idx, r in enumerate(rows)
     ]
 

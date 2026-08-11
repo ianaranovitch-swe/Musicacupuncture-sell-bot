@@ -1,6 +1,7 @@
-"""Каталог из 18 встроенных треков (обложка и MP3 — см. поля cover / audio).
+"""Каталог встроенных треков (обложка и MP3 — см. поля cover / audio).
 
 Поле buy_url_sek — ссылка Stripe для Mini App в SEK (может совпадать с buy_url).
+usd_price / sek_price — целые USD/SEK для checkout и витрины (разные цены на Multi/Super).
 Опционально: is_featured, is_new, ui_emoji, ui_short_name — для витрины и фронта.
 Опционально: google_drive_file_id — ID файла в Google Drive для скачивания с сайта после Stripe (файлы >20 MB).
 Нужен GOOGLE_SERVICE_ACCOUNT_JSON и доступ SA к папке с MP3. См. _BUILTIN_GOOGLE_DRIVE_IDS.
@@ -395,6 +396,314 @@ _BUILTIN_TRACKS: list[dict] = [
         "buy_url": "https://buy.stripe.com/aFaaEW9jD50rdhz7ShcfK0h",
         "buy_url_sek": "https://buy.stripe.com/8x228qanHfF5cdv4G5cfK0g"
     },
+    {
+        "id": 19,
+        "short_title": "🎼 5 Element MULTI",
+        "title": 'Mozart + 5 Element MULTI',
+        "description": (
+            "Restore harmony through the balance of the Five Elements.\nA unique fusion of Mozart's timeless music and harmonizing sound frequencies inspired by the Five Elements. Designed to encourage balance, inner flow, relaxation, and a deeper sense of connection throughout the whole body. A beautiful musical journey for restoring harmony and energetic alignment. Listen daily for best results."
+        ),
+        "price": "$29",
+        "price_sek": "290 SEK",
+        "price_amount": 2900,
+        "usd_price": 29,
+        "sek_price": 290,
+        "currency": "USD",
+        "cover": "covers/Mozart+5-Element-MULTI.png",
+        "audio": "songs/Mozart+5-Element-MULTI.mp3",
+        "buy_url": 'https://buy.stripe.com/5kQ7sK9jD78zgtL0pPcfK0x',
+        "buy_url_sek": 'https://buy.stripe.com/5kQ7sK9jD78zgtL0pPcfK0x',
+        "is_featured": True,
+        "is_new": True,
+        "ui_emoji": "🎼",
+        "ui_short_name": '5 Element MULTI',
+    },
+    {
+        "id": 20,
+        "short_title": "🎼 Chakra Multi",
+        "title": 'Mozart + Chakra Multi',
+        "description": (
+            "Balance your chakras and awaken your natural energy flow.\nMozart's beautiful music blended with harmonizing frequencies created to support the entire chakra system. Encourages energetic balance, relaxation, clarity, and a smooth flow of life energy from root to crown. Ideal for meditation, daily restoration, and inner alignment. Listen daily for best results."
+        ),
+        "price": "$29",
+        "price_sek": "290 SEK",
+        "price_amount": 2900,
+        "usd_price": 29,
+        "sek_price": 290,
+        "currency": "USD",
+        "cover": "covers/Mozart+Chakra-Multi.png",
+        "audio": "songs/Mozart+Chakra-Multi.mp3",
+        "buy_url": 'https://buy.stripe.com/8x23cu53n50rdhz3C1cfK0y',
+        "buy_url_sek": 'https://buy.stripe.com/8x23cu53n50rdhz3C1cfK0y',
+        "is_featured": True,
+        "is_new": True,
+        "ui_emoji": "🎼",
+        "ui_short_name": 'Chakra Multi',
+    },
+    {
+        "id": 21,
+        "short_title": "🎵 Crown + Third Eye",
+        "title": 'Mozart + Crown Chakra + Third Eye',
+        "description": (
+            "Open your mind to clarity, intuition, and higher awareness.\nAn uplifting fusion of Mozart's music and frequencies focused on the Crown Chakra and Third Eye. Designed to encourage mental clarity, intuition, inner vision, and a deeper connection with your higher awareness. Perfect for meditation, reflection, and peaceful relaxation. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Crown-Chakra-Third-Eye.png",
+        "audio": "songs/Mozart+Crown-Chakra-Third-Eye.mp3",
+        "buy_url": 'https://buy.stripe.com/8x2bJ053nboP91jgoNcfK0l',
+        "buy_url_sek": 'https://buy.stripe.com/8x2bJ053nboP91jgoNcfK0l',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Crown + Third Eye',
+    },
+    {
+        "id": 22,
+        "short_title": "🎵 Heart",
+        "title": 'Mozart + Heart',
+        "description": (
+            "Surround your heart with harmony, warmth, and peaceful energy.\nMozart's timeless melodies combined with gentle harmonizing frequencies centered around the heart. Encourages relaxation, emotional balance, inner peace, and a feeling of warmth and openness. A soothing musical experience created to bring harmony to body and mind. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Heart.png",
+        "audio": "songs/Mozart+Heart.mp3",
+        "buy_url": 'https://buy.stripe.com/5kQ28qeDX78zb9r2xXcfK0m',
+        "buy_url_sek": 'https://buy.stripe.com/5kQ28qeDX78zb9r2xXcfK0m',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Heart',
+    },
+    {
+        "id": 23,
+        "short_title": "🎵 Heart Chakra + Thymus",
+        "title": 'Mozart + Heart Chakra + Thymus Gland',
+        "description": (
+            "Awaken heart energy, compassion, and inner harmony.\nA beautiful combination of Mozart's music and specially created frequencies inspired by the Heart Chakra and thymus area. Encourages openness, emotional harmony, compassion, and a peaceful sense of inner balance. Ideal for relaxation and reconnecting with the energy of love and well-being. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+HEART-CHAKRA-Thimus-gland.png",
+        "audio": "songs/Mozart+HEART-CHAKRA-Thimus-gland.mp3",
+        "buy_url": 'https://buy.stripe.com/5kQ8wOfI18cD1yR0pPcfK0n',
+        "buy_url_sek": 'https://buy.stripe.com/5kQ8wOfI18cD1yR0pPcfK0n',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Heart Chakra + Thymus',
+    },
+    {
+        "id": 24,
+        "short_title": "🎵 Immune + Stomach",
+        "title": 'Mozart + Immune System + Stomach',
+        "description": (
+            "Create inner balance, strength, and comforting harmony.\nMozart's music blended with specially designed sound frequencies inspired by the immune system and stomach. Created to encourage relaxation, resilience, energetic balance, and a comforting sense of harmony within the body. A gentle daily musical ritual for restoring calm and inner strength. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Immune-System+Stomach.png",
+        "audio": "songs/Mozart+Immune-System+Stomach.mp3",
+        "buy_url": 'https://buy.stripe.com/cNieVcanHgJ9dhzb4tcfK0o',
+        "buy_url_sek": 'https://buy.stripe.com/cNieVcanHgJ9dhzb4tcfK0o',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Immune + Stomach',
+    },
+    {
+        "id": 25,
+        "short_title": "🎵 Kidneys + Bladder",
+        "title": 'Mozart + Kidneys + Urinary Bladder',
+        "description": (
+            "Restore flow, grounding, and deep inner balance.\nA calming fusion of Mozart's music and harmonizing frequencies inspired by the kidneys and urinary bladder. Designed to encourage relaxation, energetic flow, stability, and a deeper sense of grounding. Let the music help you reconnect with calmness and balance throughout the body. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+KIDNEYS+URINARY-BLADDER.png",
+        "audio": "songs/Mozart+KIDNEYS+URINARY-BLADDER.mp3",
+        "buy_url": 'https://buy.stripe.com/3cIfZgfI11OfelD7ShcfK0p',
+        "buy_url_sek": 'https://buy.stripe.com/3cIfZgfI11OfelD7ShcfK0p',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Kidneys + Bladder',
+    },
+    {
+        "id": 26,
+        "short_title": "🎵 Liver + Gallbladder",
+        "title": 'Mozart + Liver + Gallbladder',
+        "description": (
+            "Refresh your energy and invite greater flow and clarity.\nMozart's harmonious music combined with specially created frequencies inspired by the liver and gallbladder. Encourages a feeling of renewal, energetic flow, relaxation, and inner clarity. A refreshing musical experience designed to help you feel lighter, calmer, and more balanced. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Liver+GALLBLADDER.png",
+        "audio": "songs/Mozart+Liver+GALLBLADDER.mp3",
+        "buy_url": 'https://buy.stripe.com/fZu9AS0N7boP91j1tTcfK0q',
+        "buy_url_sek": 'https://buy.stripe.com/fZu9AS0N7boP91j1tTcfK0q',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Liver + Gallbladder',
+    },
+    {
+        "id": 27,
+        "short_title": "🎵 Lungs + Large Intestine",
+        "title": 'Mozart + Lungs + Large Intestine',
+        "description": (
+            "Breathe into freedom, clarity, and renewed inner flow.\nA soothing combination of Mozart's music and harmonizing frequencies inspired by the lungs and large intestine. Designed to encourage relaxation, openness, energetic flow, and a feeling of release. Let each listening session bring greater calm, spaciousness, and harmony to your daily life. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Lungs-Large-Intestine.png",
+        "audio": "songs/Mozart+Lungs-Large-Intestine.mp3",
+        "buy_url": 'https://buy.stripe.com/28E5kCgM50Kb2CVb4tcfK0r',
+        "buy_url_sek": 'https://buy.stripe.com/28E5kCgM50Kb2CVb4tcfK0r',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Lungs + Large Intestine',
+    },
+    {
+        "id": 28,
+        "short_title": "🎵 Root Chakra + Suprarenal",
+        "title": 'Mozart + Root Chakra + Suprarenal Glands',
+        "description": (
+            "Feel grounded, secure, energized, and deeply supported.\nMozart's timeless music blended with powerful grounding frequencies inspired by the Root Chakra and suprarenal glands. Encourages stability, inner strength, relaxation, and a sense of safety and connection to the earth. Ideal when you want to restore your foundation and natural vitality. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+ROOT-Chakra+Suprarenal-glands.png",
+        "audio": "songs/Mozart+ROOT-Chakra+Suprarenal-glands.mp3",
+        "buy_url": 'https://buy.stripe.com/eVqaEW8fzcsTgtLegFcfK0s',
+        "buy_url_sek": 'https://buy.stripe.com/eVqaEW8fzcsTgtLegFcfK0s',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Root Chakra + Suprarenal',
+    },
+    {
+        "id": 29,
+        "short_title": "🎵 Sacral Chakra",
+        "title": 'Mozart + Sacral Chakra + Reproductive Organs',
+        "description": (
+            "Awaken creativity, emotional flow, and joyful life energy.\nA flowing fusion of Mozart's music and harmonizing frequencies inspired by the Sacral Chakra and reproductive organs. Designed to encourage creativity, emotional balance, vitality, sensual energy, and a natural sense of movement and joy. A beautiful sound experience for reconnecting with your creative life force. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Sacral-Chakra+Reproductive-Organs.png",
+        "audio": "songs/Mozart+Sacral-Chakra+Reproductive-Organs.mp3",
+        "buy_url": 'https://buy.stripe.com/aFa9ASanH1OfelD0pPcfK0t',
+        "buy_url_sek": 'https://buy.stripe.com/aFa9ASanH1OfelD0pPcfK0t',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Sacral Chakra',
+    },
+    {
+        "id": 30,
+        "short_title": "🎵 Solar Plexus",
+        "title": 'Mozart + Solar Plexus Chakra + Pancreas and Liver Glands',
+        "description": (
+            "Activate confidence, inner power, and balanced energy.\nMozart's inspiring music combined with harmonizing frequencies focused on the Solar Plexus Chakra and the energetic areas associated with the pancreas and liver. Encourages confidence, motivation, clarity, inner strength, and emotional balance. A powerful daily musical experience for reconnecting with your personal energy and direction. Listen daily for best results."
+        ),
+        "price": "$15",
+        "price_sek": "150 SEK",
+        "price_amount": 1500,
+        "usd_price": 15,
+        "sek_price": 150,
+        "currency": "USD",
+        "cover": "covers/Mozart+Solarplexus-Chakra+Pancreas_and_Liver-Glands.png",
+        "audio": "songs/Mozart+Solarplexus-Chakra+Pancreas_and_Liver-Glands.mp3",
+        "buy_url": 'https://buy.stripe.com/eVqdR867rcsT5P7dcBcfK0u',
+        "buy_url_sek": 'https://buy.stripe.com/eVqdR867rcsT5P7dcBcfK0u',
+        "is_featured": False,
+        "is_new": True,
+        "ui_emoji": "🎵",
+        "ui_short_name": 'Solar Plexus',
+    },
+    {
+        "id": 31,
+        "short_title": "🎼 Super 5 Element MULTI",
+        "title": 'Super Mozart + 5 Element MULTI',
+        "description": (
+            "Experience an intensified journey into Five Element harmony.\nA powerful enhanced fusion of Mozart's timeless music and multi-layered harmonizing frequencies inspired by the Five Elements. Created to offer a deeper and more immersive sound experience supporting relaxation, energetic balance, inner flow, and whole-body harmony. An advanced musical journey for those seeking a stronger sense of alignment and renewal. Listen daily for best results."
+        ),
+        "price": "$49",
+        "price_sek": "490 SEK",
+        "price_amount": 4900,
+        "usd_price": 49,
+        "sek_price": 490,
+        "currency": "USD",
+        "cover": "covers/Super-Mozart+5-Element-MULTI.png",
+        "audio": "songs/Super-Mozart+5-Element-MULTI.mp3",
+        "buy_url": 'https://buy.stripe.com/eVq00i53n78z3GZgoNcfK0v',
+        "buy_url_sek": 'https://buy.stripe.com/eVq00i53n78z3GZgoNcfK0v',
+        "is_featured": True,
+        "is_new": True,
+        "ui_emoji": "🎼",
+        "ui_short_name": 'Super 5 Element MULTI',
+    },
+    {
+        "id": 32,
+        "short_title": "🎼 Super Chakra MULTI",
+        "title": 'Super Mozart + Chakra MULTI',
+        "description": (
+            "Immerse your whole chakra system in powerful musical harmony.\nAn enhanced combination of Mozart's music and multi-layered frequencies created for the entire chakra system. Designed to provide a rich and immersive experience of energetic balance, relaxation, clarity, and flowing life energy from Root Chakra to Crown Chakra. A powerful sound journey for meditation, restoration, and deep inner alignment. Listen daily for best results."
+        ),
+        "price": "$49",
+        "price_sek": "490 SEK",
+        "price_amount": 4900,
+        "usd_price": 49,
+        "sek_price": 490,
+        "currency": "USD",
+        "cover": "covers/Super-Mozart+Chakra-MULTI.png",
+        "audio": "songs/Super-Mozart+Chakra-MULTI.mp3",
+        "buy_url": 'https://buy.stripe.com/28E28qeDXgJ97Xfa0pcfK0w',
+        "buy_url_sek": 'https://buy.stripe.com/28E28qeDXgJ97Xfa0pcfK0w',
+        "is_featured": True,
+        "is_new": True,
+        "ui_emoji": "🎼",
+        "ui_short_name": 'Super Chakra MULTI',
+    },
 ]
 
 
@@ -455,11 +764,12 @@ def _build_merged_catalog() -> list[dict]:
         for t in out:
             if str(t.get("price", "")).strip().upper() == "FREE":
                 continue
-            try:
-                if int(t.get("price_amount") or -1) == 0:
-                    continue
-            except (TypeError, ValueError):
-                pass
+            if t.get("price_amount") is not None:
+                try:
+                    if int(t.get("price_amount")) == 0:
+                        continue
+                except (TypeError, ValueError):
+                    pass
             t["buy_url"] = test_link
             t["buy_url_sek"] = test_link
     return out

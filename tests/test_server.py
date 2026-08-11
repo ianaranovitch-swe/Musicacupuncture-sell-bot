@@ -84,6 +84,42 @@ def test_create_checkout_accepts_selected_currency(mocker):
     assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 15000
 
 
+def test_create_checkout_uses_per_track_sek_price(mocker):
+    """Premium Mozart: song.price_sek перекрывает глобальный CHECKOUT_SEK_UNIT_AMOUNT."""
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    catalog = {
+        "mozart_multi": {
+            "name": "Mozart + 5 Element MULTI",
+            "price_usd": 29,
+            "price_sek": 290,
+            "file": "songs/Mozart+5-Element-MULTI.mp3",
+        }
+    }
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog,
+    )
+    client = app.test_client()
+    resp = client.post(
+        "/create-checkout",
+        json={"song_id": "mozart_multi", "telegram_id": 42, "currency": "sek"},
+    )
+    assert resp.status_code == 200
+    assert create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"] == 29000
+
+    resp_usd = client.post(
+        "/create-checkout",
+        json={"song_id": "mozart_multi", "telegram_id": 42, "currency": "usd"},
+    )
+    assert resp_usd.status_code == 200
+    assert create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"] == 2900
+
+
 def test_website_create_payment_success_url_follows_backend_without_hardcoded_domain(mocker, monkeypatch):
     """WEBSITE_SUCCESS_URL не задан — success_url = origin + / (корень витрины)."""
     monkeypatch.delenv("WEBSITE_SUCCESS_URL", raising=False)
