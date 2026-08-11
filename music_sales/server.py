@@ -931,6 +931,16 @@ def create_app(
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}success=true&track_id={track_id_raw}&session_id={{CHECKOUT_SESSION_ID}}"
 
+    def _website_cancel_url() -> str:
+        """
+        После отмены оплаты (стрелка MusicSell на Stripe Checkout) —
+        сразу витрина с каталогом, без страницы «Payment cancelled».
+        """
+        custom = (os.environ.get("WEBSITE_CANCEL_URL") or "").strip()
+        if custom.startswith("https://") or custom.startswith("http://"):
+            return custom
+        return _stripe_public_origin().rstrip("/") + "/?canceled=1"
+
     def _website_download_sign(song_id: str, exp: int) -> str:
         secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
         payload = f"{song_id}:{exp}".encode("utf-8")
@@ -1111,7 +1121,7 @@ def create_app(
                 ],
                 mode="payment",
                 success_url=_checkout_success_url(),
-                cancel_url=_stripe_public_origin() + "/cancel",
+                cancel_url=_website_cancel_url(),
                 # Дублируем telegram_id в client_reference_id как запасной канал,
                 # если в будущем metadata потеряется в промежуточном потоке.
                 client_reference_id=str(telegram_id),
@@ -1165,7 +1175,7 @@ def create_app(
                 ],
                 mode="payment",
                 success_url=_website_success_url(track_id),
-                cancel_url=_stripe_public_origin() + "/cancel",
+                cancel_url=_website_cancel_url(),
                 client_reference_id="0",
                 metadata={
                     "telegram_id": "0",
@@ -1723,9 +1733,12 @@ def create_app(
 </html>"""
 
     @app.route("/cancel")
-    def cancel() -> str:
-        return "Payment cancelled."
-
+    def cancel() -> Any:
+        """
+        Старые Payment Links / сессии всё ещё шлют сюда.
+        Не показываем «Payment cancelled» — сразу каталог витрины.
+        """
+        return redirect("/?canceled=1", code=302)
     bootstrap_sales_log()
     bootstrap_testimonials()
 

@@ -2137,6 +2137,20 @@
     scrollToId("success-section");
   }
 
+  /** Возврат из Stripe Checkout без оплаты → каталог, без страницы cancelled. */
+  function initCanceledReturn() {
+    var params = new URLSearchParams(window.location.search);
+    var canceled = params.get("canceled") === "1" || params.get("cancelled") === "1";
+    if (!canceled) return;
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.delete("canceled");
+      u.searchParams.delete("cancelled");
+      history.replaceState({}, "", u.pathname + (u.search || "") + "#shop");
+    } catch (e) {}
+    scrollToId("shop");
+  }
+
   /* ---------- Starfield canvas ---------- */
   function initStars() {
     var canvas = document.getElementById("stars-canvas");
@@ -2303,6 +2317,7 @@
   initAboutFounderPhoto();
   initPurchasePlayerUi();
   initSuccessPage();
+  initCanceledReturn();
   loadPricing();
   loadTestimonials();
   window.addEventListener("resize", function () {

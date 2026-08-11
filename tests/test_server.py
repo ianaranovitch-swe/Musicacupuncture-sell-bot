@@ -59,7 +59,7 @@ def test_create_checkout_cancel_url_https_when_domain_has_no_scheme(mocker):
     resp = client.post("/create-checkout", json={"song_id": "song1", "telegram_id": 42})
     assert resp.status_code == 200
     kwargs = create.call_args.kwargs
-    assert kwargs["cancel_url"] == "https://musicacupuncture.example/cancel"
+    assert kwargs["cancel_url"] == "https://musicacupuncture.example/?canceled=1"
     assert kwargs["success_url"] == "https://musicacupuncture.example/success"
 
 
@@ -1381,7 +1381,34 @@ def test_success_and_cancel_pages():
     )
     client = app.test_client()
     assert client.get("/success").status_code == 200
-    assert client.get("/cancel").status_code == 200
+    # /cancel больше не текст «Payment cancelled» — редирект на витрину/каталог
+    cancel = client.get("/cancel", follow_redirects=False)
+    assert cancel.status_code == 302
+    assert cancel.headers["Location"] == "/?canceled=1"
+
+
+def test_website_create_payment_cancel_url_points_to_storefront(mocker, monkeypatch):
+    """Отмена на Stripe (кнопка MusicSell) → витрина ?canceled=1, не HTML «Payment cancelled»."""
+    monkeypatch.delenv("WEBSITE_CANCEL_URL", raising=False)
+    monkeypatch.delenv("WEBSITE_SUCCESS_URL", raising=False)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        domain="https://musicacupuncture.example",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/website-create-payment", json={"track_id": 2, "currency": "sek"})
+    assert resp.status_code == 200
+    assert create.call_args.kwargs["cancel_url"] == "https://musicacupuncture.example/?canceled=1"
 
 
 def test_miniapp_html_route(mocker, tmp_path):
