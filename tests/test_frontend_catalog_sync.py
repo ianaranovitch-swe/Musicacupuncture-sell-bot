@@ -6,9 +6,11 @@ from pathlib import Path
 
 from music_sales.frontend_catalog_sync import (
     is_free_track,
+    is_premium_catalog_track,
     miniapp_js_block,
     ordered_frontend_pairs,
     peel_emoji_short,
+    sort_tracks_catalog_order,
     sync_frontend_html_catalog,
     track_display_emoji_short,
     website_js_block,
@@ -31,35 +33,56 @@ def test_track_display_emoji_short_prefers_ui_fields() -> None:
     assert track_display_emoji_short(t) == ("🌙", "Sleep")
 
 
-def test_ordered_frontend_free_then_paid_by_id() -> None:
+def test_ordered_frontend_premium_then_classic_with_free() -> None:
+    """Premium Mozart сверху; free остаётся в classic с display id 0."""
     tracks = [
         {"id": 3, "price": "$16", "short_title": "🎵 Three", "title": "T3", "description": "d", "cover": "c3.png"},
         {"id": 18, "price": "FREE", "short_title": "🎁 G", "title": "Free", "description": "f", "cover": "cf.png"},
+        {
+            "id": 19,
+            "price": "$29",
+            "short_title": "🎼 M",
+            "title": "Mozart + Multi",
+            "description": "d",
+            "cover": "cm.png",
+            "is_featured": True,
+            "is_new": True,
+        },
         {"id": 1, "price": "$16", "short_title": "🎵 One", "title": "T1", "description": "d", "cover": "c1.png"},
     ]
     pairs = ordered_frontend_pairs(tracks)
-    assert [p[0] for p in pairs] == [0, 1, 3]
-    assert pairs[0][1]["id"] == 18
+    assert [p[0] for p in pairs] == [19, 0, 1, 3]
+    assert pairs[1][1]["id"] == 18
+    assert is_premium_catalog_track(pairs[0][1])
 
 
-def test_ordered_frontend_featured_new_paid_first() -> None:
+def test_ordered_frontend_featured_classic_after_premium() -> None:
     tracks = [
         {"id": 18, "price": "FREE", "short_title": "🎁 F", "title": "Free", "description": "", "cover": "c0.png"},
         {"id": 1, "price": "$16", "short_title": "🎵 One", "title": "T1", "description": "", "cover": "c1.png"},
         {
             "id": 17,
             "price": "$16",
-            "short_title": "🎵 New",
-            "title": "T17",
+            "short_title": "🎵 Sleep",
+            "title": "Sleep Best",
             "description": "",
             "cover": "c17.png",
             "is_featured": True,
             "is_new": True,
         },
+        {
+            "id": 21,
+            "price": "$15",
+            "short_title": "🎼 H",
+            "title": "Mozart + Heart",
+            "description": "",
+            "cover": "c21.png",
+            "is_new": True,
+        },
         {"id": 2, "price": "$16", "short_title": "🎵 Two", "title": "T2", "description": "", "cover": "c2.png"},
     ]
     pairs = ordered_frontend_pairs(tracks)
-    assert [p[0] for p in pairs] == [0, 17, 1, 2]
+    assert [p[0] for p in pairs] == [21, 0, 17, 1, 2]
 
 
 def test_miniapp_js_contains_real_ids_for_paid() -> None:
@@ -84,20 +107,40 @@ def test_miniapp_js_contains_real_ids_for_paid() -> None:
     assert "Free T" in js
 
 
-def test_live_catalog_miniapp_block_starts_with_free_gift() -> None:
-    """Регрессия: бесплатный трек (UI id 0) должен быть первым в miniapp/website JSON."""
+def test_live_catalog_premium_block_then_free_in_classic() -> None:
+    """Регрессия: 14 Mozart сначала; free (UI id 0) в classic после premium."""
     from tracks import TRACKS
 
     pairs = ordered_frontend_pairs(TRACKS)
     assert pairs, "TRACKS must not be empty"
-    assert pairs[0][0] == 0
-    assert is_free_track(pairs[0][1])
+    assert is_premium_catalog_track(pairs[0][1])
+    assert pairs[0][0] == int(pairs[0][1]["id"])
+
+    premium_ids = [p[0] for p in pairs if is_premium_catalog_track(p[1])]
+    classic_ids = [p[0] for p in pairs if not is_premium_catalog_track(p[1])]
+    assert len(premium_ids) == 14
+    assert len(classic_ids) == 18
+    assert classic_ids[0] == 0
+    assert is_free_track(next(p[1] for p in pairs if p[0] == 0))
+
+    # В массиве JS первый объект — premium, free где-то позже
     js = miniapp_js_block(TRACKS)
-    # Первый объект в массиве — free gift с display id 0
     first_obj = js.split("const tracks = [", 1)[1].lstrip().split("\n", 1)[0]
-    assert '"id": 0' in first_obj
-    assert '"isFree": true' in first_obj
-    assert "Super Feng Shui" in first_obj or "Free" in first_obj
+    assert '"isPremium": true' in first_obj
+    assert '"id": 0' in js
+    assert '"isFree": true' in js
+    assert '"isPremium": true' in js
+
+
+def test_sort_tracks_catalog_order_matches_pairs() -> None:
+    tracks = [
+        {"id": 1, "price": "$1", "title": "Old", "cover": "a.png"},
+        {"id": 20, "price": "$2", "title": "Mozart + X", "cover": "b.png", "is_featured": True, "is_new": True},
+        {"id": 18, "price": "FREE", "title": "Free", "cover": "c.png"},
+    ]
+    ordered = sort_tracks_catalog_order(tracks)
+    assert [t["id"] for t in ordered] == [20, 18, 1]
+
 
 def test_website_js_stripe_fields_for_paid() -> None:
     tracks = [

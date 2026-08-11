@@ -45,6 +45,40 @@ def is_free_track(t: dict[str, Any]) -> bool:
     return False
 
 
+def is_premium_catalog_track(t: dict[str, Any]) -> bool:
+    """
+    Новая premium-серия (Mozart / Super Mozart), ids 19–32.
+    По title «Mozart» или по диапазону id — чтобы блок не разъезжался.
+    """
+    title = str(t.get("title") or "")
+    if "Mozart" in title:
+        return True
+    try:
+        tid = int(t["id"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return 19 <= tid <= 32
+
+
+def sort_tracks_catalog_order(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Витрина: сначала все premium (14 Mozart), потом classic (free + старые платные).
+    Внутри premium: featured+new выше, дальше по id.
+    Внутри classic: free первым, затем featured+new, остальные по id.
+    """
+    premium = [t for t in tracks if is_premium_catalog_track(t)]
+    classic = [t for t in tracks if not is_premium_catalog_track(t)]
+
+    def _feat_id_key(x: dict[str, Any]) -> tuple[int, int]:
+        feat = bool(x.get("is_featured")) and bool(x.get("is_new"))
+        return (0 if feat else 1, int(x["id"]))
+
+    premium_sorted = sorted(premium, key=_feat_id_key)
+    free = [t for t in classic if is_free_track(t)]
+    paid_classic = sorted((t for t in classic if not is_free_track(t)), key=_feat_id_key)
+    return premium_sorted + free + paid_classic
+
+
 def track_display_emoji_short(t: dict[str, Any]) -> tuple[str, str]:
     """
     Эмодзи и короткое имя для Mini App / website: приоритет у ui_emoji + ui_short_name из tracks.py
@@ -85,22 +119,15 @@ def _gallery_covers_miniapp(t: dict[str, Any], is_free: bool) -> list[str] | Non
 
 def ordered_frontend_pairs(tracks: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
     """
-    Порядок как на сайте: сначала бесплатный с id 0 в UI, затем платные.
-    Платные: сначала is_featured + is_new (новый эксклюзив), остальные по возрастанию id.
-    Реальные id в каталоге бота не трогаем — в JSON для фронта кладём display_id.
+    Порядок витрины: premium Mozart → classic (free с display id 0 + старые).
+    Реальные id в боте не трогаем — в JSON для фронта у free кладём display_id=0.
     """
-    free = [t for t in tracks if is_free_track(t)]
-
-    def _paid_sort_key(x: dict[str, Any]) -> tuple[int, int]:
-        feat = bool(x.get("is_featured")) and bool(x.get("is_new"))
-        return (0 if feat else 1, int(x["id"]))
-
-    paid = sorted((t for t in tracks if not is_free_track(t)), key=_paid_sort_key)
     out: list[tuple[int, dict[str, Any]]] = []
-    if free:
-        out.append((0, free[0]))
-    for t in paid:
-        out.append((int(t["id"]), t))
+    for t in sort_tracks_catalog_order(tracks):
+        if is_free_track(t):
+            out.append((0, t))
+        else:
+            out.append((int(t["id"]), t))
     return out
 
 
@@ -125,6 +152,8 @@ def miniapp_js_block(tracks: list[dict[str, Any]]) -> str:
             obj["isFeatured"] = True
         if bool(t.get("is_new")):
             obj["isNew"] = True
+        if is_premium_catalog_track(t):
+            obj["isPremium"] = True
         if is_free:
             obj["isFree"] = True
         else:
@@ -161,6 +190,8 @@ def website_js_block(tracks: list[dict[str, Any]]) -> str:
             obj["isFeatured"] = True
         if bool(t.get("is_new")):
             obj["isNew"] = True
+        if is_premium_catalog_track(t):
+            obj["isPremium"] = True
         if is_free:
             obj["isFree"] = True
             obj["buyUrl"] = None

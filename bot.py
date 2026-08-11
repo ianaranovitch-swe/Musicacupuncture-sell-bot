@@ -19,6 +19,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from music_sales.admin_panel import build_admin_conversation_handler
+from music_sales.frontend_catalog_sync import is_premium_catalog_track
 from music_sales.pricing_display import track_usd_sek, usd_pair_plain
 
 from tracks import TRACKS, get_track
@@ -146,22 +147,36 @@ def _next_track_id(track_id: int) -> int:
 
 
 def _track_card_keyboard(track: dict) -> InlineKeyboardMarkup:
-    """Полная клавиатура: Mini App + баннер эксклюзива + сетка кнопок треков (порядок как в TRACKS) + Buy + NEXT."""
+    """Полная клавиатура: Mini App + секции premium/classic + Buy + NEXT."""
     rows: list[list[InlineKeyboardButton]] = []
     store_url = _miniapp_url()
     if store_url:
         rows.append([InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))])
-    # Не кликабельный «лейбл» в Telegram нельзя — кнопка с noop: только всплывающее уведомление при тапе.
-    rows.append(
-        [InlineKeyboardButton("🆕 EXCLUSIVE NEW RELEASE", callback_data="catalog_banner")]
-    )
-    for i in range(0, len(TRACKS), 2):
-        left = TRACKS[i]
-        row = [InlineKeyboardButton(left["short_title"], callback_data=str(left["id"]))]
-        if i + 1 < len(TRACKS):
-            right = TRACKS[i + 1]
-            row.append(InlineKeyboardButton(right["short_title"], callback_data=str(right["id"])))
-        rows.append(row)
+
+    premium = [t for t in TRACKS if is_premium_catalog_track(t)]
+    classic = [t for t in TRACKS if not is_premium_catalog_track(t)]
+
+    def _append_track_rows(items: list[dict]) -> None:
+        for i in range(0, len(items), 2):
+            left = items[i]
+            row = [InlineKeyboardButton(left["short_title"], callback_data=str(left["id"]))]
+            if i + 1 < len(items):
+                right = items[i + 1]
+                row.append(InlineKeyboardButton(right["short_title"], callback_data=str(right["id"])))
+            rows.append(row)
+
+    # В Telegram нельзя сделать некликабельный лейбл — noop-кнопка с коротким ответом.
+    if premium:
+        rows.append(
+            [InlineKeyboardButton("✨ NEW PREMIUM SOUND FILES", callback_data="catalog_banner")]
+        )
+        _append_track_rows(premium)
+    if classic:
+        rows.append(
+            [InlineKeyboardButton("🎵 CLASSIC COLLECTION", callback_data="catalog_banner_classic")]
+        )
+        _append_track_rows(classic)
+
     rows.append([_buy_keyboard(track)])
     rows.append([InlineKeyboardButton("NEXT", callback_data=f"next:{_next_track_id(track['id'])}")])
     return InlineKeyboardMarkup(rows)
@@ -210,7 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 [[InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))]]
             ),
         )
-    first_track = get_track(1)
+    first_track = TRACKS[0] if TRACKS else None
     if first_track is None:
         await update.message.reply_text("No tracks available.")
         return
@@ -234,8 +249,7 @@ async def on_track_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
 
-    if query.data == "catalog_banner":
-        await query.answer()
+    if query.data in ("catalog_banner", "catalog_banner_classic"):
         return
 
     try:
@@ -292,7 +306,7 @@ def main() -> None:
     app.add_handler(build_admin_conversation_handler())
     app.add_handler(CommandHandler("start", start))
     app.add_handler(
-        CallbackQueryHandler(on_track_button, pattern=r"^(buy_unavailable|catalog_banner|\d+|next:\d+)$")
+        CallbackQueryHandler(on_track_button, pattern=r"^(buy_unavailable|catalog_banner|catalog_banner_classic|\d+|next:\d+)$")
     )
     app.add_error_handler(error_handler)
     logger.info("Bot polling…")

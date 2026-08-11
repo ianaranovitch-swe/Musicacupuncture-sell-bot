@@ -14,6 +14,7 @@ import os
 from copy import deepcopy
 from pathlib import Path
 
+from music_sales.frontend_catalog_sync import sort_tracks_catalog_order
 
 def _test_mode_env_on() -> bool:
     """Совпадает с music_sales.config.test_mode_active() — без импорта config из tracks (порядок загрузки)."""
@@ -57,8 +58,9 @@ _BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
 }
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.
+# Итоговый порядок витрины/бота задаётся sort_tracks_catalog_order (premium → classic).
 _BUILTIN_TRACKS: list[dict] = [
-    # Порядок для клавиатуры бота: сначала бесплатный, сразу новый релиз, дальше остальные (Mini App/сайт — см. ordered_frontend_pairs).
+    # Classic: free + Sleep Best + Divine Sound 1–16
     {
         "id": 18,
         "short_title": "🎁 Free Gift",
@@ -723,7 +725,7 @@ def _read_json(path: Path, default: object) -> object:
 def _build_merged_catalog() -> list[dict]:
     """
     Собираем итоговый список: встроенные треки минус удалённые, + правки полей, + треки из tracks_extra.json.
-    Порядок элементов в _BUILTIN_TRACKS задаёт порядок кнопок каталога в Telegram-боте.
+    Порядок витрины: premium (Mozart) → classic (free + старые) — sort_tracks_catalog_order.
     Вызывается при старте и после админских изменений (reload_track_catalog).
     """
     deleted_raw = _read_json(_tracks_data_dir() / "tracks_deleted.json", [])
@@ -772,7 +774,8 @@ def _build_merged_catalog() -> list[dict]:
                     pass
             t["buy_url"] = test_link
             t["buy_url_sek"] = test_link
-    return out
+    # Единый порядок: premium Mozart сверху, classic (free + старые) ниже — бот и фронт.
+    return sort_tracks_catalog_order(out)
 
 
 # Единый список для бота и get_track; перезагрузка — reload_track_catalog().
