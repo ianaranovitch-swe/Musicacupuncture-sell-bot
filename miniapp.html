@@ -168,6 +168,26 @@
       color: var(--gold);
       letter-spacing: 0.02em;
     }
+    header.hero .brand-heading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-logo {
+      display: block;
+      flex-shrink: 0;
+      object-fit: cover;
+      background: rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+    }
+    .brand-logo--hero {
+      width: 72px;
+      height: 72px;
+      border-radius: 14px;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
     header.hero p {
       margin: 6px 0 0;
       font-size: 0.9rem;
@@ -632,7 +652,21 @@
     <div class="screens">
       <div id="grid-screen" class="wrap">
         <header class="hero">
-          <h1>🎵 Music Acupuncture</h1>
+          <h1 class="brand-heading">
+            <video
+              class="brand-logo brand-logo--hero"
+              id="brand-logo-hero"
+              muted
+              autoplay
+              loop
+              playsinline
+              preload="metadata"
+              aria-hidden="true"
+            >
+              <source src="assets/michael.mp4" type="video/mp4" />
+            </video>
+            <span>Music Acupuncture</span>
+          </h1>
           <p>Divine Healing Sounds</p>
         </header>
         <div id="track-grid" class="grid" aria-label="Track list"></div>
@@ -943,7 +977,29 @@
       }
       syncTestModeBanner();
       mergeTrackDurationsFromServer();
+      initBrandLogoVideo();
       renderGrid();
+    }
+
+    /** Уменьшенный michael.mp4 вместо 🎵 в шапке Mini App. */
+    function initBrandLogoVideo() {
+      const v = document.getElementById("brand-logo-hero");
+      if (!v) return;
+      let reduce = false;
+      try {
+        reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      } catch (e) {}
+      v.muted = true;
+      if (reduce) {
+        v.removeAttribute("autoplay");
+        v.pause();
+        try {
+          v.currentTime = 0;
+        } catch (e2) {}
+        return;
+      }
+      const p = v.play();
+      if (p && typeof p.catch === "function") p.catch(function () {});
     }
 
     function renderGrid() {

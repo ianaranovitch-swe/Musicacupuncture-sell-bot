@@ -66,11 +66,46 @@
       border-bottom: 1px solid var(--card-border);
     }
     .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       font-weight: 700;
       font-size: 1rem;
       color: var(--gold);
       text-decoration: none;
       white-space: nowrap;
+    }
+    .brand-logo {
+      display: block;
+      flex-shrink: 0;
+      object-fit: cover;
+      background: rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+    }
+    .brand-logo--nav {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 215, 0, 0.35);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    }
+    .brand-logo--hero {
+      width: clamp(72px, 18vw, 96px);
+      height: clamp(72px, 18vw, 96px);
+      border-radius: 16px;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+      margin: 0 auto 14px;
+    }
+    .brand-heading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    .brand-heading--nav {
+      flex-direction: row;
+      gap: 8px;
     }
     .nav-links {
       display: flex;
@@ -981,7 +1016,21 @@
   <div class="page-wrap">
     <!-- ========== Sticky navigation ========== -->
     <header class="nav-bar">
-      <a href="#home" class="nav-brand" id="nav-logo">🎵 Music Acupuncture</a>
+      <a href="#home" class="nav-brand" id="nav-logo" aria-label="Music Acupuncture home">
+        <video
+          class="brand-logo brand-logo--nav"
+          data-brand-logo
+          muted
+          autoplay
+          loop
+          playsinline
+          preload="metadata"
+          aria-hidden="true"
+        >
+          <source type="video/mp4" />
+        </video>
+        <span>Music Acupuncture</span>
+      </a>
       <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu">☰</button>
       <nav class="nav-links collapsible" id="nav-links">
         <a href="#home">Home</a>
@@ -1020,7 +1069,21 @@
 
     <!-- ========== PAGE 1: Hero ========== -->
     <section id="home" class="hero">
-      <h1>🎵 Music Acupuncture</h1>
+      <h1 class="brand-heading">
+        <video
+          class="brand-logo brand-logo--hero"
+          data-brand-logo
+          muted
+          autoplay
+          loop
+          playsinline
+          preload="metadata"
+          aria-hidden="true"
+        >
+          <source type="video/mp4" />
+        </video>
+        <span>Music Acupuncture</span>
+      </h1>
       <p class="tagline">Divine Healing Sounds by Michael</p>
       <p class="lead">
         <strong>Divine Healing Music for Body and Soul.</strong><br />
@@ -2237,6 +2300,33 @@
     bindAboutIconVideoSound(document.getElementById("about-founder-video-wrap"));
   }
 
+  /** Уменьшенный michael.mp4 вместо 🎵 в меню и hero (один URL — браузер кэширует). */
+  function initBrandLogoVideos() {
+    var src = assetUrl("assets/michael.mp4");
+    var reduce = false;
+    try {
+      reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {}
+    document.querySelectorAll("video[data-brand-logo]").forEach(function (v) {
+      var s = v.querySelector("source");
+      if (s) s.src = src;
+      else v.src = src;
+      v.muted = true;
+      v.setAttribute("playsinline", "");
+      v.load();
+      if (reduce) {
+        v.removeAttribute("autoplay");
+        v.pause();
+        try {
+          v.currentTime = 0;
+        } catch (e2) {}
+      } else {
+        var p = v.play();
+        if (p && typeof p.catch === "function") p.catch(function () {});
+      }
+    });
+  }
+
   function bindAboutIconVideoSound(wrap) {
     if (!wrap) return;
     var video = wrap.querySelector(".about-icon-video");
@@ -2315,6 +2405,7 @@
   initScrollFade();
   initFreeSection();
   initAboutFounderPhoto();
+  initBrandLogoVideos();
   initPurchasePlayerUi();
   initSuccessPage();
   initCanceledReturn();
