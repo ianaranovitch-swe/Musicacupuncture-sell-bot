@@ -132,6 +132,22 @@ def test_live_catalog_premium_block_then_free_in_classic() -> None:
     assert '"isPremium": true' in js
 
 
+def test_startup_helpers_do_not_use_tracks_zero_as_free() -> None:
+    """TRACKS[0] — premium; free ищем явно (бот /start и секция Free на сайте)."""
+    from tracks import TRACKS
+
+    assert TRACKS and is_premium_catalog_track(TRACKS[0])
+    free = next(t for t in TRACKS if is_free_track(t))
+    assert free["id"] == 18
+
+    import bot as bot_mod
+
+    startup = bot_mod._startup_track_card()
+    assert startup is not None
+    assert is_free_track(startup)
+    assert startup["id"] == 18
+
+
 def test_sort_tracks_catalog_order_matches_pairs() -> None:
     tracks = [
         {"id": 1, "price": "$1", "title": "Old", "cover": "a.png"},

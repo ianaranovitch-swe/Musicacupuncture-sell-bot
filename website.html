@@ -2196,9 +2196,17 @@
 
   /* ---------- Free section content ---------- */
   function initFreeSection() {
-    var free = TRACKS[0];
-    document.getElementById("free-cover-img").src = assetUrl(free.cover);
-    document.getElementById("free-desc").textContent = free.description;
+    // Не TRACKS[0]: после reorder сверху premium Mozart; free ищем по флагу / id 0.
+    var free = TRACKS.find(function (t) {
+      return t && t.isFree;
+    }) || TRACKS.find(function (t) {
+      return t && t.id === 0;
+    });
+    if (!free) return;
+    var coverEl = document.getElementById("free-cover-img");
+    var descEl = document.getElementById("free-desc");
+    if (coverEl) coverEl.src = assetUrl(free.cover);
+    if (descEl) descEl.textContent = free.description;
   }
 
   function initAboutFounderPhoto() {

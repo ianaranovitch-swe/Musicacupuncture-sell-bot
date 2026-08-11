@@ -19,11 +19,26 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from music_sales.admin_panel import build_admin_conversation_handler
-from music_sales.frontend_catalog_sync import is_premium_catalog_track
+from music_sales.frontend_catalog_sync import is_free_track, is_premium_catalog_track
 from music_sales.pricing_display import track_usd_sek, usd_pair_plain
 
 from tracks import TRACKS, get_track
 
+
+def _startup_track_card() -> dict | None:
+    """
+    Карточка при /start: бесплатный подарок (не TRACKS[0] — после reorder там premium).
+    Если free нет — первый classic, иначе первый в каталоге.
+    """
+    if not TRACKS:
+        return None
+    for t in TRACKS:
+        if is_free_track(t):
+            return t
+    for t in TRACKS:
+        if not is_premium_catalog_track(t):
+            return t
+    return TRACKS[0]
 load_dotenv()
 
 ROOT = Path(__file__).resolve().parent
@@ -225,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 [[InlineKeyboardButton("🎵 Open Music Store", web_app=WebAppInfo(url=store_url))]]
             ),
         )
-    first_track = TRACKS[0] if TRACKS else None
+    first_track = _startup_track_card()
     if first_track is None:
         await update.message.reply_text("No tracks available.")
         return
