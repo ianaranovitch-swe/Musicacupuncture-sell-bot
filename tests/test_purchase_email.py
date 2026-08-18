@@ -1,12 +1,12 @@
-"""Тесты писем после покупки (Gmail SMTP — мок)."""
+"""Тесты писем после покупки (Resend API — мок)."""
 
 from __future__ import annotations
 
-import smtplib
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from music_sales import purchase_email as pe
 
@@ -14,16 +14,20 @@ from music_sales import purchase_email as pe
 @pytest.fixture(autouse=True)
 def _clear_purchase_email_env(monkeypatch):
     monkeypatch.delenv("ENABLE_PURCHASE_EMAIL", raising=False)
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("RESEND_FROM", raising=False)
+    monkeypatch.delenv("SHOP_OWNER_EMAIL", raising=False)
+    monkeypatch.delenv("DEVELOPER_EMAIL", raising=False)
+    monkeypatch.delenv("SUPPORT_CONTACT", raising=False)
+    monkeypatch.delenv("EMAIL_STARTUP_TEST", raising=False)
+    monkeypatch.delenv("SMTP_STARTUP_TEST", raising=False)
     monkeypatch.delenv("GMAIL_USER", raising=False)
     monkeypatch.delenv("GMAIL_PASSWORD", raising=False)
-    monkeypatch.delenv("SHOP_OWNER_EMAIL", raising=False)
-    monkeypatch.delenv("SUPPORT_CONTACT", raising=False)
-    monkeypatch.delenv("SMTP_STARTUP_TEST", raising=False)
 
 
 def test_purchase_emails_disabled_by_default():
     assert pe.purchase_emails_enabled() is False
-    with patch.object(pe, "_send_smtp") as smtp:
+    with patch.object(pe, "_send_email") as send:
         pe.send_purchase_emails(
             track_title="Heart",
             song_row={"name": "Divine sound Heart from God", "google_drive_file_id": "abc123"},
@@ -32,21 +36,23 @@ def test_purchase_emails_disabled_by_default():
             buyer_email="buyer@example.com",
             buyer_telegram_label="@buyer",
         )
-        smtp.assert_not_called()
+        send.assert_not_called()
 
 
-def test_send_purchase_emails_owner_and_buyer(monkeypatch):
+def test_send_purchase_emails_owner_developer_and_buyer(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "app-pass")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("RESEND_FROM", "Music Acupuncture <orders@example.com>")
     monkeypatch.setenv("SHOP_OWNER_EMAIL", "owner@gmail.com")
+    monkeypatch.setenv("DEVELOPER_EMAIL", "dev@example.com")
     monkeypatch.setenv("SUPPORT_CONTACT", "help@example.com")
     sent: list[tuple[str, str]] = []
 
-    def _capture(*, to_addr: str, subject: str, body: str) -> None:
+    def _capture(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
         sent.append((to_addr, subject))
+        assert html and "#1a0533" in html
 
-    monkeypatch.setattr(pe, "_send_smtp", _capture)
+    monkeypatch.setattr(pe, "_send_email", _capture)
     pe.send_purchase_emails(
         track_title="Divine sound Heart from God",
         song_row={"google_drive_file_id": "drive_id_99"},
@@ -56,24 +62,48 @@ def test_send_purchase_emails_owner_and_buyer(monkeypatch):
         buyer_telegram_label="@sarah",
         source="website",
     )
-    assert len(sent) == 2
+    assert len(sent) == 3
     assert sent[0][0] == "owner@gmail.com"
     assert "New purchase" in sent[0][1]
-    assert sent[1][0] == "buyer@example.com"
-    assert "Your purchase" in sent[1][1]
+    assert sent[1][0] == "dev@example.com"
+    assert sent[2][0] == "buyer@example.com"
+    assert "Your purchase" in sent[2][1]
+
+
+def test_send_purchase_emails_dedupes_owner_and_developer(monkeypatch):
+    monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
+    monkeypatch.setenv("SHOP_OWNER_EMAIL", "same@example.com")
+    monkeypatch.setenv("DEVELOPER_EMAIL", "same@example.com")
+    sent: list[str] = []
+
+    def _capture(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
+        sent.append(to_addr)
+
+    monkeypatch.setattr(pe, "_send_email", _capture)
+    pe.send_purchase_emails(
+        track_title="Heart",
+        song_row={},
+        amount=16.0,
+        currency="USD",
+        buyer_email="buyer@example.com",
+        source="website",
+    )
+    assert sent == ["same@example.com", "buyer@example.com"]
 
 
 def test_send_purchase_emails_multiple_owners(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "app-pass")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
     monkeypatch.setenv("SHOP_OWNER_EMAIL", "owner1@gmail.com, owner2@gmail.com")
     sent: list[str] = []
 
-    def _capture(*, to_addr: str, subject: str, body: str) -> None:
+    def _capture(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
         sent.append(to_addr)
 
-    monkeypatch.setattr(pe, "_send_smtp", _capture)
+    monkeypatch.setattr(pe, "_send_email", _capture)
     pe.send_purchase_emails(
         track_title="Heart",
         song_row={},
@@ -93,35 +123,36 @@ def test_parse_email_addresses_comma_and_semicolon():
 
 
 def test_shop_owner_emails_from_env(monkeypatch):
-    monkeypatch.setenv("GMAIL_USER", "fallback@gmail.com")
     monkeypatch.setenv("SHOP_OWNER_EMAIL", "one@gmail.com, two@gmail.com")
     assert pe._shop_owner_emails() == ["one@gmail.com", "two@gmail.com"]
     assert pe._shop_owner_email() == "one@gmail.com, two@gmail.com"
 
 
-def test_startup_test_sends_to_all_owners(monkeypatch):
+def test_startup_test_sends_to_all_staff(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "secret")
-    monkeypatch.setenv("SHOP_OWNER_EMAIL", "a@gmail.com; b@gmail.com")
-    monkeypatch.setenv("SMTP_STARTUP_TEST", "1")
-    with patch.object(pe, "_send_smtp") as smtp:
-        assert pe.send_smtp_startup_test_email() is True
-        assert smtp.call_count == 2
-        assert smtp.call_args_list[0].kwargs["to_addr"] == "a@gmail.com"
-        assert smtp.call_args_list[1].kwargs["to_addr"] == "b@gmail.com"
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
+    monkeypatch.setenv("SHOP_OWNER_EMAIL", "a@gmail.com")
+    monkeypatch.setenv("DEVELOPER_EMAIL", "b@gmail.com")
+    monkeypatch.setenv("EMAIL_STARTUP_TEST", "1")
+    with patch.object(pe, "_send_email") as send:
+        assert pe.send_email_startup_test() is True
+        assert send.call_count == 2
+        assert send.call_args_list[0].kwargs["to_addr"] == "a@gmail.com"
+        assert send.call_args_list[1].kwargs["to_addr"] == "b@gmail.com"
 
 
 def test_send_purchase_emails_skips_buyer_without_email(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "app-pass")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
+    monkeypatch.setenv("SHOP_OWNER_EMAIL", "owner@example.com")
     sent: list[str] = []
 
-    def _capture(*, to_addr: str, subject: str, body: str) -> None:
+    def _capture(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
         sent.append(to_addr)
 
-    monkeypatch.setattr(pe, "_send_smtp", _capture)
+    monkeypatch.setattr(pe, "_send_email", _capture)
     pe.send_purchase_emails(
         track_title="Track",
         song_row={},
@@ -130,7 +161,7 @@ def test_send_purchase_emails_skips_buyer_without_email(monkeypatch):
         buyer_email=None,
         buyer_telegram_label="Telegram user id 123",
     )
-    assert sent == ["shop@gmail.com"]
+    assert sent == ["owner@example.com"]
 
 
 def test_drive_download_link_from_song_row():
@@ -157,8 +188,8 @@ def test_buyer_label_from_metadata_username():
 
 def test_send_purchase_emails_for_stripe_session(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "x")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
     calls: list[str] = []
     monkeypatch.setattr(
         pe,
@@ -179,55 +210,53 @@ def test_send_purchase_emails_for_stripe_session(monkeypatch):
     assert calls == ["web@example.com"]
 
 
-def test_smtp_uses_starttls(monkeypatch):
-    monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "secret")
-    mock_smtp = MagicMock()
-    with patch("music_sales.purchase_email.smtplib.SMTP", return_value=mock_smtp) as smtp_ctor:
-        pe._send_smtp(to_addr="a@b.com", subject="S", body="B")
-    smtp_ctor.assert_called_once_with("smtp.gmail.com", 587, timeout=30)
-    mock_smtp.ehlo.assert_called()
-    mock_smtp.starttls.assert_called_once()
-    method_names = [name for name, _args, _kwargs in mock_smtp.method_calls]
-    assert method_names.index("starttls") < method_names.index("login")
-    mock_smtp.login.assert_called_once_with("shop@gmail.com", "secret")
-    mock_smtp.send_message.assert_called_once()
-    mock_smtp.quit.assert_called_once()
-
-
-def test_gmail_password_strips_spaces(monkeypatch):
-    monkeypatch.setenv("GMAIL_PASSWORD", "abcd efgh ijkl mnop")
-    assert pe._gmail_password() == "abcdefghijklmnop"
+def test_resend_send_posts_json(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_secret")
+    monkeypatch.setenv("RESEND_FROM", "Shop <orders@example.com>")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"id": "email_123"}
+    with patch("music_sales.purchase_email.requests.post", return_value=mock_resp) as post:
+        pe._send_email(to_addr="a@b.com", subject="S", body="B", html="<p>Hi</p>")
+    post.assert_called_once()
+    kwargs = post.call_args.kwargs
+    assert kwargs["json"]["from"] == "Shop <orders@example.com>"
+    assert kwargs["json"]["to"] == ["a@b.com"]
+    assert kwargs["json"]["subject"] == "S"
+    assert kwargs["json"]["text"] == "B"
+    assert kwargs["json"]["html"] == "<p>Hi</p>"
+    assert kwargs["headers"]["Authorization"] == "Bearer re_secret"
 
 
 def test_startup_test_sends_when_enabled(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "secret")
-    monkeypatch.setenv("SMTP_STARTUP_TEST", "1")
-    with patch.object(pe, "_send_smtp") as smtp:
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
+    monkeypatch.setenv("SHOP_OWNER_EMAIL", "owner@example.com")
+    monkeypatch.setenv("EMAIL_STARTUP_TEST", "1")
+    with patch.object(pe, "_send_email") as send:
         assert pe.send_smtp_startup_test_email() is True
-        smtp.assert_called_once()
-        assert smtp.call_args.kwargs["to_addr"] == "shop@gmail.com"
-        assert "SMTP startup test" in smtp.call_args.kwargs["subject"]
+        send.assert_called_once()
+        assert send.call_args.kwargs["to_addr"] == "owner@example.com"
+        assert "startup test" in send.call_args.kwargs["subject"].lower()
 
 
 def test_startup_test_skipped_when_disabled(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "0")
-    with patch.object(pe, "_send_smtp") as smtp:
-        assert pe.send_smtp_startup_test_email() is False
-        smtp.assert_not_called()
+    with patch.object(pe, "_send_email") as send:
+        assert pe.send_email_startup_test() is False
+        send.assert_not_called()
 
 
-def test_smtp_logs_authentication_error(monkeypatch, caplog):
-    monkeypatch.setenv("GMAIL_USER", "shop@gmail.com")
-    monkeypatch.setenv("GMAIL_PASSWORD", "bad")
-    mock_smtp = MagicMock()
-    mock_smtp.login.side_effect = smtplib.SMTPAuthenticationError(535, b"Bad credentials")
-    with patch("music_sales.purchase_email.smtplib.SMTP", return_value=mock_smtp):
+def test_resend_logs_http_error(monkeypatch, caplog):
+    monkeypatch.setenv("RESEND_API_KEY", "re_bad")
+    monkeypatch.setenv("RESEND_FROM", "orders@example.com")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 401
+    mock_resp.text = '{"message":"Invalid API key"}'
+    mock_resp.raise_for_status.side_effect = requests.HTTPError("401", response=mock_resp)
+    with patch("music_sales.purchase_email.requests.post", return_value=mock_resp):
         with caplog.at_level("ERROR"):
-            with pytest.raises(smtplib.SMTPAuthenticationError):
-                pe._send_smtp(to_addr="a@b.com", subject="S", body="B")
-    assert any("Gmail SMTP failed" in r.message for r in caplog.records)
-    assert any("stage=login" in r.message for r in caplog.records)
+            with pytest.raises(requests.HTTPError):
+                pe._send_email(to_addr="a@b.com", subject="S", body="B")
+    assert any("Resend" in r.message for r in caplog.records)

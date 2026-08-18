@@ -1,13 +1,12 @@
 """
-Письма покупателю и владельцу магазина после успешной оплаты (Gmail SMTP).
+Письма покупателю, владельцу магазина и разработчику после успешной оплаты (Resend API).
 
-Включение: ENABLE_PURCHASE_EMAIL=1 и GMAIL_USER + GMAIL_PASSWORD (app password).
+Включение: ENABLE_PURCHASE_EMAIL=1 и RESEND_API_KEY + RESEND_FROM.
 
-SMTP (обязательные настройки):
-  host = smtp.gmail.com
-  port = 587
-  TLS  = starttls() ДО login()
-  login = GMAIL_USER / GMAIL_PASSWORD из .env
+Получатели:
+  - buyer — email из Stripe Checkout (customer_details / customer_email)
+  - owner(s) — SHOP_OWNER_EMAIL (несколько через , или ;)
+  - developer(s) — DEVELOPER_EMAIL (несколько через , или ;)
 """
 
 from __future__ import annotations
@@ -15,44 +14,50 @@ from __future__ import annotations
 import logging
 import os
 import re
-import smtplib
 from datetime import datetime, timezone
-from email.message import EmailMessage
 from typing import Any
+
+import requests
+
+from music_sales.email_templates import (
+    build_buyer_email,
+    build_staff_email,
+    build_startup_test_email,
+)
 
 logger = logging.getLogger(__name__)
 
-_GMAIL_SMTP_HOST = "smtp.gmail.com"
-_GMAIL_SMTP_PORT = 587
+_RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def purchase_emails_enabled() -> bool:
     if (os.environ.get("ENABLE_PURCHASE_EMAIL") or "").strip() != "1":
         return False
-    user = (os.environ.get("GMAIL_USER") or "").strip()
-    password = _gmail_password()
-    return bool(user and password)
+    return bool(_resend_api_key() and _resend_from())
 
 
 def purchase_emails_disabled_reason() -> str | None:
     """Почему письма выключены (для логов диагностики). None — включены."""
     if (os.environ.get("ENABLE_PURCHASE_EMAIL") or "").strip() != "1":
         return "ENABLE_PURCHASE_EMAIL is not '1'"
-    if not (os.environ.get("GMAIL_USER") or "").strip():
-        return "GMAIL_USER is empty"
-    if not _gmail_password():
-        return "GMAIL_PASSWORD is empty"
+    if not _resend_api_key():
+        return "RESEND_API_KEY is empty"
+    if not _resend_from():
+        return "RESEND_FROM is empty"
     return None
 
 
-def _gmail_user() -> str:
-    return (os.environ.get("GMAIL_USER") or "").strip()
+def _resend_api_key() -> str:
+    return (os.environ.get("RESEND_API_KEY") or "").strip()
 
 
-def _gmail_password() -> str:
-    """App password из .env; пробелы внутри часто копируют из Google — убираем."""
-    raw = os.environ.get("GMAIL_PASSWORD") or ""
-    return "".join(raw.split())
+def _resend_from() -> str:
+    """
+    Отправитель Resend, например:
+      Music Acupuncture <orders@musicacupuncture.digital>
+      orders@musicacupuncture.digital
+    """
+    return (os.environ.get("RESEND_FROM") or "").strip()
 
 
 def _parse_email_addresses(raw: str) -> list[str]:
@@ -83,14 +88,29 @@ def _parse_email_addresses(raw: str) -> list[str]:
 
 
 def _shop_owner_emails() -> list[str]:
-    """Список адресов владельца(ев) для уведомлений о покупке."""
+    """Список адресов владельца(ев) / продавца для уведомлений о покупке."""
     owner_raw = (os.environ.get("SHOP_OWNER_EMAIL") or "").strip()
     if owner_raw:
-        parsed = _parse_email_addresses(owner_raw)
-        if parsed:
-            return parsed
-    user = _gmail_user()
-    return [user] if user else []
+        return _parse_email_addresses(owner_raw)
+    return []
+
+
+def _developer_emails() -> list[str]:
+    """Адреса разработчика (проект + вы) — то же уведомление, что владельцу."""
+    return _parse_email_addresses(os.environ.get("DEVELOPER_EMAIL") or "")
+
+
+def _staff_notify_emails() -> list[str]:
+    """Owner + developer без дублей (один человек может быть в обоих списках)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for addr in _shop_owner_emails() + _developer_emails():
+        key = addr.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(addr)
+    return out
 
 
 def _shop_owner_email() -> str:
@@ -102,9 +122,14 @@ def _support_contact_line() -> str:
     return (os.environ.get("SUPPORT_CONTACT") or "").strip() or "Please contact us on Telegram."
 
 
-def _smtp_startup_test_enabled() -> bool:
-    """По умолчанию тест при старте включён, если purchase email включён. SMTP_STARTUP_TEST=0 — выкл."""
-    raw = (os.environ.get("SMTP_STARTUP_TEST") or "").strip().lower()
+def _email_startup_test_enabled() -> bool:
+    """
+    По умолчанию тест при старте включён, если purchase email включён.
+    EMAIL_STARTUP_TEST / SMTP_STARTUP_TEST = 0 — выкл. (SMTP_* — совместимость со старым .env).
+    """
+    raw = (
+        os.environ.get("EMAIL_STARTUP_TEST") or os.environ.get("SMTP_STARTUP_TEST") or ""
+    ).strip().lower()
     if raw in ("0", "false", "no", "off"):
         return False
     if raw in ("1", "true", "yes", "on"):
@@ -122,15 +147,6 @@ def drive_download_link(song_row: dict[str, Any]) -> str | None:
     return f"https://drive.google.com/file/d/{fid}/view"
 
 
-def _format_amount(amount: float, currency: str) -> str:
-    ccy = (currency or "USD").strip().upper()
-    if ccy == "SEK":
-        return f"{amount:.2f} kr"
-    if ccy == "EUR":
-        return f"€{amount:.2f}"
-    return f"${amount:.2f}"
-
-
 def _format_purchased_at(purchased_at_utc: datetime | None) -> str:
     dt = purchased_at_utc or datetime.now(timezone.utc)
     if dt.tzinfo is None:
@@ -138,198 +154,176 @@ def _format_purchased_at(purchased_at_utc: datetime | None) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
-def _build_buyer_body(*, track_title: str, download_link: str | None) -> str:
-    lines = [
-        "Thank you for your purchase from Music Acupuncture!",
-        "",
-        f"Track: {track_title}",
-    ]
-    if download_link:
-        lines.extend(["", "Download your MP3 here:", download_link])
-    else:
-        lines.extend(["", "Your MP3 link will be sent separately if Drive is not configured for this track."])
-    lines.extend(["", "Need help?", _support_contact_line(), "", "With gratitude,", "Michael — Music Acupuncture"])
-    return "\n".join(lines)
+def _staff_role_for_address(addr: str) -> str:
+    """owner / developer / team — для заголовка staff-письма."""
+    key = (addr or "").strip().lower()
+    owners = {a.lower() for a in _shop_owner_emails()}
+    developers = {a.lower() for a in _developer_emails()}
+    in_o = key in owners
+    in_d = key in developers
+    if in_o and not in_d:
+        return "owner"
+    if in_d and not in_o:
+        return "developer"
+    return "team"
 
 
-def _build_owner_body(
-    *,
-    track_title: str,
-    buyer_label: str,
-    amount: float,
-    currency: str,
-    purchased_at_utc: datetime | None,
-    source: str,
-) -> str:
-    src = (source or "telegram").strip() or "telegram"
-    lines = [
-        "New purchase on Music Acupuncture",
-        "",
-        f"Track: {track_title}",
-        f"Buyer: {buyer_label}",
-        f"Amount: {_format_amount(amount, currency)}",
-        f"Date: {_format_purchased_at(purchased_at_utc)}",
-        f"Source: {src}",
-    ]
-    return "\n".join(lines)
-
-
-def _log_smtp_exception(stage: str, exc: BaseException, *, to_addr: str) -> None:
-    """Подробный лог SMTP-ошибки без пароля."""
-    user = _gmail_user()
+def _log_resend_exception(stage: str, exc: BaseException, *, to_addr: str) -> None:
     details = [
         f"stage={stage}",
-        f"host={_GMAIL_SMTP_HOST}",
-        f"port={_GMAIL_SMTP_PORT}",
-        f"from={user!r}",
+        f"api={_RESEND_API_URL}",
+        f"from={_resend_from()!r}",
         f"to={to_addr!r}",
         f"exc_type={type(exc).__name__}",
         f"exc={exc!r}",
     ]
-    if isinstance(exc, smtplib.SMTPResponseException):
-        details.append(f"smtp_code={getattr(exc, 'smtp_code', None)!r}")
-        details.append(f"smtp_error={getattr(exc, 'smtp_error', None)!r}")
-    if isinstance(exc, smtplib.SMTPAuthenticationError):
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        details.append(f"http_status={exc.response.status_code}")
+        try:
+            details.append(f"response_body={exc.response.text[:500]!r}")
+        except Exception:
+            pass
         details.append(
-            "hint=Check GMAIL_USER and Gmail App Password (2FA required; "
-            "regular account password will not work)."
+            "hint=Check RESEND_API_KEY, verified RESEND_FROM domain, and Resend dashboard logs."
         )
-    if isinstance(exc, (TimeoutError, OSError, smtplib.SMTPConnectError)):
-        details.append("hint=Network/firewall may block outbound TCP 587 to smtp.gmail.com.")
-    logger.error("Gmail SMTP failed: %s", " | ".join(details), exc_info=True)
+    logger.error("Resend email failed: %s", " | ".join(details), exc_info=True)
 
 
-def _send_smtp(*, to_addr: str, subject: str, body: str) -> None:
+def _send_email(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
     """
-    Отправка через Gmail SMTP:
-      smtp.gmail.com:587 → ehlo → starttls() → ehlo → login(GMAIL_USER, GMAIL_PASSWORD) → send.
+    Отправка через Resend HTTP API:
+      POST https://api.resend.com/emails
+      Authorization: Bearer RESEND_API_KEY
+    body — plain text; html — опциональный брендированный шаблон.
     """
-    from_addr = _gmail_user()
-    password = _gmail_password()
+    api_key = _resend_api_key()
+    from_addr = _resend_from()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY is empty — cannot send email")
     if not from_addr:
-        raise RuntimeError("GMAIL_USER is empty — cannot send email")
-    if not password:
-        raise RuntimeError("GMAIL_PASSWORD is empty — cannot send email")
+        raise RuntimeError("RESEND_FROM is empty — cannot send email")
     if not (to_addr or "").strip():
         raise RuntimeError("Recipient address is empty — cannot send email")
 
-    msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    msg.set_content(body)
+    payload: dict[str, Any] = {
+        "from": from_addr,
+        "to": [to_addr.strip()],
+        "subject": subject,
+        "text": body,
+    }
+    if html and str(html).strip():
+        payload["html"] = html
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
 
     logger.info(
-        "Gmail SMTP sending: host=%s port=%s tls=starttls login_user=%r to=%r subject=%r password_len=%s",
-        _GMAIL_SMTP_HOST,
-        _GMAIL_SMTP_PORT,
+        "Resend sending: from=%r to=%r subject=%r has_html=%s api_key_len=%s",
         from_addr,
         to_addr,
         subject,
-        len(password),
+        bool(html and str(html).strip()),
+        len(api_key),
     )
 
-    smtp: smtplib.SMTP | None = None
     try:
-        logger.debug("Gmail SMTP: connecting to %s:%s …", _GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT)
-        smtp = smtplib.SMTP(_GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT, timeout=30)
-        logger.debug("Gmail SMTP: connected, calling ehlo()")
-        smtp.ehlo()
-        logger.debug("Gmail SMTP: calling starttls() before login")
-        smtp.starttls()
-        logger.debug("Gmail SMTP: starttls OK, calling ehlo() again")
-        smtp.ehlo()
-        logger.debug("Gmail SMTP: calling login(%r, ***)", from_addr)
-        smtp.login(from_addr, password)
-        logger.debug("Gmail SMTP: login OK, calling send_message()")
-        smtp.send_message(msg)
-        logger.info("Gmail SMTP: message accepted for delivery to=%r subject=%r", to_addr, subject)
-    except smtplib.SMTPAuthenticationError as e:
-        _log_smtp_exception("login", e, to_addr=to_addr)
+        resp = requests.post(_RESEND_API_URL, json=payload, headers=headers, timeout=30)
+        if resp.status_code >= 400:
+            logger.error(
+                "Resend HTTP error: status=%s body=%r to=%r",
+                resp.status_code,
+                (resp.text or "")[:500],
+                to_addr,
+            )
+            resp.raise_for_status()
+        try:
+            data = resp.json()
+        except Exception:
+            data = {}
+        email_id = data.get("id") if isinstance(data, dict) else None
+        logger.info(
+            "Resend: message accepted for delivery to=%r subject=%r id=%r",
+            to_addr,
+            subject,
+            email_id,
+        )
+    except requests.HTTPError as e:
+        _log_resend_exception("http", e, to_addr=to_addr)
         raise
-    except smtplib.SMTPRecipientsRefused as e:
-        _log_smtp_exception("recipients", e, to_addr=to_addr)
-        raise
-    except smtplib.SMTPSenderRefused as e:
-        _log_smtp_exception("sender", e, to_addr=to_addr)
-        raise
-    except smtplib.SMTPDataError as e:
-        _log_smtp_exception("data", e, to_addr=to_addr)
-        raise
-    except smtplib.SMTPConnectError as e:
-        _log_smtp_exception("connect", e, to_addr=to_addr)
-        raise
-    except smtplib.SMTPException as e:
-        _log_smtp_exception("smtp", e, to_addr=to_addr)
-        raise
-    except OSError as e:
-        _log_smtp_exception("os/network", e, to_addr=to_addr)
+    except requests.RequestException as e:
+        _log_resend_exception("network", e, to_addr=to_addr)
         raise
     except Exception as e:
-        _log_smtp_exception("unexpected", e, to_addr=to_addr)
+        _log_resend_exception("unexpected", e, to_addr=to_addr)
         raise
-    finally:
-        if smtp is not None:
-            try:
-                smtp.quit()
-            except Exception:
-                try:
-                    smtp.close()
-                except Exception:
-                    pass
 
 
-def send_smtp_startup_test_email() -> bool:
+# Совместимость со старыми тестами/импортами (алиас на Resend).
+def _send_smtp(*, to_addr: str, subject: str, body: str, html: str | None = None) -> None:
+    _send_email(to_addr=to_addr, subject=subject, body=body, html=html)
+
+
+def send_email_startup_test() -> bool:
     """
-    Простое тестовое письмо при старте (проверка smtp.gmail.com:587 + starttls + login).
+    Простое тестовое письмо при старте (проверка Resend API).
 
     Возвращает True при успехе. Ошибки только логируются (не роняют процесс).
     """
     reason = purchase_emails_disabled_reason()
     if reason:
-        logger.warning("SMTP startup test skipped: %s", reason)
+        logger.warning("Email startup test skipped: %s", reason)
         return False
-    if not _smtp_startup_test_enabled():
-        logger.info("SMTP startup test skipped: SMTP_STARTUP_TEST is off")
-        return False
-
-    owners = _shop_owner_emails()
-    if not owners:
-        logger.warning("SMTP startup test skipped: no owner email (SHOP_OWNER_EMAIL / GMAIL_USER)")
+    if not _email_startup_test_enabled():
+        logger.info("Email startup test skipped: EMAIL_STARTUP_TEST / SMTP_STARTUP_TEST is off")
         return False
 
-    subject = "Music Acupuncture — SMTP startup test"
-    body = (
-        "This is an automatic test email from Music Acupuncture sell-bot.\n"
-        "If you received it, Gmail SMTP works:\n"
-        f"  server={_GMAIL_SMTP_HOST}\n"
-        f"  port={_GMAIL_SMTP_PORT}\n"
-        "  TLS=starttls() before login\n"
-        f"  login user={_gmail_user()}\n"
-    )
+    recipients = _staff_notify_emails()
+    if not recipients:
+        logger.warning(
+            "Email startup test skipped: no staff email "
+            "(set SHOP_OWNER_EMAIL and/or DEVELOPER_EMAIL)"
+        )
+        return False
+
+    content = build_startup_test_email(from_addr=_resend_from(), api_url=_RESEND_API_URL)
     ok_any = False
-    for to_addr in owners:
+    for to_addr in recipients:
         try:
-            logger.info("SMTP startup test: sending test email to %r …", to_addr)
-            _send_smtp(to_addr=to_addr, subject=subject, body=body)
-            logger.info("SMTP startup test: SUCCESS — test email sent to %r", to_addr)
+            logger.info("Email startup test: sending test email to %r …", to_addr)
+            _send_email(
+                to_addr=to_addr,
+                subject=content.subject,
+                body=content.text,
+                html=content.html,
+            )
+            logger.info("Email startup test: SUCCESS — test email sent to %r", to_addr)
             ok_any = True
         except Exception as e:
             logger.error(
-                "SMTP startup test: FAILED for %r — email will not work until this is fixed. error=%r",
+                "Email startup test: FAILED for %r — email will not work until this is fixed. error=%r",
                 to_addr,
                 e,
                 exc_info=True,
             )
     return ok_any
 
+def send_smtp_startup_test_email() -> bool:
+    """Алиас для совместимости со старым именем."""
+    return send_email_startup_test()
 
-def run_smtp_startup_test_if_configured() -> None:
+
+def run_email_startup_test_if_configured() -> None:
     """Точка входа для bot/web startup (безопасно вызывать всегда)."""
     try:
-        send_smtp_startup_test_email()
+        send_email_startup_test()
     except Exception:
-        logger.exception("SMTP startup test: unexpected outer failure")
+        logger.exception("Email startup test: unexpected outer failure")
+
+
+def run_smtp_startup_test_if_configured() -> None:
+    """Алиас: bot_app / web_entry по-прежнему импортируют это имя."""
+    run_email_startup_test_if_configured()
 
 
 def send_purchase_emails(
@@ -344,13 +338,14 @@ def send_purchase_emails(
     source: str = "telegram",
 ) -> None:
     """
-    Два письма: покупателю (если есть email) и владельцу. Ошибки SMTP только в лог — не роняют webhook/бот.
+    Письма: staff (owner + developer) и покупателю (если есть email).
+    HTML-шаблоны адаптируются под покупателя. Ошибки Resend только в лог.
     """
     disabled = purchase_emails_disabled_reason()
     if disabled:
         logger.warning(
             "purchase email: SKIPPED after purchase — %s (set ENABLE_PURCHASE_EMAIL=1, "
-            "GMAIL_USER, GMAIL_PASSWORD in .env)",
+            "RESEND_API_KEY, RESEND_FROM in .env / Railway)",
             disabled,
         )
         return
@@ -365,40 +360,47 @@ def send_purchase_emails(
     elif buyer_to and buyer_label not in ("Unknown", ""):
         owner_buyer = f"{buyer_label} ({buyer_to})"
 
+    staff = _staff_notify_emails()
     logger.info(
-        "purchase email: start track=%r source=%s buyer_email=%r owners=%r has_drive_link=%s",
+        "purchase email: start track=%r source=%s buyer_email=%r staff=%r has_drive_link=%s",
         title,
         source,
         buyer_to or None,
-        _shop_owner_emails(),
+        staff,
         bool(link),
     )
 
-    owners = _shop_owner_emails()
-    if not owners:
-        logger.error("purchase email: owner address empty — cannot notify owner")
-    else:
-        owner_body = _build_owner_body(
-            track_title=title,
-            buyer_label=owner_buyer,
-            amount=amount,
-            currency=currency,
-            purchased_at_utc=purchased_at_utc,
-            source=source,
+    purchased_label = _format_purchased_at(purchased_at_utc)
+
+    if not staff:
+        logger.error(
+            "purchase email: staff address empty — set SHOP_OWNER_EMAIL and/or DEVELOPER_EMAIL"
         )
-        owner_subject = f"New purchase – {title}"
-        for owner_to in owners:
+    else:
+        for staff_to in staff:
+            content = build_staff_email(
+                track_title=title,
+                buyer_label=owner_buyer,
+                buyer_email=buyer_to or None,
+                amount=amount,
+                currency=currency,
+                purchased_at=purchased_label,
+                source=source,
+                download_link=link,
+                recipient_role=_staff_role_for_address(staff_to),
+            )
             try:
-                _send_smtp(
-                    to_addr=owner_to,
-                    subject=owner_subject,
-                    body=owner_body,
+                _send_email(
+                    to_addr=staff_to,
+                    subject=content.subject,
+                    body=content.text,
+                    html=content.html,
                 )
-                logger.info("purchase email: owner notified track=%r to=%r", title, owner_to)
+                logger.info("purchase email: staff notified track=%r to=%r", title, staff_to)
             except Exception as e:
                 logger.exception(
-                    "purchase email: failed to send owner notification to %r: %r",
-                    owner_to,
+                    "purchase email: failed to send staff notification to %r: %r",
+                    staff_to,
                     e,
                 )
 
@@ -410,16 +412,25 @@ def send_purchase_emails(
         )
         return
 
+    buyer_content = build_buyer_email(
+        track_title=title,
+        download_link=link,
+        buyer_email=buyer_to,
+        buyer_label=buyer_label,
+        amount=amount,
+        currency=currency,
+        support_contact=_support_contact_line(),
+    )
     try:
-        _send_smtp(
+        _send_email(
             to_addr=buyer_to,
-            subject=f"Your purchase – {title}",
-            body=_build_buyer_body(track_title=title, download_link=link),
+            subject=buyer_content.subject,
+            body=buyer_content.text,
+            html=buyer_content.html,
         )
         logger.info("purchase email: buyer notified %s track=%r", buyer_to, title)
     except Exception as e:
         logger.exception("purchase email: failed to send buyer notification to %s: %r", buyer_to, e)
-
 
 def buyer_email_from_checkout_session(session: Any) -> str | None:
     """Email из Stripe Checkout Session (website / external checkout)."""
@@ -462,14 +473,18 @@ def send_purchase_emails_for_stripe_session(
     song_row = catalog.get(song_id) if isinstance(catalog.get(song_id), dict) else {}
     track_title = str(song_row.get("name") or song_id)
     try:
-        amount_total = int(session.get("amount_total") or 0) if isinstance(session, dict) else int(
-            getattr(session, "amount_total", None) or 0
+        amount_total = (
+            int(session.get("amount_total") or 0)
+            if isinstance(session, dict)
+            else int(getattr(session, "amount_total", None) or 0)
         )
     except (TypeError, ValueError):
         amount_total = 0
     try:
         currency_code = (
-            str(session.get("currency") or "") if isinstance(session, dict) else str(getattr(session, "currency", "") or "")
+            str(session.get("currency") or "")
+            if isinstance(session, dict)
+            else str(getattr(session, "currency", "") or "")
         ).upper()
     except Exception:
         currency_code = "USD"
