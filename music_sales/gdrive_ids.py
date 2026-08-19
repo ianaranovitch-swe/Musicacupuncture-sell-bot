@@ -67,6 +67,50 @@ def load_gdrive_ids_dict() -> dict[str, str]:
     return merged
 
 
+def tracks_missing_google_drive_ids() -> list[dict[str, Any]]:
+    """
+    Треки из tracks.py без google_drive_file_id.
+
+    Сайт после Stripe не может скачать MP3 >20 MB через Telegram getFile —
+    без Drive-ID покупатель видит ошибку «20 MB».
+    """
+    try:
+        from tracks import TRACKS, reload_track_catalog
+
+        reload_track_catalog()
+    except ImportError:
+        return []
+
+    missing: list[dict[str, Any]] = []
+    for t in TRACKS:
+        gid = str(t.get("google_drive_file_id") or "").strip()
+        if gid:
+            continue
+        stem = Path(str(t.get("audio") or "")).stem
+        missing.append(
+            {
+                "id": t.get("id"),
+                "title": str(t.get("title") or stem),
+                "stem": stem,
+            }
+        )
+    return missing
+
+
+def song_requires_drive_for_website(song: dict[str, Any]) -> bool:
+    """
+    Mozart / Super-Mozart ~40–50 MB: Telegram getFile на сайте всегда падает.
+    Тогда нужен google_drive_file_id (как у Divine sound).
+    """
+    if str(song.get("google_drive_file_id") or "").strip():
+        return True
+    rel = str(song.get("file") or song.get("audio") or "").strip()
+    stem = Path(rel).stem if rel else ""
+    name = str(song.get("name") or "").strip()
+    blob = f"{stem} {name}"
+    return "Mozart+" in blob or "Mozart +" in blob or stem.startswith("Super-Mozart")
+
+
 def google_drive_file_id_for_song(
     song: dict[str, Any],
     gdrive_ids: dict[str, str] | None = None,

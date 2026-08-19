@@ -18,7 +18,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from music_sales import config
-from music_sales.catalog import discover_songs, enrich_song_row_delivery_ids, free_bonus_audio_path, project_root, songs_dir
+from music_sales.catalog import discover_songs, free_bonus_audio_path, project_root, songs_dir
+from music_sales.gdrive_ids import tracks_missing_google_drive_ids
 from music_sales.google_drive_delivery import drive_credentials_available, drive_file_metadata, service_account_client_email
 from tracks import TRACKS
 
@@ -107,15 +108,12 @@ def _google_drive_delivery_ok() -> Tuple[bool, str]:
 
 
 def _website_delivery_ids_ok() -> Tuple[bool, str]:
-    """Платный трек из discover_songs получает google_drive_file_id из tracks.py."""
-    songs = discover_songs()
-    if not songs:
-        return True, "discover_songs empty (no MP3 on disk) — synthetic rows used"
-    sid = next(iter(songs))
-    row = enrich_song_row_delivery_ids(songs[sid], sid)
-    if str(row.get("google_drive_file_id") or "").strip():
-        return True, f"enrich_song_row OK (example {sid})"
-    return False, f"Missing google_drive_file_id after enrich for {sid}"
+    """Все треки из tracks.py должны иметь google_drive_file_id (сайт, файлы >20 MB)."""
+    missing = tracks_missing_google_drive_ids()
+    if not missing:
+        return True, f"All {len(TRACKS)} tracks have google_drive_file_id"
+    sample = missing[0].get("stem") or missing[0].get("title") or "?"
+    return False, f"{len(missing)} tracks missing google_drive_file_id (e.g. {sample})"
 
 
 def _file_ids_json_ok() -> Tuple[bool, str]:

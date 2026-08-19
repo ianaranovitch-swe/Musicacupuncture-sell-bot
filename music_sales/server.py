@@ -39,6 +39,7 @@ from music_sales.google_drive_delivery import (
     iter_drive_file_chunks,
     service_account_client_email,
 )
+from music_sales.gdrive_ids import song_requires_drive_for_website
 from music_sales.pcloud_delivery import resolve_pcloud_direct_download_url
 from music_sales.mp3_duration import miniapp_track_durations_for_pricing
 from music_sales.sales_log import bootstrap_sales_log
@@ -78,17 +79,29 @@ def _telegram_download_too_big(tg_err: str | None) -> bool:
     return "too big" in low or "file is too big" in low
 
 
-def _json_telegram_download_error(tg_err: str | None) -> tuple[Any, int]:
+def _json_telegram_download_error(
+    tg_err: str | None,
+    *,
+    drive_configured: bool = True,
+) -> tuple[Any, int]:
     """Единый JSON при сбое getFile / CDN (англ. тексты — UI для пользователя сайта)."""
     if _telegram_download_too_big(tg_err):
+        if drive_configured:
+            hint = (
+                "Telegram Bot API limits direct downloads to about 20 MB. "
+                "This track should be served from Google Drive. Please contact support."
+            )
+        else:
+            hint = (
+                "This MP3 is larger than Telegram's 20 MB website download limit, "
+                "and Google Drive is not configured for this track yet. "
+                "Please contact support — we will send your file."
+            )
         return (
             jsonify(
                 {
                     "error": "Could not prepare download link",
-                    "hint": (
-                        "Telegram Bot API limits direct downloads to about 20 MB. "
-                        "Use the Telegram bot to receive this track."
-                    ),
+                    "hint": hint,
                 }
             ),
             502,
@@ -190,7 +203,7 @@ def _stream_mp3_from_telegram(
     tg_url, tg_err = resolve_telegram_file_download_url(bot_token, file_id)
     if not tg_url:
         logger.warning("%s: getFile не удался: %s", log_prefix, tg_err)
-        return _json_telegram_download_error(tg_err)
+        return _json_telegram_download_error(tg_err, drive_configured=True)
 
     attachment = attachment_filename.replace('"', "'")
     return _stream_attached_mpeg_from_url(
@@ -214,7 +227,7 @@ def _head_mp3_from_telegram(
     tg_url, tg_err = resolve_telegram_file_download_url(bot_token, file_id)
     if not tg_url:
         logger.warning("%s (HEAD): getFile не удался: %s", log_prefix, tg_err)
-        return _json_telegram_download_error(tg_err)
+        return _json_telegram_download_error(tg_err, drive_configured=True)
 
     attachment = attachment_filename.replace('"', "'")
     return _head_attached_mpeg_from_url(
@@ -398,6 +411,26 @@ def _deliver_mp3_for_website_song(
             hint += f" Service account email: {sa}."
         return jsonify({"error": "Could not download from Google Drive", "hint": hint}), 502
 
+    # Mozart ~40–50 MB: Telegram getFile на сайте всегда падает (лимит ~20 MB).
+    if (not gdrive_id) and song_requires_drive_for_website(song):
+        logger.error(
+            "%s: Mozart/large track has no google_drive_file_id — refusing Telegram getFile",
+            log_prefix,
+        )
+        return (
+            jsonify(
+                {
+                    "error": "Could not prepare download link",
+                    "hint": (
+                        "This MP3 is larger than Telegram's 20 MB website download limit, "
+                        "and Google Drive is not configured for this track yet. "
+                        "Please contact support — we will send your file."
+                    ),
+                }
+            ),
+            503,
+        )
+
     file_ids = load_file_ids_dict()
     tg_fid = file_id_for_song(song, file_ids)
     if not tg_fid:
@@ -423,6 +456,27 @@ def _deliver_mp3_for_website_song(
             log_prefix=log_prefix,
             inline_playback=inline_playback,
         )
+    if isinstance(tg_res, tuple) and not gdrive_id:
+        body, status = tg_res
+        try:
+            data = body.get_json() or {}
+        except Exception:
+            data = {}
+        hint = str((data or {}).get("hint") or "")
+        if "20 MB" in hint:
+            return (
+                jsonify(
+                    {
+                        **(data or {}),
+                        "hint": (
+                            "This MP3 is larger than Telegram's 20 MB website download limit, "
+                            "and Google Drive is not configured for this track yet. "
+                            "Please contact support — we will send your file."
+                        ),
+                    }
+                ),
+                status,
+            )
     if isinstance(tg_res, tuple) and gdrive_id:
         try:
             data = tg_res[0].get_json() or {}

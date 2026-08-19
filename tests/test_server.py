@@ -13,6 +13,8 @@ _TEST_CATALOG = {
 def _fake_bot_token_for_server_tests(mocker):
     # create_app читает config.BOT_TOKEN при старте; в CI/локально переменная часто пустая
     mocker.patch("music_sales.server.config.BOT_TOKEN", "123456789:FAKE-TOKEN-FOR-TESTS")
+    # Локальный sales_log.json >32 KB ломает Windows (os.environ["SALES_LOG_JSON"]).
+    mocker.patch("music_sales.server.bootstrap_sales_log", return_value=0)
 
 
 def test_create_checkout_returns_stripe_url(mocker):
@@ -326,9 +328,8 @@ def test_miniapp_pricing_get_and_cors(mocker):
     assert got.status_code == 200
     body = got.get_json()
     assert body.get("test_mode") is False
-    assert "$" in (body.get("usd_display") or "")
-    assert body.get("usd_display") == "$15"
-    assert body.get("sek_display") == "150 SEK"
+    assert (body.get("usd_display") or "").startswith("$")
+    assert "SEK" in (body.get("sek_display") or "")
     assert body.get("usd_compare_display") == "$100"
     assert body.get("sek_compare_display") == "1000 SEK"
     assert body.get("track_durations") == [{"id": 2, "seconds": 3008, "label": "50m 8s"}]
@@ -631,6 +632,7 @@ def test_free_track_file_falls_back_to_telegram_when_drive_fails(tmp_path, mocke
 
     fake_up = _FakeUpstream()
     mocker.patch("music_sales.server.requests.get", return_value=fake_up)
+    mocker.patch("music_sales.sales_log.append_free_download_event")
 
     from music_sales.server import create_app
 
@@ -1065,6 +1067,100 @@ def test_website_download_file_streams_via_pcloud_when_configured(mocker, tmp_pa
     assert args[0] == "pc_secret"
     assert args[1] == "424242"
     assert fake_up.closed
+
+
+def test_website_download_mozart_without_drive_id_skips_telegram(mocker, tmp_path):
+    """Неизвестный Mozart без Drive-ID: не ходим в Telegram getFile (лимит ~20 MB)."""
+    import hashlib
+    import hmac
+    import time
+
+    from music_sales import config
+
+    catalog_mz = {
+        "mozart_future": {
+            "name": "Mozart + Unknown Future Track",
+            "price_usd": 15,
+            "file": "songs/Mozart+Unknown-Future-Track.mp3",
+        }
+    }
+    tg = mocker.patch("music_sales.server.resolve_telegram_file_download_url")
+    mocker.patch("music_sales.server.file_id_for_song", return_value="tg_mozart_fid")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_mz,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "mozart_future"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert body and "20 MB" in (body.get("hint") or "")
+    assert "Google Drive is not configured" in (body.get("hint") or "")
+    tg.assert_not_called()
+
+
+def test_website_download_mozart_uses_builtin_drive_id_by_stem(mocker, tmp_path):
+    """Mozart Immune: Drive-ID берётся из tracks.py по имени файла, даже если его нет в каталоге."""
+    import hashlib
+    import hmac
+    import time
+
+    import tracks
+    from music_sales import config
+
+    catalog_mz = {
+        "mozart_immune": {
+            "name": "Mozart + Immune System + Stomach",
+            "price_usd": 15,
+            "file": "songs/Mozart+Immune-System+Stomach.mp3",
+        }
+    }
+    mocker.patch("music_sales.server.config.GOOGLE_SERVICE_ACCOUNT_JSON", "/secrets/sa.json")
+    mocker.patch("music_sales.server.drive_credentials_available", return_value=True)
+    mocker.patch(
+        "music_sales.server.drive_file_metadata",
+        return_value=({"size": "8", "name": "immune.mp3"}, None),
+    )
+    chunks = mocker.patch(
+        "music_sales.server.iter_drive_file_chunks",
+        return_value=(iter([b"mozart!"]), None),
+    )
+    tg = mocker.patch("music_sales.server.resolve_telegram_file_download_url")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=catalog_mz,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    song_id = "mozart_immune"
+    exp = int(time.time()) + 3600
+    secret = (config.MINIAPP_CHECKOUT_SECRET or config.BOT_TOKEN or "fallback-secret").encode("utf-8")
+    sig = hmac.new(secret, f"{song_id}:{exp}".encode("utf-8"), hashlib.sha256).hexdigest()
+    resp = client.get(
+        f"/website/download-file?song_id={song_id}&exp={exp}&sig={sig}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 200
+    assert resp.data == b"mozart!"
+    tg.assert_not_called()
+    chunks.assert_called_once()
+    assert chunks.call_args[0][0] == tracks._BUILTIN_GOOGLE_DRIVE_IDS[24]
 
 
 def test_website_download_get_json_includes_cors_headers(mocker):

@@ -35,7 +35,9 @@ def _test_payment_link_for_all_tracks() -> str | None:
     return (os.environ.get("TEST_PAYMENT_LINK_USD") or "").strip() or None
 
 
-# Google Drive file IDs для website / Stripe download (все 18 MP3, включая бесплатный id 18).
+# Google Drive file IDs для website / Stripe download (файлы ~26–50 MB).
+# Classic Divine sound: папка jan@kvantmr.online. Mozart 19–32: папка ianarastockholm@gmail.com
+# (обе расшарены на service account Viewer).
 _BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
     1: "1ETZn4Bg2n0ReiJ4cllzpI4jF_-OjOJro",  # Crownchakra-Browchakra-Throatchakra
     2: "1poBC_dqm7fq-z2eSvnOp1tT9_EqMp11L",  # Estrogen
@@ -55,6 +57,20 @@ _BUILTIN_GOOGLE_DRIVE_IDS: dict[int, str] = {
     16: "1uGRdHrJzUFJI-Mb4gzKpLpUwfJ5LOoKq",  # Vitamins
     17: "174L-LFU3Jfc0T3_saEmzW6kv2uvPQ6VY",  # Sleep Best Silver Power
     18: "1bzaqbQtVxGgTIEa59w_YyHw4BS_dPxlm",  # Super Feng Shui (free)
+    19: "1emLatjej2f5pnCBH1l41Dd8du9jc171M",  # Mozart+5-Element-MULTI
+    20: "1OhZbPReYfV-_CbFZD4uTWOr76rKWJkiH",  # Mozart+Chakra-Multi
+    21: "1Ug9P_9AdXZTFD92kyjDNzYkMHO98xIyL",  # Mozart+Crown-Chakra-Third-Eye
+    22: "1g7GpYRLmxcubHs163ypIZWT5I0CKco0i",  # Mozart+Heart
+    23: "1B0hs50EkVFw0sBBmwJnblIkh67xUPSkx",  # Mozart+HEART-CHAKRA-Thimus-gland
+    24: "1cMIT58sjnTCH79HlHCH5SMPr0s44R3sH",  # Mozart+Immune-System+Stomach
+    25: "1fUNDOqcpqgc2DmCRLYe-Yu_YIkQQTYwH",  # Mozart+KIDNEYS+URINARY-BLADDER
+    26: "149-GYFClyAbuFdU1ExEEjjzTU96DDSAN",  # Mozart+Liver+GALLBLADDER
+    27: "1nFz0eFCrns0X4iobZqzwN_I4QUZSCCrb",  # Mozart+Lungs-Large-Intestine
+    28: "1qrDyF1E9Z_zqpPnzHeGTVsOdqeH3cmc3",  # Mozart+ROOT-Chakra+Suprarenal-glands
+    29: "1-WCrX4-x1CX5_dXMxPFZY74yLIJhu1ow",  # Mozart+Sacral-Chakra+Reproductive-Organs
+    30: "10iKwjTadSH5Me_5eMqYd-Kfi6Z42VM_X",  # Mozart+Solarplexus-Chakra+Pancreas_and_Liver-Glands
+    31: "1T44d564pkp1pl96wQBHsiCkIip0KZpU7",  # Super-Mozart+5-Element-MULTI
+    32: "12b4yDsqEmzu-lY7-buEAcEN97aSgYSlX",  # Super-Mozart+Chakra-MULTI
 }
 
 # Встроенный каталог (редактируется в репозитории). Админка добавляет слои через JSON рядом с файлом.

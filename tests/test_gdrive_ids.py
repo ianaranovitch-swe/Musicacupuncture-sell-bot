@@ -30,6 +30,34 @@ def test_google_drive_file_id_for_song_by_stem():
     assert gid == "drive123"
 
 
+def test_mozart_tracks_have_google_drive_ids():
+    from music_sales.gdrive_ids import tracks_missing_google_drive_ids
+
+    missing = tracks_missing_google_drive_ids()
+    assert missing == []
+
+
+def test_mozart_immune_drive_id_from_stem():
+    import tracks
+    from music_sales.gdrive_ids import google_drive_file_id_for_song
+
+    gid = google_drive_file_id_for_song(
+        {"name": "Mozart + Immune System + Stomach", "file": "songs/Mozart+Immune-System+Stomach.mp3"}
+    )
+    assert gid == tracks._BUILTIN_GOOGLE_DRIVE_IDS[24]
+
+
+def test_song_requires_drive_for_website_mozart():
+    from music_sales.gdrive_ids import song_requires_drive_for_website
+
+    assert song_requires_drive_for_website(
+        {"file": "songs/Mozart+Immune-System+Stomach.mp3", "name": "Mozart + Immune System + Stomach"}
+    )
+    assert not song_requires_drive_for_website(
+        {"file": "songs/song1.mp3", "name": "Relaxing Sound"}
+    )
+
+
 def test_enrich_uses_gdrive_ids_json_when_no_builtin_on_row(monkeypatch, tmp_path):
     monkeypatch.setenv("PROJECT_ROOT", str(tmp_path))
     monkeypatch.setenv(
