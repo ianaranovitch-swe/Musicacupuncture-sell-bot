@@ -21,7 +21,7 @@ from music_sales import config
 from music_sales.catalog import discover_songs, free_bonus_audio_path, project_root, songs_dir
 from music_sales.gdrive_ids import tracks_missing_google_drive_ids
 from music_sales.google_drive_delivery import drive_credentials_available, drive_file_metadata, service_account_client_email
-from tracks import TRACKS
+from tracks import TRACKS, _BUILTIN_GOOGLE_DRIVE_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,24 @@ def _cors_configured() -> Tuple[bool, str]:
     return True, f"CORS origins configured ({len(raw.split(','))} entries)"
 
 
+def _drive_metadata_sample_ok(track_id: int, label: str) -> Tuple[bool, str]:
+    """Проверка одного google_drive_file_id из tracks.py (метаданные Drive API)."""
+    fid = str(_BUILTIN_GOOGLE_DRIVE_IDS.get(track_id) or "").strip()
+    if not fid:
+        return False, f"no builtin Drive id for track {track_id}"
+    meta, err = drive_file_metadata(fid)
+    if meta:
+        name = str(meta.get("name") or label)
+        size_raw = meta.get("size")
+        size = str(size_raw) if size_raw is not None else "?"
+        return True, f"{label} OK ({name}, {size} bytes)"
+    sa = service_account_client_email()
+    share = f" Share MP3 folder with {sa} (Viewer)." if sa else ""
+    return False, f"{label} failed ({err}){share}"
+
+
 def _google_drive_delivery_ok() -> Tuple[bool, str]:
-    """Ключ SA загружается и один тестовый file_id из tracks отвечает метаданными."""
+    """SA + метаданные Drive для classic (id 6) и Mozart (id 24) — ловит устаревшие file_id."""
     raw = (config.GOOGLE_SERVICE_ACCOUNT_JSON or "").strip()
     if not raw:
         return False, "GOOGLE_SERVICE_ACCOUNT_JSON not set (website MP3 >20 MB need Drive)"
@@ -90,19 +106,21 @@ def _google_drive_delivery_ok() -> Tuple[bool, str]:
             "GOOGLE_SERVICE_ACCOUNT_JSON set but not loaded — use full JSON in Railway, not secrets/ path",
         )
     try:
-        from tracks import _BUILTIN_GOOGLE_DRIVE_IDS
-
-        fid = str(_BUILTIN_GOOGLE_DRIVE_IDS.get(6) or "").strip()
-        if not fid:
-            return False, "No builtin Drive file id for test"
-        meta, err = drive_file_metadata(fid)
-        if meta:
-            sa = service_account_client_email()
-            extra = f" SA email: {sa}" if sa else ""
-            return True, f"Drive metadata OK for Kidney sample{extra}"
+        classic_ok, classic_msg = _drive_metadata_sample_ok(6, "Classic Kidney")
+        mozart_ok, mozart_msg = _drive_metadata_sample_ok(24, "Mozart Immune")
         sa = service_account_client_email()
-        share = f" Share folder with {sa} (Viewer)." if sa else ""
-        return False, f"Drive metadata failed: {err}{share}"
+        sa_bit = f" SA: {sa}" if sa else ""
+        if classic_ok and mozart_ok:
+            return True, f"{classic_msg}; {mozart_msg}{sa_bit}"
+        if classic_ok and not mozart_ok:
+            return (
+                False,
+                f"{classic_msg}; {mozart_msg}. "
+                "Mozart IDs in tracks.py may be stale — re-copy file IDs after moving MP3s to a new Drive folder.",
+            )
+        if not classic_ok and mozart_ok:
+            return False, f"{classic_msg}; {mozart_msg}{sa_bit}"
+        return False, f"{classic_msg}; {mozart_msg}{sa_bit}"
     except Exception as e:
         return False, f"Drive check error: {e!s}"[:200]
 

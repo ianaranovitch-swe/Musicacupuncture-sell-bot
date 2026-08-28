@@ -8,12 +8,13 @@ All shop MP3s are **26–50 MB**. Telegram Bot API `getFile` (used by the websit
 
 Drive file IDs for **all 32 tracks** (classic 1–18 + Mozart 19–32) live in `tracks.py` → `_BUILTIN_GOOGLE_DRIVE_IDS`.
 
-Note: there are two Drive folders named `musicacupuncture-mp3`:
+All MP3s can live in **one** shared folder (recommended). Each file keeps a unique Drive file ID in the URL:
+`https://drive.google.com/file/d/FILE_ID/view`
 
-- `jan@kvantmr.online` — classic Divine sound (ids 1–18)
-- `ianarastockholm@gmail.com` — Mozart / Super Mozart (ids 19–32)
+**Important:** if you **copy/upload** Mozart files into the classic folder, Google creates **new** file IDs.
+The old Mozart IDs in `tracks.py` (from a previous folder) will stop working — website checkout succeeds but download fails.
 
-Both must stay shared with the shop service account (Viewer):
+Both the folder (and each file, if shared individually) must stay shared with the shop service account (Viewer):
 
 `mp3-downloader-latest@mp3-shop.iam.gserviceaccount.com`
 
