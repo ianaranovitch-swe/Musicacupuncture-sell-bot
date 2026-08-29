@@ -1755,8 +1755,27 @@
     selectedTrack = null;
   }
 
+  function isTestModeActive() {
+    return Boolean(serverPricing && serverPricing.test_mode);
+  }
+
+  /** Блокируем боевые Payment Link / cs_live_, если на Railway включён TEST_MODE. */
+  function isBlockedLiveCheckoutUrl(url, track) {
+    if (!url || !isTestModeActive()) return false;
+    if (/cs_live_/i.test(url)) return true;
+    if (!track) return false;
+    var liveUsd = trackBuyUrl(track, false);
+    var liveSek = trackBuyUrl(track, true);
+    return url === liveUsd || url === liveSek;
+  }
+
+  function trackBuyUrl(track, useSek) {
+    if (!track) return "";
+    return useSek ? track.buyUrlSek : track.buyUrlUsd;
+  }
+
   async function createBackendCheckout(track, useSek) {
-    if (!track || track.isFree) return null;
+    if (!track || track.isFree) return { url: null, httpStatus: 0, error: "free_track" };
     var headers = { "Content-Type": "application/json" };
     if (CHECKOUT_SECRET) headers["X-Miniapp-Checkout-Secret"] = CHECKOUT_SECRET;
     try {
@@ -1771,26 +1790,67 @@
           currency: useSek ? "sek" : "usd",
         }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) {
+        var errText = "";
+        try {
+          var errData = await r.json();
+          if (errData && errData.error) errText = String(errData.error);
+        } catch (e) {}
+        return { url: null, httpStatus: r.status, error: errText || "server_error" };
+      }
       var data = await r.json();
-      if (data && data.url && typeof data.url === "string") return data.url;
-    } catch (e) {}
-    return null;
+      if (data && data.url && typeof data.url === "string") {
+        return { url: data.url, httpStatus: r.status, error: "" };
+      }
+      return { url: null, httpStatus: r.status, error: "missing_checkout_url" };
+    } catch (e) {
+      return { url: null, httpStatus: 0, error: "network_error" };
+    }
+  }
+
+  function alertTestModeCheckoutBlocked(checkoutResult) {
+    var detail = "";
+    if (checkoutResult && checkoutResult.httpStatus) {
+      detail = " (server HTTP " + checkoutResult.httpStatus + ")";
+    } else if (checkoutResult && checkoutResult.error === "network_error") {
+      detail = " (could not reach payment server)";
+    }
+    alert(
+      "TEST MODE is on, but checkout could not be created" +
+        detail +
+        ". Live Stripe links are blocked in test mode.\n\n" +
+        "Check Railway Web: TEST_MODE=true, STRIPE_SECRET_KEY=sk_test_..., redeploy, then try again."
+    );
   }
 
   async function openStripeForTrack(track, useSek) {
     if (!track || track.isFree) return;
     setLoading(true);
-    var url = await createBackendCheckout(track, useSek);
+    var checkoutResult = await createBackendCheckout(track, useSek);
     setLoading(false);
+    var url = checkoutResult && checkoutResult.url;
+    var inTest = isTestModeActive();
+
     if (!url || !/^https?:\/\//i.test(url)) {
-      /* TEST_MODE на Railway: fallback из /miniapp-pricing, не live-ссылки из HTML. */
-      if (serverPricing && serverPricing.test_mode && serverPricing.test_payment_link) {
-        url = serverPricing.test_payment_link;
+      if (inTest) {
+        if (serverPricing && serverPricing.test_payment_link) {
+          url = serverPricing.test_payment_link;
+        } else {
+          alertTestModeCheckoutBlocked(checkoutResult);
+          return;
+        }
       } else {
-        url = useSek ? track.buyUrlSek : track.buyUrlUsd;
+        url = trackBuyUrl(track, useSek);
       }
     }
+
+    if (isBlockedLiveCheckoutUrl(url, track)) {
+      alert(
+        "TEST MODE blocked a live Stripe checkout URL. Check Railway Web: STRIPE_SECRET_KEY must be sk_test_... (not sk_live_...)."
+      );
+      return;
+    }
+
     if (!url || !/^https?:\/\//i.test(url)) {
       alert("Payment link is not available for this track.");
       return;
