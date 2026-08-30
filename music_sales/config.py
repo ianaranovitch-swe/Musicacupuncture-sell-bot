@@ -90,6 +90,23 @@ DEFAULT_TRACK_PRICE_SEK = _env("DEFAULT_TRACK_PRICE_SEK", "")
 # TEST_MODE: см. test_mode_active(). Цены теста (целые доллары / целые SEK).
 TEST_PRICE_USD = _env("TEST_PRICE_USD", "1")
 TEST_PRICE_SEK = _env("TEST_PRICE_SEK", "10")
+# Stripe Checkout: минимальная сумма для SEK — 3.00 kr (300 öre).
+STRIPE_MIN_SEK_WHOLE = 3
+
+
+def resolved_test_price_sek_whole() -> int:
+    """Целые SEK в TEST_MODE; не ниже минимума Stripe (3 kr)."""
+    raw = (os.environ.get("TEST_PRICE_SEK") or TEST_PRICE_SEK or "10").strip() or "10"
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 10
+    return max(STRIPE_MIN_SEK_WHOLE, n)
+
+
+def resolved_test_price_sek_unit_amount() -> int:
+    """TEST_MODE: сумма в öre для Stripe Checkout (валюта sek)."""
+    return resolved_test_price_sek_whole() * 100
 # Опционально: один тестовый Payment Link для всех платных треков (tracks.py + website fallback при TEST_MODE).
 TEST_PAYMENT_LINK = _env("TEST_PAYMENT_LINK")
 # Опционально: готовые Stripe Payment Links для простого бота (bot.py), не для динамического Checkout с webhook.

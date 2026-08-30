@@ -411,6 +411,31 @@ def test_website_create_payment_without_secret(mocker):
     assert kwargs["line_items"][0]["price_data"]["currency"] == "sek"
 
 
+def test_website_create_payment_sek_raises_amount_to_stripe_minimum(mocker, monkeypatch):
+    """TEST_PRICE_SEK=1 слишком мало для Stripe — поднимаем до 3 kr (300 öre)."""
+    monkeypatch.setenv("TEST_MODE", "true")
+    monkeypatch.setenv("TEST_PRICE_SEK", "1")
+    mock_session = mocker.Mock()
+    mock_session.url = "https://stripe.test/session"
+    create = mocker.patch("stripe.checkout.Session.create", return_value=mock_session)
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/website-create-payment", json={"track_id": 24, "currency": "sek"})
+
+    assert resp.status_code == 200
+    unit_amount = create.call_args.kwargs["line_items"][0]["price_data"]["unit_amount"]
+    assert unit_amount == 300
+
+
 def test_website_create_payment_works_without_songs_folder(mocker, tmp_path, monkeypatch):
     """Railway без MP3 в репо: checkout всё раже строится из tracks.py + synthetic row."""
     mock_session = mocker.Mock()

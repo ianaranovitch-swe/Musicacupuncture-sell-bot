@@ -921,11 +921,7 @@ def create_app(
         """Для sek — фиксированная сумма в öre (из env); для usd/eur — из каталога. TEST_MODE — дешёвые суммы."""
         if config.test_mode_active():
             if currency == "sek":
-                try:
-                    sek_whole = int((os.environ.get("TEST_PRICE_SEK") or config.TEST_PRICE_SEK or "10").strip() or "10")
-                    return max(100, sek_whole * 100)
-                except ValueError:
-                    return 1000
+                return config.resolved_test_price_sek_unit_amount()
             try:
                 minor = int(song.get("price_usd", 1) or 1) * 100
                 return max(50, minor)
@@ -1074,12 +1070,8 @@ def create_app(
                 usd_n = int((os.environ.get("TEST_PRICE_USD") or config.TEST_PRICE_USD or "1").strip() or "1")
             except ValueError:
                 usd_n = 1
-            try:
-                sek_n = int((os.environ.get("TEST_PRICE_SEK") or config.TEST_PRICE_SEK or "10").strip() or "10")
-            except ValueError:
-                sek_n = 10
+            sek_n = config.resolved_test_price_sek_whole()
             usd_n = max(1, usd_n)
-            sek_n = max(1, sek_n)
             payload: dict[str, Any] = {
                 "test_mode": True,
                 "usd_display": f"${usd_n}",
