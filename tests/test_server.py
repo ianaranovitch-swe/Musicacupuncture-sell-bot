@@ -499,6 +499,37 @@ def test_create_checkout_400_when_unsupported_currency(mocker):
     assert resp.status_code == 400
 
 
+def test_webhook_fulfillment_exception_still_returns_200(mocker, tmp_path):
+    """Stripe webhook: даже при падении fulfillment отвечаем 200 (идемпотентность)."""
+    event = {
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": "cs_test_crash",
+                "metadata": {"telegram_id": "555", "song_id": "song1"},
+            }
+        },
+    }
+    mocker.patch("stripe.Event.construct_from", return_value=event)
+    mocker.patch(
+        "music_sales.checkout_fulfillment.fulfill_checkout_session_completed",
+        side_effect=RuntimeError("unexpected"),
+    )
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        project_root_override=tmp_path,
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+    )
+    client = app.test_client()
+    resp = client.post("/webhook", json=event)
+
+    assert resp.status_code == 200
+
+
 def test_webhook_completed_sends_audio(mocker, tmp_path):
     mocker.patch.dict(
         os.environ,
@@ -510,6 +541,7 @@ def test_webhook_completed_sends_audio(mocker, tmp_path):
         "type": "checkout.session.completed",
         "data": {
             "object": {
+                "id": "cs_test_bot_555",
                 "metadata": {
                     "telegram_id": "555",
                     "song_id": "song1",
@@ -545,6 +577,7 @@ def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_pa
         "type": "checkout.session.completed",
         "data": {
             "object": {
+                "id": "cs_test_website",
                 "metadata": {
                     "telegram_id": "0",
                     "telegram_name": "Website customer",
@@ -555,7 +588,7 @@ def test_webhook_completed_website_source_skips_telegram_delivery(mocker, tmp_pa
         },
     }
     mocker.patch("stripe.Event.construct_from", return_value=event)
-    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post = mocker.patch("music_sales.owner_notify.requests.post")
     mock_post.return_value.raise_for_status = MagicMock()
 
     from music_sales.server import create_app
@@ -701,6 +734,35 @@ def test_free_track_options_preflight_includes_cors(tmp_path, mocker):
     )
     assert resp.status_code == 204
     assert resp.headers.get("Access-Control-Allow-Origin") == "https://ianaranovitch-swe.github.io"
+
+
+def test_website_download_triggers_fulfillment_when_webhook_missed(mocker, tmp_path):
+    """Запасной путь: email/статистика при первом скачивании, если live webhook не сработал."""
+    mocker.patch("tracks.get_track", return_value={"audio": "songs/song1.mp3"})
+    mocker.patch("music_sales.server.resolve_song_id_by_audio_stem", return_value="song1")
+    mock_fulfill = mocker.patch("music_sales.checkout_fulfillment.fulfill_checkout_session_completed", return_value=True)
+    mocker.patch(
+        "stripe.checkout.Session.retrieve",
+        return_value={
+            "id": "cs_live_missed",
+            "payment_status": "paid",
+            "metadata": {"source": "website", "song_id": "song1"},
+        },
+    )
+
+    from music_sales.server import create_app
+
+    app = create_app(
+        stripe_secret="sk_test_fake",
+        stripe_webhook_secret="",
+        songs_catalog=_TEST_CATALOG,
+        project_root_override=tmp_path,
+    )
+    client = app.test_client()
+    resp = client.get("/website/download?session_id=cs_live_missed&track_id=2")
+
+    assert resp.status_code == 200
+    mock_fulfill.assert_called_once()
 
 
 def test_website_download_returns_signed_url(mocker):
@@ -1230,6 +1292,8 @@ def test_webhook_completed_non_dict_metadata_still_detects_website(mocker, tmp_p
 
     class _Session:
         def __getitem__(self, key: str):
+            if key == "id":
+                return "cs_test_meta_obj"
             if key == "metadata":
                 return _Meta()
             if key == "client_reference_id":
@@ -1238,7 +1302,7 @@ def test_webhook_completed_non_dict_metadata_still_detects_website(mocker, tmp_p
 
     fake_event = {"type": "checkout.session.completed", "data": {"object": _Session()}}
     mocker.patch("stripe.Event.construct_from", return_value=fake_event)
-    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post = mocker.patch("music_sales.owner_notify.requests.post")
     mock_post.return_value.raise_for_status = MagicMock()
 
     from music_sales.server import create_app
@@ -1263,6 +1327,7 @@ def test_webhook_completed_telegram_id_zero_skips_telegram_even_without_source(m
         "type": "checkout.session.completed",
         "data": {
             "object": {
+                "id": "cs_test_zero_tid",
                 "client_reference_id": "0",
                 "metadata": {
                     "telegram_id": "0",
@@ -1272,7 +1337,7 @@ def test_webhook_completed_telegram_id_zero_skips_telegram_even_without_source(m
         },
     }
     mocker.patch("stripe.Event.construct_from", return_value=event)
-    mock_post = mocker.patch("music_sales.server.requests.post")
+    mock_post = mocker.patch("music_sales.owner_notify.requests.post")
     mock_post.return_value.raise_for_status = MagicMock()
 
     from music_sales.server import create_app

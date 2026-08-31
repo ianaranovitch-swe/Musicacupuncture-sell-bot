@@ -1258,6 +1258,18 @@ def create_app(
         if payment_status not in ("paid", "no_payment_required"):
             return ({"error": "Payment is not completed"}, 403)
 
+        try:
+            from music_sales.checkout_fulfillment import fulfill_checkout_session_completed
+
+            fulfill_checkout_session_completed(
+                sess,
+                catalog=get_catalog(),
+                deliver_purchase_fn=deliver_purchase,
+                project_root=root_path(),
+            )
+        except Exception:
+            logger.exception("website download: checkout fulfillment failed")
+
         meta = _checkout_session_metadata_plain(sess)
         source = str(meta.get("source") or "").strip()
         sess_song_id = str(meta.get("song_id") or "").strip()
@@ -1438,86 +1450,18 @@ def create_app(
         reason: Optional[str] = None,
     ) -> None:
         """Уведомление владельцу и разработчику через Telegram Bot API (без Bot instance)."""
-        from music_sales.owner_notify import owner_and_developer_chat_ids, _format_notify_lines
+        from music_sales.owner_notify import notify_owner_http
 
-        text = "\n".join(
-            _format_notify_lines(
-                actor_label=actor_name,
-                event=event,
-                song_name=song_name,
-                payment_ok=payment_ok,
-                reason=reason,
-            )
+        notify_owner_http(
+            actor_name=actor_name,
+            event=event,
+            song_name=song_name,
+            payment_ok=payment_ok,
+            reason=reason,
         )
-        for chat_id in owner_and_developer_chat_ids():
-            try:
-                requests.post(
-                    _tg_api_url("sendMessage"),
-                    json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-                    timeout=10,
-                )
-            except Exception:
-                logger.exception("Failed to notify chat_id=%s via Telegram API", chat_id)
 
     @app.route("/webhook", methods=["POST"])
     def webhook() -> Any:
-        def _session_metadata(session_obj: Any) -> dict[str, Any]:
-            """
-            Безопасно достаём metadata и из dict, и из StripeObject.
-
-            У StripeObject нет метода .get(), из-за этого webhook падал 500.
-            """
-            try:
-                if isinstance(session_obj, dict):
-                    raw_meta = session_obj.get("metadata", {})
-                else:
-                    raw_meta = session_obj["metadata"]
-            except Exception:
-                return {}
-            return _stripe_metadata_as_plain_dict(raw_meta)
-
-        def _recover_song_id_from_line_items(session_obj: Any, catalog: Dict[str, Dict[str, Any]]) -> str:
-            """
-            Запасной путь: если metadata.song_id пустой, пытаемся восстановить его по названию
-            товара в Stripe line items (там хранится product_data.name).
-            """
-            try:
-                session_id = str(session_obj["id"] or "")
-            except Exception:
-                return ""
-            if not session_id:
-                return ""
-            try:
-                li = stripe.checkout.Session.list_line_items(session_id, limit=5)
-            except Exception:
-                logger.warning("Could not load Stripe line items for session_id=%s", session_id)
-                return ""
-            data = li.get("data", []) if isinstance(li, dict) else getattr(li, "data", [])
-            if not data:
-                return ""
-
-            names = {
-                sid: str(meta.get("name") or "").strip().lower()
-                for sid, meta in catalog.items()
-                if str(meta.get("name") or "").strip()
-            }
-            for item in data:
-                try:
-                    # Stripe line item может прийти как dict или StripeObject.
-                    if isinstance(item, dict):
-                        desc = str(item.get("description") or "").strip()
-                    else:
-                        desc = str(item["description"] or "").strip()
-                except Exception:
-                    desc = ""
-                if not desc:
-                    continue
-                normalized = desc.replace("[TEST] ", "").replace("[TEST]", "").strip().lower()
-                for sid, nm in names.items():
-                    if nm and nm == normalized:
-                        return sid
-            return ""
-
         parsed = _parse_webhook_event(effective_wh_secret)
         if isinstance(parsed, tuple):
             return parsed
@@ -1525,166 +1469,25 @@ def create_app(
 
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
-            meta = _session_metadata(session)
-            telegram_id = str(meta.get("telegram_id") or "")
-            song_id = str(meta.get("song_id") or "")
-            telegram_name = str(meta.get("telegram_name") or "Unknown user")
-            source = str(meta.get("source") or "")
-            catalog = get_catalog()
-            if not telegram_id:
-                # Fallback: иногда client_reference_id есть, а metadata пустая.
-                try:
-                    telegram_id = str(session["client_reference_id"] or "")
-                except Exception:
-                    telegram_id = ""
-            if not song_id:
-                # Fallback: если metadata.song_id пустой, пробуем восстановить из line items Stripe.
-                song_id = _recover_song_id_from_line_items(session, catalog)
-            if not telegram_id or not song_id:
-                try:
-                    event_id = str(event["id"] or "unknown")
-                except Exception:
-                    event_id = "unknown"
-                logger.warning(
-                    "Webhook metadata is incomplete: telegram_id or song_id missing (event_id=%s, telegram_id=%r, song_id=%r)",
-                    event_id,
-                    telegram_id,
-                    song_id,
-                )
-                return "", 200
-            song_name = str(catalog.get(song_id, {}).get("name") or song_id)
             try:
-                tid_int = int(str(telegram_id).strip())
-            except ValueError:
-                tid_int = -1
-            try:
-                from music_sales.sales_log import append_sale_event
+                from music_sales.checkout_fulfillment import fulfill_checkout_session_completed
 
-                try:
-                    sess_id = str(session["id"] or "")
-                except Exception:
-                    sess_id = ""
-                try:
-                    transaction_id = str(session.get("payment_intent") or "")
-                except Exception:
-                    transaction_id = ""
-                try:
-                    amount_total = int(session.get("amount_total") or 0)
-                except Exception:
-                    amount_total = 0
-                # session в webhook может быть StripeObject (без dict.get),
-                # поэтому читаем валюту через getattr и безопасный fallback.
-                try:
-                    currency_code = str(getattr(session, "currency", "") or "").upper()
-                except Exception:
-                    currency_code = "USD"
-                amount_major = (amount_total / 100.0) if amount_total > 0 else 0.0
-
-                track_id_num = None
-                try:
-                    from pathlib import Path as _Path
-                    from tracks import TRACKS as _TRACKS
-
-                    for _t in _TRACKS:
-                        _stem = _Path(str(_t.get("audio", ""))).stem
-                        if _stem and resolve_song_id_by_audio_stem(_stem) == song_id:
-                            track_id_num = int(_t.get("id"))
-                            break
-                except Exception:
-                    track_id_num = None
-                # Лог продажи не должен ломать обработку платежа:
-                # если запись в файл/БД не удалась, продолжаем webhook.
-                try:
-                    append_sale_event(
-                        song_id=song_id,
-                        track_id=track_id_num,
-                        track_title=song_name,
-                        amount=amount_major,
-                        currency=currency_code,
-                        source=(source or "telegram")[:32],
-                        session_id=sess_id,
-                        transaction_id=transaction_id,
-                        telegram_id=tid_int if tid_int > 0 else None,
-                    )
-                except Exception:
-                    logger.exception("sales_log append failed")
-            except Exception:
-                logger.exception("sales_log preparation failed")
-
-            try:
-                from music_sales.purchase_email import send_purchase_emails_for_stripe_session
-
-                send_purchase_emails_for_stripe_session(
+                fulfill_checkout_session_completed(
                     session,
-                    catalog=catalog,
-                    song_id=song_id,
-                    meta=meta,
-                    telegram_id_int=tid_int,
+                    catalog=get_catalog(),
+                    deliver_purchase_fn=deliver_purchase,
+                    project_root=root_path(),
                 )
             except Exception:
-                logger.exception("purchase email failed (checkout webhook)")
-
-            # Website: не шлём документ в Telegram. Запасной путь: chat_id=0 невалиден в Telegram.
-            if source == "website" or tid_int == 0:
-                _notify_owner_via_api(
-                    actor_name=telegram_name,
-                    event="Payment result",
-                    song_name=song_name,
-                    payment_ok=True,
-                    reason="Website sale — MP3 via site download (not Telegram).",
-                )
-                return "", 200
-            try:
-                deliver_purchase(
-                    int(telegram_id),
-                    song_id,
-                    catalog,
-                    root_path(),
-                )
-                _notify_owner_via_api(
-                    actor_name=telegram_name,
-                    event="Payment result",
-                    song_name=song_name,
-                    payment_ok=True,
-                )
-            except OSError as e:
-                logger.exception("Failed to send audio: %s", e)
-                fail_reason = str(e).strip()[:220] or "Audio delivery failed"
-                try:
-                    requests.post(
-                        _tg_api_url("sendMessage"),
-                        data={
-                            "chat_id": int(telegram_id),
-                            "text": (
-                                "Payment received — thank you! "
-                                "We could not send your MP3 automatically. "
-                                "Please contact support and mention this track name."
-                            ),
-                        },
-                        timeout=30,
-                    )
-                except Exception:
-                    logger.warning("Could not notify buyer about delivery failure")
-                _notify_owner_via_api(
-                    actor_name=telegram_name,
-                    event="Payment result",
-                    song_name=song_name,
-                    payment_ok=False,
-                    reason=fail_reason,
-                )
-            except KeyError:
-                logger.exception("Unknown song in webhook metadata: %s", song_id)
-                _notify_owner_via_api(
-                    actor_name=telegram_name,
-                    event="Payment result",
-                    song_name=song_id,
-                    payment_ok=False,
-                    reason="Unknown song in metadata",
-                )
+                # Stripe: всегда 200 после валидной подписи — иначе бесконечные повторы webhook.
+                logger.exception("checkout webhook: fulfillment failed")
+            return "", 200
 
         if event["type"] in ("checkout.session.expired", "checkout.session.async_payment_failed"):
             session = event["data"]["object"]
-            meta = _session_metadata(session)
+            from music_sales.checkout_fulfillment import checkout_session_metadata_plain
+
+            meta = checkout_session_metadata_plain(session)
             song_id = str(meta.get("song_id") or "unknown")
             song_name = str(get_catalog().get(song_id, {}).get("name") or song_id)
             telegram_name = str(meta.get("telegram_name") or "Unknown user")

@@ -231,6 +231,20 @@ def free_gift_counting_started_label(entries: list[dict[str, Any]]) -> str:
     return first.strftime("%Y-%m-%d %H:%M UTC")
 
 
+def sale_event_exists_for_session(session_id: str, entries: list[dict[str, Any]] | None = None) -> bool:
+    """Уже записали продажу для этой Stripe Checkout session? (идемпотентность webhook / download)."""
+    sid = (session_id or "").strip()
+    if not sid:
+        return False
+    rows = entries if entries is not None else read_sales_entries_local()
+    for e in rows:
+        if str(e.get("event_type") or "") != "sale":
+            continue
+        if str(e.get("session_id") or "") == sid:
+            return True
+    return False
+
+
 def append_sale_event(
     *,
     song_id: str,

@@ -6,6 +6,7 @@ import html
 import logging
 from typing import Optional
 
+import requests
 from telegram import Bot, User
 from telegram.ext import ContextTypes
 
@@ -97,6 +98,26 @@ def notify_owner_sync(
     reason: str | None = None,
 ) -> None:
     """Синхронно отправляет владельцу и разработчику событие (Flask / webhook)."""
+    notify_owner_http(
+        actor_name=actor_name,
+        event=event,
+        song_name=song_name,
+        payment_ok=payment_ok,
+        reason=reason,
+        bot=bot,
+    )
+
+
+def notify_owner_http(
+    *,
+    actor_name: str,
+    event: str,
+    song_name: str | None = None,
+    payment_ok: bool | None = None,
+    reason: str | None = None,
+    bot: Bot | None = None,
+) -> None:
+    """Уведомление через Bot API (HTTP или переданный Bot instance)."""
     text = "\n".join(
         _format_notify_lines(
             actor_label=actor_name,
@@ -108,6 +129,18 @@ def notify_owner_sync(
     )
     for chat_id in owner_and_developer_chat_ids():
         try:
-            bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            if bot is not None:
+                bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
+            else:
+                token = (config.BOT_TOKEN or "").strip()
+                if not token:
+                    logger.warning("notify_owner_http: BOT_TOKEN not set — skip chat_id=%s", chat_id)
+                    continue
+
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+                    timeout=10,
+                )
         except Exception:
-            logger.exception("Failed to notify chat_id=%s synchronously", chat_id)
+            logger.exception("Failed to notify chat_id=%s", chat_id)
