@@ -1253,7 +1253,7 @@
           <input type="range" class="purchase-player-volume" id="purchase-player-volume" min="0" max="100" value="100" aria-label="Volume" />
         </div>
       </div>
-      <audio id="purchase-player-audio" class="purchase-player-audio-hidden" preload="auto" playsinline crossorigin="anonymous"></audio>
+      <audio id="purchase-player-audio" class="purchase-player-audio-hidden" preload="auto" playsinline loop crossorigin="anonymous"></audio>
       <div class="purchase-player-actions">
         <button type="button" class="btn-gold" id="purchase-player-download">⬇️ Download MP3</button>
         <button type="button" class="btn-outline" id="purchase-player-download-again">⬇️ Download again</button>
@@ -2041,6 +2041,7 @@
       try {
         audio.pause();
       } catch (e) {}
+      audio.loop = false;
       audio.removeAttribute("src");
       try {
         audio.load();
@@ -2109,8 +2110,9 @@
     if (duration) duration.textContent = "0:00";
     setPurchasePlayerStatus("Loading your track…");
 
-    /* inline — браузеру проще стримить в <audio>, чем attachment */
+    /* inline — браузеру проще стримить в <audio>, чем attachment; loop — healing tracks repeat until pause */
     var playbackUrl = appendQueryParam(mp3Url, "disposition", "inline");
+    audio.loop = true;
     audio.src = playbackUrl;
 
     modal.classList.add("open");
@@ -2189,6 +2191,8 @@
         playBtn.setAttribute("aria-label", "Play");
       });
       audio.addEventListener("ended", function () {
+        /* loop=true: браузер сам начинает сначала; кнопку не сбрасываем на ▶ */
+        if (audio.loop) return;
         playBtn.textContent = "▶";
         playBtn.setAttribute("aria-label", "Play");
       });

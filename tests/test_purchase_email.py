@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -173,6 +174,61 @@ def test_drive_download_link_missing_id():
     assert pe.drive_download_link({}) is None
 
 
+def test_resolve_song_row_for_purchase_email_uses_tracks_when_missing_from_catalog(monkeypatch):
+    """Mozart на Railway: нет MP3 в discover_songs(), но ID Drive есть в tracks.py."""
+    row = pe.resolve_song_row_for_purchase_email({}, "Mozart_HEART-CHAKRA-Thimus-gland")
+    assert row.get("name")
+    assert row.get("google_drive_file_id") or pe.drive_download_link(row)
+
+
+def test_track_id_for_song_id_skips_invalid_id_before_valid_match(monkeypatch):
+    """Если у совпавшего трека битый id — ищем дальше, не выходим из цикла."""
+    sid = "Mozart_HEART-CHAKRA-Thimus-gland"
+    fake_tracks = [
+        {"id": "not-a-number", "audio": "songs/first.mp3"},
+        {"id": 23, "audio": "songs/Mozart+HEART-CHAKRA-Thimus-gland.mp3"},
+    ]
+
+    def fake_resolve(stem: str) -> str | None:
+        if stem in ("first", "Mozart+HEART-CHAKRA-Thimus-gland"):
+            return sid
+        return None
+
+    monkeypatch.setattr("tracks.TRACKS", fake_tracks)
+    monkeypatch.setattr(pe, "resolve_song_id_by_audio_stem", fake_resolve)
+    assert pe._track_id_for_song_id(sid) == 23
+
+
+def test_buyer_download_link_website_uses_stripe_session_redirect(monkeypatch):
+    monkeypatch.setenv("DOMAIN", "https://musicacupuncture.digital")
+    song_row = {
+        "name": "Mozart + Heart Chakra + Thymus Gland",
+        "file": "songs/Mozart+HEART-CHAKRA-Thimus-gland.mp3",
+        "google_drive_file_id": "drive123",
+    }
+    link = pe.buyer_download_link_for_purchase(
+        song_row=song_row,
+        session={"id": "cs_test_session123"},
+        meta={"source": "website"},
+        song_id="Mozart_HEART-CHAKRA-Thimus-gland",
+    )
+    assert link is not None
+    assert link.startswith("https://musicacupuncture.digital/website/download-redirect?")
+    assert "session_id=cs_test_session123" in link
+    assert "track_id=23" in link
+
+
+def test_buyer_download_link_falls_back_to_drive_without_website_session():
+    song_row = {"google_drive_file_id": "1AbC"}
+    link = pe.buyer_download_link_for_purchase(
+        song_row=song_row,
+        session=None,
+        meta={"source": "telegram"},
+        song_id="heart",
+    )
+    assert link == "https://drive.google.com/file/d/1AbC/view"
+
+
 def test_buyer_email_from_checkout_session():
     session = {
         "customer_details": {"email": "stripe@buyer.com"},
@@ -190,24 +246,29 @@ def test_send_purchase_emails_for_stripe_session(monkeypatch):
     monkeypatch.setenv("ENABLE_PURCHASE_EMAIL", "1")
     monkeypatch.setenv("RESEND_API_KEY", "re_test")
     monkeypatch.setenv("RESEND_FROM", "orders@example.com")
-    calls: list[str] = []
+    monkeypatch.setenv("DOMAIN", "https://musicacupuncture.digital")
+    calls: list[dict[str, Any]] = []
     monkeypatch.setattr(
         pe,
         "send_purchase_emails",
-        lambda **kw: calls.append(kw.get("buyer_email") or ""),
+        lambda **kw: calls.append(dict(kw)),
     )
     pe.send_purchase_emails_for_stripe_session(
         {
+            "id": "cs_test_abc",
             "amount_total": 16900,
             "currency": "sek",
             "customer_email": "web@example.com",
         },
-        catalog={"heart": {"name": "Divine sound Heart from God", "google_drive_file_id": "x"}},
-        song_id="heart",
+        catalog={},
+        song_id="Mozart_HEART-CHAKRA-Thimus-gland",
         meta={"source": "website", "telegram_name": "Website customer"},
         telegram_id_int=0,
     )
-    assert calls == ["web@example.com"]
+    assert calls[0]["buyer_email"] == "web@example.com"
+    assert calls[0]["download_link"]
+    assert "download-redirect" in calls[0]["download_link"]
+    assert calls[0]["song_row"].get("name")
 
 
 def test_resend_send_posts_json(monkeypatch):

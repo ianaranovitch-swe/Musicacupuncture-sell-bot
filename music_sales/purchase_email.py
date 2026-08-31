@@ -15,10 +15,18 @@ import logging
 import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import requests
 
+from music_sales.catalog import (
+    enrich_song_row_delivery_ids,
+    resolve_song_id_by_audio_stem,
+    synthetic_song_row_for_song_id,
+)
+from music_sales import config
 from music_sales.email_templates import (
     build_buyer_email,
     build_staff_email,
@@ -145,6 +153,91 @@ def drive_download_link(song_row: dict[str, Any]) -> str | None:
     if not fid:
         return None
     return f"https://drive.google.com/file/d/{fid}/view"
+
+
+def resolve_song_row_for_purchase_email(catalog: dict[str, Any], song_id: str) -> dict[str, Any]:
+    """
+    Строка трека для письма: discover_songs() + tracks.py (Mozart без MP3 на диске Railway).
+    """
+    sid = (song_id or "").strip()
+    if not sid:
+        return {}
+    row = catalog.get(sid) if isinstance(catalog.get(sid), dict) else None
+    if row:
+        return enrich_song_row_delivery_ids(dict(row), sid)
+    synth = synthetic_song_row_for_song_id(sid)
+    return dict(synth) if synth else {}
+
+
+def _purchase_email_public_origin() -> str:
+    """Публичный https origin для ссылки скачивания в письме (как на сайте после Stripe)."""
+    for raw in (
+        os.environ.get("DOMAIN"),
+        config.DOMAIN,
+        os.environ.get("BACKEND_URL"),
+        config.BACKEND_URL,
+        os.environ.get("WEBSITE_SUCCESS_URL"),
+    ):
+        d = (raw or "").strip().rstrip("/")
+        if not d:
+            continue
+        low = d.lower()
+        if low.startswith("https://") or low.startswith("http://"):
+            if "?" in d:
+                d = d.split("?", 1)[0].rstrip("/")
+            return d
+        return f"https://{d.lstrip('/')}"
+    return ""
+
+
+def _track_id_for_song_id(song_id: str) -> int | None:
+    """track_id из tracks.py для website/download-redirect (как на success-странице)."""
+    sid = (song_id or "").strip()
+    if not sid:
+        return None
+    try:
+        from tracks import TRACKS
+    except ImportError:
+        return None
+    for t in TRACKS:
+        stem = Path(str(t.get("audio", "") or "")).stem
+        if stem and resolve_song_id_by_audio_stem(stem) == sid:
+            try:
+                return int(t.get("id"))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _checkout_session_id(session: Any) -> str:
+    if isinstance(session, dict):
+        return str(session.get("id") or "").strip()
+    return str(getattr(session, "id", None) or "").strip()
+
+
+def buyer_download_link_for_purchase(
+    *,
+    song_row: dict[str, Any],
+    session: Any | None = None,
+    meta: dict[str, Any] | None = None,
+    song_id: str = "",
+) -> str | None:
+    """
+    Ссылка на MP3 в письме покупателю.
+
+    Website: тот же /website/download-redirect, что после оплаты (проверка Stripe session).
+    Иначе: публичная ссылка Google Drive, если известен file_id.
+    """
+    meta = meta or {}
+    source = str(meta.get("source") or "").strip().lower()
+    session_id = _checkout_session_id(session) if session is not None else ""
+    if source == "website" and session_id:
+        track_id = _track_id_for_song_id(song_id)
+        origin = _purchase_email_public_origin().rstrip("/")
+        if track_id is not None and origin:
+            qs = urlencode({"session_id": session_id, "track_id": str(track_id)})
+            return f"{origin}/website/download-redirect?{qs}"
+    return drive_download_link(song_row)
 
 
 def _format_purchased_at(purchased_at_utc: datetime | None) -> str:
@@ -336,6 +429,7 @@ def send_purchase_emails(
     buyer_email: str | None = None,
     buyer_telegram_label: str = "",
     source: str = "telegram",
+    download_link: str | None = None,
 ) -> None:
     """
     Письма: staff (owner + developer) и покупателю (если есть email).
@@ -351,7 +445,7 @@ def send_purchase_emails(
         return
 
     title = (track_title or str(song_row.get("name") or "Track")).strip() or "Track"
-    link = drive_download_link(song_row)
+    link = download_link if download_link is not None else drive_download_link(song_row)
     buyer_label = (buyer_telegram_label or "").strip() or "Unknown"
     buyer_to = (buyer_email or "").strip()
     owner_buyer = buyer_label
@@ -470,8 +564,14 @@ def send_purchase_emails_for_stripe_session(
     telegram_id_int: int,
 ) -> None:
     """Вызов из webhook checkout.session.completed после успешной оплаты."""
-    song_row = catalog.get(song_id) if isinstance(catalog.get(song_id), dict) else {}
+    song_row = resolve_song_row_for_purchase_email(catalog, song_id)
     track_title = str(song_row.get("name") or song_id)
+    download_link = buyer_download_link_for_purchase(
+        song_row=song_row,
+        session=session,
+        meta=meta,
+        song_id=song_id,
+    )
     try:
         amount_total = (
             int(session.get("amount_total") or 0)
@@ -502,6 +602,7 @@ def send_purchase_emails_for_stripe_session(
             telegram_id_int if telegram_id_int > 0 else None,
         ),
         source=source,
+        download_link=download_link,
     )
 
 
