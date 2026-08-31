@@ -147,6 +147,22 @@ def _detail_row(label: str, value: str) -> str:
               </tr>"""
 
 
+def _staff_download_section(download_link: str) -> str:
+    """Кликабельная кнопка + URL на отдельной строке (не склеивать «Download» с https://)."""
+    url = _esc(download_link)
+    return f"""
+              <tr>
+                <td colspan="2" style="padding:16px 0 8px;border-bottom:1px solid rgba(255,255,255,0.08);text-align:center;">
+                  <a href="{url}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:{_GOLD};color:{_BG};text-decoration:none;font-weight:700;font-size:14px;">
+                    Download MP3
+                  </a>
+                  <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:{_MUTED};word-break:break-all;">
+                    <a href="{url}" style="color:{_GOLD};text-decoration:underline;">{url}</a>
+                  </p>
+                </td>
+              </tr>"""
+
+
 def build_buyer_email(
     *,
     track_title: str,
@@ -201,7 +217,8 @@ def build_buyer_email(
                 </a>
               </p>
               <p style="margin:0 0 18px;text-align:center;font-size:12px;color:{_MUTED};word-break:break-all;">
-                Or open: {_esc(download_link)}
+                Or open:
+                <a href="{_esc(download_link)}" style="color:{_GOLD};text-decoration:underline;">{_esc(download_link)}</a>
               </p>"""
     else:
         cta = f"""
@@ -283,11 +300,11 @@ def build_staff_email(
             f"Amount: {amount_s}",
             f"Date: {purchased_at}",
             f"Source: {src}",
-            *(["", f"Download link: {download_link}"] if download_link else []),
+            *(["", "Download:", download_link] if download_link else []),
         ]
     )
 
-    dl_row = _detail_row("Download", download_link) if download_link else ""
+    dl_row = _staff_download_section(download_link) if download_link else ""
 
     inner = f"""
               <p style="margin:16px 0 6px;font-size:18px;color:{_TEXT};">Hello,</p>

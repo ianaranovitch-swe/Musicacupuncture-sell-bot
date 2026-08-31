@@ -73,6 +73,26 @@ def test_build_staff_email_role_eyebrow():
     assert "developer notify" in developer.html
 
 
+def test_build_staff_email_download_link_is_clickable_html():
+    url = "https://musicacupuncture.digital/website/download-redirect?session_id=cs_test_x&track_id=21"
+    content = build_staff_email(
+        track_title="Mozart + Crown Chakra + Third Eye",
+        buyer_label="jan.mr@mr-ab.se",
+        buyer_email="jan.mr@mr-ab.se",
+        amount=10.0,
+        currency="SEK",
+        purchased_at="2026-08-31 06:39 UTC",
+        source="website",
+        download_link=url,
+        recipient_role="owner",
+    )
+    assert "Download:\n" + url in content.text
+    assert 'href="' in content.html
+    assert "track_id=21" in content.html
+    assert "Download MP3" in content.html
+    assert "Downloadhttps://" not in content.html.replace(" ", "")
+
+
 def test_build_startup_test_email():
     content = build_startup_test_email(
         from_addr="orders@example.com",
