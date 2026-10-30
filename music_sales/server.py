@@ -910,12 +910,60 @@ def create_app(
             return True
         return p.endswith(tails)
 
+    @app.before_request
+    def _seo_force_https_and_apex_host():  # noqa: WPS430
+        """
+        301: www → без www; http → https (за Railway / proxy смотрим X-Forwarded-Proto).
+        Не трогаем webhook и health — только публичный HTML-трафик.
+        """
+        host = (request.host or "").split(":")[0].strip().lower()
+        if not host or host in ("localhost", "127.0.0.1") or host.endswith(".railway.app"):
+            return None
+        proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip().lower()
+        path = request.full_path if request.query_string else request.path
+        if path.endswith("?"):
+            path = path[:-1]
+        # www → apex
+        if host.startswith("www."):
+            apex = host[4:]
+            return redirect(f"https://{apex}{path}", code=301)
+        # http → https (если прокси ещё отдал http)
+        if proto == "http" and host.endswith("musicacupuncture.digital"):
+            return redirect(f"https://{host}{path}", code=301)
+        return None
+
     @app.after_request
     def _cors_after_create_checkout(response):  # noqa: WPS430 — замыкание на Flask app
         if _path_is_checkout_cors():
             for k, v in _cors_headers_for_create_checkout().items():
                 response.headers[k] = v
+        # Кэш статики (обложки, assets) — быстрее Core Web Vitals
+        p = (request.path or "")
+        if p.startswith("/assets/") or p.startswith("/covers/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=604800, immutable")
+        elif p in ("/robots.txt", "/sitemap.xml"):
+            response.headers.setdefault("Cache-Control", "public, max-age=3600")
+        # Сжатие: gzip/brotli обычно делает reverse-proxy Railway; здесь не дублируем.
         return response
+
+    def _serve_seo_html(filename: str, *, page: str = "other", subdir: str = "") -> Response:
+        """Отдаём HTML с подстановкой analytics / JSON-LD маркеров."""
+        from music_sales.seo import inject_seo_into_html
+
+        base = (root_path() / subdir).resolve() if subdir else root_path().resolve()
+        path = (base / filename).resolve()
+        try:
+            path.relative_to(base)
+        except ValueError:
+            return Response("Not found", status=404, mimetype="text/plain")
+        if not path.is_file():
+            return Response("Not found", status=404, mimetype="text/plain")
+        try:
+            html = path.read_text(encoding="utf-8")
+        except OSError:
+            return Response("Not found", status=404, mimetype="text/plain")
+        html = inject_seo_into_html(html, page=page)
+        return Response(html, mimetype="text/html; charset=utf-8")
 
     def _checkout_unit_amount(song: Dict[str, Any], currency: str) -> int:
         """Для sek — фиксированная сумма в öre (из env); для usd/eur — из каталога. TEST_MODE — дешёвые суммы."""
@@ -1004,12 +1052,12 @@ def create_app(
     @app.route("/about.html")
     def about_michael_page() -> Any:
         """Страница о создателе MusicAcupuncture® (Michael B. Johnsson)."""
-        return send_from_directory(str(root_path()), "about.html", mimetype="text/html")
+        return _serve_seo_html("about.html", page="about")
 
     @app.route("/")
     def website_root() -> Any:
         """Главная витрина: https://musicacupuncture.digital/ (файл website.html)."""
-        return send_from_directory(str(root_path()), "website.html", mimetype="text/html")
+        return _serve_seo_html("website.html", page="home")
 
     @app.route("/index.html")
     def website_index_redirect() -> Any:
@@ -1022,6 +1070,43 @@ def create_app(
         """301 на / — чтобы в браузере не оставался /website.html."""
         qs = request.query_string.decode() if request.query_string else ""
         return redirect("/" + (f"?{qs}" if qs else ""), code=301)
+
+    @app.route("/robots.txt")
+    def robots_txt_route() -> Any:
+        from music_sales.seo import robots_txt
+
+        return Response(robots_txt(), mimetype="text/plain; charset=utf-8")
+
+    @app.route("/sitemap.xml")
+    def sitemap_xml_route() -> Any:
+        from music_sales.seo import sitemap_xml
+
+        return Response(sitemap_xml(), mimetype="application/xml; charset=utf-8")
+
+    @app.route("/blog/")
+    @app.route("/blog")
+    def blog_index_page() -> Any:
+        return _serve_seo_html("index.html", page="blog", subdir="blog")
+
+    @app.route("/blog/<path:slug>")
+    def blog_article_page(slug: str) -> Any:
+        """Статичные статьи блога (только *.html в папке blog/)."""
+        safe = Path(slug).name
+        if safe != slug or not safe.endswith(".html") or ".." in slug:
+            return _serve_seo_html("404.html", page="404"), 404
+        blog_file = root_path() / "blog" / safe
+        if not blog_file.is_file():
+            html = _serve_seo_html("404.html", page="404")
+            return html, 404
+        return _serve_seo_html(safe, page="blog", subdir="blog")
+
+    @app.errorhandler(404)
+    def not_found_page(exc: Any) -> Any:  # noqa: ARG001
+        """Кастомная 404 для браузеров; JSON API оставляем JSON где уже отвечали."""
+        accept = (request.headers.get("Accept") or "").lower()
+        if "text/html" in accept or request.path.endswith(".html") or request.path in ("/",):
+            return _serve_seo_html("404.html", page="404"), 404
+        return jsonify({"error": "Not found"}), 404
 
     @app.route("/assets/<path:filename>")
     def static_assets(filename: str) -> Any:
