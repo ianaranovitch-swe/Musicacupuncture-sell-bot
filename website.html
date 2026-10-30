@@ -3,15 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Therapeutic healing music for body, soul and chakras. Divine healing sounds by Michael — Music Acupuncture." />
+  <meta name="robots" content="index,follow" />
+  <meta name="description" content="Musicacupuncture — Music Acupuncture &amp; music therapy for the meridians. Buy healing music MP3 for relaxation, meditation, and energy balance. Free track available." />
   <meta name="theme-color" content="#1a0533" />
-  <meta property="og:title" content="Music Acupuncture - Divine Healing Sounds" />
-  <meta property="og:description" content="Therapeutic healing music for body, soul and chakras." />
+  <link rel="canonical" href="https://musicacupuncture.digital/" />
+  <link rel="alternate" hreflang="en" href="https://musicacupuncture.digital/" />
+  <link rel="alternate" hreflang="x-default" href="https://musicacupuncture.digital/" />
+  <meta property="og:title" content="Musicacupuncture – Music Acupuncture &amp; Music Therapy" />
+  <meta property="og:description" content="Therapeutic music for acupuncture meridians. Buy healing music MP3 — meditation, sound healing, and relaxation by Michael." />
   <meta property="og:type" content="website" />
-  <title>Music Acupuncture - Divine Healing Sounds</title>
+  <meta property="og:url" content="https://musicacupuncture.digital/" />
+  <meta property="og:image" content="https://musicacupuncture.digital/assets/og-musicacupuncture.png" />
+  <meta property="og:image:width" content="1254" />
+  <meta property="og:image:height" content="1254" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:site_name" content="Musicacupuncture" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Musicacupuncture – Music Acupuncture &amp; Music Therapy" />
+  <meta name="twitter:description" content="Buy healing music MP3 for meridians, meditation, and stress relief. Free track available." />
+  <meta name="twitter:image" content="https://musicacupuncture.digital/assets/og-musicacupuncture.png" />
+  <title>Musicacupuncture – Music Acupuncture &amp; Music Therapy for the Meridians</title>
+  <link rel="preload" href="https://fonts.gstatic.com/s/poppins/v23/pxiEyp8kv8JHgFVrJJfecg.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&amp;display=swap" rel="stylesheet" />
+  <!-- SEO_ANALYTICS -->
+  <!-- SEO_JSONLD -->
   <style>
     /* ========== Design tokens (match miniapp.html) ========== */
     :root {
@@ -944,6 +961,44 @@
       margin: 0 8px;
     }
     footer a:hover { text-decoration: underline; }
+    .seo-prose {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 8px 4px 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.65;
+    }
+    .seo-prose h3 {
+      color: var(--gold);
+      font-size: 1.05rem;
+      margin: 22px 0 8px;
+    }
+    .seo-prose p { margin: 0 0 1em; }
+    .seo-prose ul { margin: 0 0 1em; padding-left: 1.2em; }
+    .faq-list details {
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin: 0 0 10px;
+      background: rgba(0, 0, 0, 0.18);
+    }
+    .faq-list summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .faq-list details p { margin: 10px 0 0; }
+    .disclaimer {
+      font-size: 0.75rem;
+      color: var(--muted);
+      max-width: 640px;
+      margin: 14px auto 0;
+      line-height: 1.45;
+    }
 
     /* ========== Loading overlay ========== */
     #global-loading {
@@ -1036,8 +1091,11 @@
         <a href="#home">Home</a>
         <a href="#free">Free Track</a>
         <a href="#shop">Shop</a>
+        <a href="#learn">Learn</a>
+        <a href="#faq">FAQ</a>
         <a href="#reviews">Reviews</a>
         <a href="#about-michael">About Michael</a>
+        <a href="/blog/">Blog</a>
       </nav>
       <div class="currency-switch" aria-label="Currency">
         <button type="button" id="btn-curr-sek" class="active" data-curr="SEK">🇸🇪 SEK</button>
@@ -1082,12 +1140,13 @@
         >
           <source type="video/mp4" />
         </video>
-        <span>Music Acupuncture</span>
+        <span>Musicacupuncture — Music Acupuncture</span>
       </h1>
-      <p class="tagline">Divine Healing Sounds by Michael</p>
+      <p class="tagline">Music Therapy for the Meridians · Divine Healing Sounds by Michael</p>
       <p class="lead">
-        <strong>Divine Healing Music for Body and Soul.</strong><br />
-        Music Acupuncture uses carefully crafted sound frequencies to support balance, calm, and inner harmony — a gentle daily practice for your energy and well-being.
+        <strong>Therapeutic music for relaxation, meditation, and energy balance.</strong><br />
+        Music Acupuncture uses carefully crafted sound frequencies inspired by acupuncture meridians —
+        a gentle daily practice that supports calm, harmony, and well-being. Buy healing music MP3 or start with a free track.
       </p>
       <div class="hero-buttons">
         <button type="button" class="btn-gold" id="hero-btn-free">🎁 Get Free Track</button>
@@ -1101,7 +1160,7 @@
       <h2 class="section-title">🎁 FREE GIFT from Michael</h2>
       <p class="section-sub">A special divine sound for harmony and positive energy in your home and life.</p>
       <div class="free-box" id="free-box">
-        <img class="cover-main" id="free-cover-img" alt="" />
+        <img class="cover-main" id="free-cover-img" alt="Divine sound Super Feng Shui — free Musicacupuncture healing music" width="480" height="480" loading="lazy" decoding="async" />
         <h3 style="color: var(--gold); margin: 0 0 12px;">Divine sound Super Feng Shui from God</h3>
         <p class="desc" id="free-desc"></p>
         <button type="button" class="btn-gold" id="btn-download-free">⬇️ Download again</button>
@@ -1111,8 +1170,8 @@
 
     <!-- ========== PAGE 3: Catalog ========== -->
     <section id="shop">
-      <h2 class="section-title">Music Catalog</h2>
-      <p class="section-sub">Tap a card for details and secure checkout.</p>
+      <h2 class="section-title">Healing Music Catalog — Buy MP3</h2>
+      <p class="section-sub">Acupuncture music, meditation tracks, and sound healing MP3. Tap a card for details and secure Stripe checkout.</p>
       <p class="catalog-exclusive-banner" id="catalog-exclusive-banner" role="status" aria-live="polite">
         ⭐️ EXCLUSIVE NEW RELEASE
       </p>
@@ -1130,9 +1189,75 @@
       <div class="testimonials-dots" id="testimonials-dots" role="tablist" aria-label="Review slides"></div>
     </section>
 
+    <!-- ========== Learn: Music Acupuncture ========== -->
+    <section id="learn" class="fade-in-up">
+      <h2 class="section-title">What is Music Acupuncture?</h2>
+      <p class="section-sub">Musicacupuncture · Acupuncture meridians · Music therapy</p>
+      <div class="seo-prose">
+        <p>
+          <strong>Musicacupuncture</strong> (Music Acupuncture) is therapeutic music created by Michael B. Johnsson.
+          Tracks use sound frequencies inspired by <strong>acupuncture meridians</strong>, chakras, and elemental balance —
+          so you can enjoy <em>healing music</em> and <em>sound healing</em> as a calm daily ritual.
+        </p>
+        <h3>How music relates to acupuncture meridians</h3>
+        <p>
+          Classical acupuncture works with meridian pathways. Music Acupuncture does not replace clinical care.
+          It offers music for meridians and frequency-focused listening that many people use for meditation,
+          music for relaxation and stress relief, and a sense of energy balance.
+        </p>
+        <h3>How to listen</h3>
+        <ul>
+          <li>Use headphones or speakers at a comfortable volume</li>
+          <li>Start with 10–20 minutes during rest or meditation</li>
+          <li>Repeat tracks you enjoy — consistency helps the body recognize a “wind-down” cue</li>
+        </ul>
+        <h3>Who it is for</h3>
+        <p>
+          Anyone seeking meditation music, sound therapy, or acupuncture music as a wellness companion.
+          Explore our <a href="/blog/">blog articles</a> or open the catalog above to buy healing music MP3.
+        </p>
+      </div>
+    </section>
+
+    <!-- ========== FAQ ========== -->
+    <section id="faq" class="fade-in-up">
+      <h2 class="section-title">FAQ — Music Therapy &amp; Healing Music</h2>
+      <p class="section-sub">Common questions about Musicacupuncture</p>
+      <div class="seo-prose faq-list">
+        <details>
+          <summary>What is Music Acupuncture?</summary>
+          <p>Music Acupuncture (Musicacupuncture) is therapeutic music inspired by meridians and energetic principles. It supports relaxation and well-being — it does not diagnose or treat medical conditions.</p>
+        </details>
+        <details>
+          <summary>How is music connected to acupuncture meridians?</summary>
+          <p>Tracks are composed with intention around meridians, chakras, and elemental themes. Listeners use them as gentle sound practice for calm and balance.</p>
+        </details>
+        <details>
+          <summary>How should I listen to healing music MP3s?</summary>
+          <p>Play at a comfortable volume with headphones or speakers. Many people listen during meditation, rest, or evening routines for 10–20 minutes.</p>
+        </details>
+        <details>
+          <summary>Who is this music for?</summary>
+          <p>Anyone looking for music for relaxation and stress relief, meditation music, or sound healing as a wellness companion alongside — not instead of — professional care.</p>
+        </details>
+        <details>
+          <summary>How do I buy healing music MP3?</summary>
+          <p>Open the Music Catalog, choose a track, and pay securely with Stripe (card or Klarna where available). After payment you can download the MP3 immediately.</p>
+        </details>
+        <details>
+          <summary>Is there a free track?</summary>
+          <p>Yes — Divine sound Super Feng Shui from God is a free download so you can experience Music Acupuncture first.</p>
+        </details>
+        <details>
+          <summary>Does this music cure diseases?</summary>
+          <p>No. Musicacupuncture supports relaxation and well-being. It is not medical treatment and does not replace advice from a licensed healthcare professional.</p>
+        </details>
+      </div>
+    </section>
+
     <!-- ========== About Michael (founder) ========== -->
     <section id="about-michael" class="fade-in-up">
-      <h2 class="section-title">About Michael</h2>
+      <h2 class="section-title">About Michael — Founder of Musicacupuncture</h2>
       <p class="section-sub">Founder &amp; President of MusicAcupuncture®</p>
       <div class="about-block about-founder-block">
         <div class="about-icon-video-wrap" id="about-founder-video-wrap">
@@ -1159,8 +1284,8 @@
           </button>
         </div>
         <div class="about-founder-photos">
-          <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson" />
-          <img class="about-founder-photo" id="about-founder-photo-2" src="" alt="Michael B. Johnsson outdoors" />
+          <img class="about-founder-photo" id="about-founder-photo" src="" alt="Michael B. Johnsson, founder of Musicacupuncture Music Acupuncture" width="420" height="420" loading="lazy" decoding="async" />
+          <img class="about-founder-photo" id="about-founder-photo-2" src="" alt="Michael B. Johnsson outdoors — Musicacupuncture founder" width="420" height="420" loading="lazy" decoding="async" />
         </div>
         <div class="about-founder-prose">
           <p>
@@ -1190,17 +1315,24 @@
 
     <!-- ========== Footer ========== -->
     <footer>
-      <p>© 2026 Music Acupuncture by Michael</p>
+      <p>© 2026 Musicacupuncture — Music Acupuncture by Michael</p>
       <p>
-        <a href="#shop">Shop</a>
+        <a href="#shop">Shop healing music</a>
         <a href="#free">Free Track</a>
-        <a href="#reviews">Reviews</a>
+        <a href="#learn">What is Music Acupuncture</a>
+        <a href="#faq">FAQ</a>
+        <a href="/blog/">Blog</a>
         <a href="#about-michael">About Michael</a>
+        <a href="/about.html">About page</a>
       </p>
       <p style="margin-top: 12px; font-size: 0.75rem;">
         <a href="https://www.facebook.com/profile.php?id=61567173356607" target="_blank" rel="noopener noreferrer">Facebook</a>
         ·
         <a href="https://www.youtube.com/@MichaelJohnsson-r4o" target="_blank" rel="noopener noreferrer">YouTube</a>
+      </p>
+      <p class="disclaimer">
+        Musicacupuncture supports relaxation and well-being. Our therapeutic music and sound healing tracks are not medical treatment
+        and do not replace advice from a licensed healthcare professional.
       </p>
     </footer>
   </div>
@@ -1253,7 +1385,7 @@
           <input type="range" class="purchase-player-volume" id="purchase-player-volume" min="0" max="100" value="100" aria-label="Volume" />
         </div>
       </div>
-      <audio id="purchase-player-audio" class="purchase-player-audio-hidden" preload="auto" playsinline loop crossorigin="anonymous"></audio>
+      <audio id="purchase-player-audio" class="purchase-player-audio-hidden" preload="none" playsinline loop crossorigin="anonymous"></audio>
       <div class="purchase-player-actions">
         <button type="button" class="btn-gold" id="purchase-player-download">⬇️ Download MP3</button>
         <button type="button" class="btn-outline" id="purchase-player-download-again">⬇️ Download again</button>
@@ -1646,7 +1778,9 @@
         '<div class="card-img-wrap">' +
         '<img src="' +
         escapeHtml(assetUrl(t.cover)) +
-        '" alt="" loading="lazy" />' +
+        '" alt="' +
+        escapeHtml((t.fullTitle || t.shortName || "Musicacupuncture") + " — healing music cover") +
+        '" width="400" height="400" loading="lazy" decoding="async" />' +
         '<span class="card-emoji">' +
         t.emoji +
         "</span>" +
@@ -2346,7 +2480,10 @@
     if (!free) return;
     var coverEl = document.getElementById("free-cover-img");
     var descEl = document.getElementById("free-desc");
-    if (coverEl) coverEl.src = assetUrl(free.cover);
+    if (coverEl) {
+      coverEl.src = assetUrl(free.cover);
+      coverEl.alt = (free.fullTitle || "Free Musicacupuncture track") + " — healing music cover";
+    }
     if (descEl) descEl.textContent = free.description;
   }
 
