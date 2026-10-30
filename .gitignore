@@ -26,8 +26,12 @@ service-account*.json
 *.__pycache__
 .DS_Store
 
-# Large WAV files in songs/ (not in Git — copy them to the server or another PC yourself)
+# Large audio in songs/ (not for GitHub — 100 MB limit; use Drive/LFS separately)
 songs/**/*.mp3
+songs/**/*.wav
+songs/**/*.WAV
+# Рабочие исходники новых треков (WAV/обложки) — локально, не в репозиторий
+songs/Nya-TRACKS/
 
 # Telegram file_id map from upload_songs.py (do not commit)
 file_ids.json
